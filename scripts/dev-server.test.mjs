@@ -54,6 +54,9 @@ test("backend lifecycle preserves the database and cleans up its processes", {
           PATH: directory + delimiter + process.env.PATH,
           DEV_TEST_LOG: log,
           DEV_TEST_MODE: mode,
+          DATABASE_URL: "postgresql://unused:unused@localhost:1/unused",
+          BETTER_AUTH_URL: "http://localhost:3035",
+          BETTER_AUTH_SECRET: "test-only-auth-secret-with-at-least-32-characters",
         },
         stdio: "ignore",
       });

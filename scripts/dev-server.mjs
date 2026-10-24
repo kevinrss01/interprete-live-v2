@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { checkAccountConfig } from "./dev-config.mjs";
 
 const cwd = fileURLToPath(new URL("../", import.meta.url));
 const compose = ["compose", "-f", "docker-compose.db.yml"];
@@ -75,6 +76,7 @@ process.on("SIGINT", () => { void shutdown(0); });
 process.on("SIGTERM", () => { void shutdown(0); });
 
 async function main() {
+  checkAccountConfig(new URL("../", import.meta.url));
   console.log("Démarrage de PostgreSQL…");
   let code = await start("docker", [...compose, "up", "-d", "--wait"]).exited;
   if (shutdownPromise) return;
@@ -118,5 +120,6 @@ async function main() {
 
 void main().catch(async (error) => {
   console.error(error.message);
-  await shutdown(1);
+  if (children.length) await shutdown(1);
+  else process.exitCode = 1;
 });

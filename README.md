@@ -30,6 +30,8 @@ Choisir les deux langues, puis appuyer sur **Activer le micro** pour la personne
 
 Le bouton d’exemple utilise un enregistrement synthétique pour tester toute la chaîne sans microphone. Il ne sert jamais au clonage. Une pastille ovale à droite de l’écran indique la session en cours et permet de l’arrêter depuis n’importe quelle application. **Appels sur Mac → Tester la pastille** affiche son aperçu sans ouvrir le micro.
 
+Si la création de compte échoue en local, vérifiez `DATABASE_URL`, `BETTER_AUTH_URL` et `BETTER_AUTH_SECRET` dans `apps/server/.env.local` (y compris dans chaque nouveau worktree). Le secret doit faire au moins 32 caractères ; générez-le une seule fois avec `openssl rand -base64 32`. `pnpm dev` et `pnpm dev:server` vérifient cette configuration avant de démarrer les services. Après une modification du fichier, relancez le serveur pour qu’il recharge les variables.
+
 ## Architecture
 
 Documentation détaillée, avec les diagrammes : [docs/architecture.md](docs/architecture.md).

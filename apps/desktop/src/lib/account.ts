@@ -22,6 +22,8 @@ export const rpc: ApiClient = createORPCClient(
 );
 
 const AUTH_ERRORS: Record<string, string> = {
+  AUTH_NOT_CONFIGURED: "Account creation and sign-in are unavailable: the server’s authentication is not configured.",
+  DATABASE_NOT_CONFIGURED: "Account creation and sign-in are unavailable: the server’s database is not configured.",
   USER_ALREADY_EXISTS: "This email is already used. Use another one.",
   USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "This email is already used. Use another one.",
   INVALID_EMAIL: "Enter a valid email.",
