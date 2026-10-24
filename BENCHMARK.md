@@ -1,6 +1,6 @@
 # Benchmark reproductible
 
-Les résultats sont ceux d'un banc d'essai local, pas d'une application déployée. Les clés sont dans `.env.local`, ignoré par Git et protégé en lecture. Le rapport n'en contient aucune.
+Les résultats sont ceux d'un banc d'essai local, pas d'une application déployée. Les clés sont dans `apps/server/.env.local`, ignoré par Git et protégé en lecture. Le rapport n'en contient aucune.
 
 ## Données
 

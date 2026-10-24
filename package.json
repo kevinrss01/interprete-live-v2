@@ -1,38 +1,22 @@
 {
-  "name": "instant-translate",
-  "version": "0.1.0",
+  "name": "interprete",
   "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.5.1",
   "scripts": {
-    "dev": "next dev --port 3035",
-    "build": "next build",
-    "start": "next start --port 3035",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/app/*.test.ts",
+    "dev:server": "pnpm --filter @interprete/server dev",
+    "dev:desktop": "pnpm --filter @interprete/desktop tauri dev",
+    "build:server": "pnpm --filter @interprete/server build",
+    "build:desktop": "pnpm --filter @interprete/desktop tauri build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
     "benchmark": "node scripts/benchmark.mjs",
-    "test:app": "tsx --test tests/app/*.test.ts",
-    "test:benchmark": "node --test tests/*.test.mjs"
-  },
-  "dependencies": {
-    "next": "16.4.2",
-    "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "lucide-react": "latest",
-    "ws": "latest",
-    "zod": "latest"
+    "test:benchmark": "node --test scripts/*.test.mjs"
   },
   "devDependencies": {
-    "typescript": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@types/ws": "latest",
-    "tailwindcss": "4.3.3",
-    "@tailwindcss/postcss": "4.3.3",
-    "eslint": "latest",
-    "eslint-config-next": "16.4.2",
-    "tsx": "latest",
-    "@playwright/test": "latest"
+    "tsx": "4.23.15",
+    "ws": "8.22.0"
   },
   "engines": {
     "node": ">=22"

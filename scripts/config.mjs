@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 export const ROOT = path.resolve(import.meta.dirname, '..');
 // Explicit task-local credentials take precedence over unrelated inherited keys.
-for (const line of fs.readFileSync(path.join(ROOT, '.env.local'), 'utf8').split('\n')) {
+for (const line of fs.readFileSync(path.join(ROOT, 'apps/server/.env.local'), 'utf8').split('\n')) {
   const match = line.match(/^([A-Z_0-9]+)=(.*)$/);
   if (!match) continue;
   try { process.env[match[1]] = JSON.parse(match[2]); }

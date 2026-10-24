@@ -1,8 +1,8 @@
 // Silent end-to-end check: PCM input and returned audio bytes, no speakers or microphone.
 import fs from "node:fs/promises";
 import WebSocket from "ws";
-import { InterpreterController } from "../src/lib/client/interpreter";
-import type { CaptureOptions } from "../src/lib/client/audio";
+import { InterpreterController } from "../apps/desktop/src/lib/interpreter";
+import type { CaptureOptions } from "../apps/desktop/src/lib/audio";
 
 async function main() {
   const base = process.env.APP_TEST_URL || "http://localhost:3035";

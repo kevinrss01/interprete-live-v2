@@ -1,9 +1,0 @@
-benchmark-corpus
-benchmark-results
-report
-scripts
-tests
-docs
-.env*
-*.md
-.git

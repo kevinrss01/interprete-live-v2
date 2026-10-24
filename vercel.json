@@ -1,7 +1,0 @@
-{
-  "regions": ["cdg1"],
-  "functions": {
-    "src/app/api/interpret/route.ts": { "maxDuration": 60 },
-    "src/app/api/voice/clone/route.ts": { "maxDuration": 60 }
-  }
-}
