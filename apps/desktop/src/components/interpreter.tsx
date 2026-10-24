@@ -8,7 +8,9 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import { signOut } from "../lib/account";
 import type { InterpreterController } from "../lib/interpreter";
+import { clearOnboardingAccount } from "../onboarding/onboarding-account";
 import { SpeakerPanel } from "./speaker-panel";
 import { CallPanel, type CallPanelHandle } from "./call-panel";
 import { TranslationPill } from "./translation-overlay";
@@ -36,7 +38,13 @@ type PendingConfirm =
   | { kind: "clear" }
   | { kind: "remove"; id: SpeakerId };
 
-export function Interpreter({ controller }: { controller: InterpreterController }) {
+export function Interpreter({
+  controller,
+  onLeave,
+}: {
+  controller: InterpreterController;
+  onLeave: () => void;
+}) {
   const state = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
@@ -131,6 +139,13 @@ export function Interpreter({ controller }: { controller: InterpreterController 
     if (pending.kind === "clear") controller.clearConversation();
     else void controller.removeVoice(pending.id);
     setPending(null);
+  }
+  function leave() {
+    if (callOverlay?.sessionId) callPanelRef.current?.stop(callOverlay.sessionId);
+    controller.cancel();
+    signOut();
+    clearOnboardingAccount();
+    onLeave();
   }
   function swap() {
     const a = state.profiles.a.language;
@@ -349,6 +364,7 @@ export function Interpreter({ controller }: { controller: InterpreterController 
         onClone={(id) => void controller.clone(id)}
         onRemove={(id) => setPending({ kind: "remove", id })}
         onVolume={(value) => controller.setVolume(value)}
+        onLeave={import.meta.env.DEV ? leave : undefined}
       />
       <AlertDialog
         open={pending !== null}

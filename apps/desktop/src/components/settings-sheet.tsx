@@ -213,6 +213,7 @@ export function SettingsSheet({
   onClone,
   onRemove,
   onVolume,
+  onLeave,
 }: {
   open: boolean;
   profiles: Record<SpeakerId, Profile>;
@@ -224,6 +225,7 @@ export function SettingsSheet({
   onClone: (id: SpeakerId) => void;
   onRemove: (id: SpeakerId) => void;
   onVolume: (volume: number) => void;
+  onLeave?: () => void;
 }) {
   const compact = useCompact();
   return (
@@ -315,6 +317,11 @@ export function SettingsSheet({
                 ci-dessus.
               </p>
             </div>
+            {onLeave && (
+              <button type="button" className="settings-dev-leave" onClick={onLeave}>
+                dev : se déconnecter
+              </button>
+            )}
           </div>
         </div>
       </SheetContent>

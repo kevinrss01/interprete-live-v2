@@ -292,6 +292,63 @@ kbd {
   display: flex;
   flex-direction: column;
 }
+/* Opacity and scale only. A fixed blur on the veil fades out; animating the blur radius restyles the whole screen every frame and stutters. */
+.screen-leave,
+.screen-enter {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: auto;
+  pointer-events: none;
+  transform-origin: center;
+  animation: screen-leave 180ms var(--ease) both;
+}
+.screen-enter {
+  z-index: 2;
+  background: var(--canvas);
+  animation-name: screen-enter;
+  animation-duration: 420ms;
+  animation-delay: 40ms;
+}
+.screen-enter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: rgb(250 250 249 / 0.35);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: screen-focus 320ms var(--ease) 120ms both;
+}
+@keyframes screen-leave {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+}
+@keyframes screen-enter {
+  from {
+    opacity: 0;
+    transform: scale(1.012);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes screen-focus {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
 .frame {
   width: 100%;
   max-width: calc(var(--frame) + var(--gutter) * 2);
@@ -1043,6 +1100,20 @@ kbd {
 .services dd {
   margin: 0;
   text-align: right;
+}
+.settings-dev-leave {
+  justify-self: start;
+  margin: 18px 0 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font-size: 11px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.settings-dev-leave:hover {
+  color: var(--ink-2);
 }
 
 /* Error page */
