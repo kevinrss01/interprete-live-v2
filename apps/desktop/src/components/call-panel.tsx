@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
+  Captions,
   Headphones,
   LoaderCircle,
   Mic,
@@ -33,11 +34,25 @@ import {
   physicalInputNames,
   requirePhysicalMicrophone,
   simulateCall,
+  loadCallOptions,
+  saveCallOptions,
+  type AcceptedCall,
+  type CallOptions,
   type CallSnapshot,
   type DetectedCall,
   type OutputDevice,
 } from "../lib/calls";
 import type { OverlayUpdate } from "../lib/translation-overlay";
+import { CallListening } from "../lib/call-listening";
+import {
+  captionLines,
+  previewFrames,
+  useCallCaptions,
+  type CaptionLine,
+  type CaptionsUpdate,
+} from "../lib/call-captions";
+import { CallOptionChecks } from "./call-options";
+import { CaptionsView } from "./call-captions";
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -91,7 +106,24 @@ export function CallPanel({
   const [preparing, setPreparing] = useState(false);
   const [overlayPreview, setOverlayPreview] = useState(false);
   const overlayId = useRef<string | null>(null);
-  const [accepted, setAccepted] = useState<DetectedCall | null>(null);
+  const [accepted, setAccepted] = useState<AcceptedCall | null>(null);
+  const [callOptions, setCallOptions] = useState<CallOptions>(loadCallOptions);
+  const [listening] = useState(() => new CallListening({ native }));
+  const listen = useSyncExternalStore(
+    listening.subscribe,
+    listening.getSnapshot,
+    listening.getServerSnapshot,
+  );
+  const incoming = useSyncExternalStore(
+    listening.controller.subscribe,
+    listening.controller.getSnapshot,
+    listening.controller.getServerSnapshot,
+  );
+  const listenBusy = listen.sessionId !== null;
+  const [captionsPreview, setCaptionsPreview] = useState<CaptionLine[] | null>(null);
+  const [captionsError, setCaptionsError] = useState<string | null>(null);
+  const previewId = useRef("");
+  const previewTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [session, setSession] = useState<{
     mode: "virtual" | "local";
     demo: boolean;
@@ -131,10 +163,11 @@ export function CallPanel({
     controller.getServerSnapshot,
   );
   const busy = preparing || state.phase !== "idle";
-  useEffect(() => onBusy(busy), [busy, onBusy]);
+  const anyBusy = busy || listenBusy;
+  useEffect(() => onBusy(anyBusy), [anyBusy, onBusy]);
   const busyRef = useRef(false);
   const startGeneration = useRef(0);
-  const handleAccept = useRef<(call: DetectedCall) => void>(() => {});
+  const handleAccept = useRef<(call: AcceptedCall) => void>(() => {});
   inputRef.current = input;
 
   async function refresh(permission = false) {
@@ -167,16 +200,20 @@ export function CallPanel({
       setError(errorMessage(e));
     }
   }
-  const stop = useCallback(() => {
+  const stopMicrophone = useCallback(() => {
     ++startGeneration.current;
     busyRef.current = false;
-    overlayId.current = null;
     setOverlayPreview(false);
     controller.cancel();
     setPreparing(false);
     setSession(null);
     activeCallRef.current = null;
   }, [controller]);
+  // The pill, Escape, the end of the call and leaving call mode stop every direction.
+  const stop = useCallback(() => {
+    stopMicrophone();
+    listening.stop();
+  }, [stopMicrophone, listening]);
   useImperativeHandle(
     ref,
     () => ({
@@ -188,36 +225,45 @@ export function CallPanel({
     [stop],
   );
   useEffect(() => {
+    // One pill for the call: the microphone direction when active, otherwise the participants'.
+    const phase = busy ? state.phase : incoming.phase;
+    if (!anyBusy && !overlayPreview) overlayId.current = null;
     onOverlayChange(
-      (busy || overlayPreview) && overlayId.current
+      (anyBusy || overlayPreview) && overlayId.current
         ? {
             sessionId: overlayId.current,
             phase: overlayPreview
               ? "preview"
-              : state.phase === "idle"
+              : phase === "idle"
                 ? "connecting"
-                : state.phase,
-            source: profiles.a.language,
-            target: profiles.b.language,
-            test: session?.mode === "local" || !!session?.demo,
+                : phase,
+            source: busy ? profiles.a.language : profiles.b.language,
+            target: busy ? profiles.b.language : profiles.a.language,
+            test: busy
+              ? session?.mode === "local" || !!session?.demo
+              : listen.demo,
           }
         : null,
     );
   }, [
     busy,
+    anyBusy,
     overlayPreview,
     state.phase,
+    incoming.phase,
     profiles.a.language,
     profiles.b.language,
     session?.mode,
     session?.demo,
+    listen.demo,
     onOverlayChange,
   ]);
   useEffect(() => () => onOverlayChange(null), [onOverlayChange]);
   async function start(demo = false, call?: DetectedCall) {
     if (busyRef.current || state.phase !== "idle") return;
     busyRef.current = true;
-    overlayId.current = crypto.randomUUID();
+    if (overlayPreview) overlayId.current = null;
+    overlayId.current ??= crypto.randomUUID();
     setOverlayPreview(false);
     const generation = ++startGeneration.current;
     setPreparing(true);
@@ -267,17 +313,117 @@ export function CallPanel({
       }
     }
   }
+  async function startListening({
+    call,
+    demo = false,
+    options = callOptions,
+  }: {
+    call?: DetectedCall;
+    demo?: boolean;
+    options?: CallOptions;
+  }) {
+    setError(null);
+    if (!options.captions && !options.voice) {
+      setError("Choisissez les sous-titres, la voix traduite, ou les deux.");
+      return;
+    }
+    if (!native && !demo) {
+      setError(
+        "Le son d’un appel ne peut être capté que dans l’app macOS. Essayez « Sous-titrer l’exemple audio ».",
+      );
+      return;
+    }
+    stopCaptionsPreview();
+    setLingering(null);
+    beforeStart();
+    if (overlayPreview) overlayId.current = null;
+    overlayId.current ??= crypto.randomUUID();
+    setOverlayPreview(false);
+    // A manual start during a detected call follows that call: its app's audio, and its end.
+    const current = demo ? undefined : (call ?? monitor?.call ?? undefined);
+    await listening.start({
+      profiles,
+      options: { captions: options.captions, voice: options.voice },
+      app: current?.app ?? null,
+      callId: current?.id ?? null,
+      demo,
+    });
+  }
   handleAccept.current = (call) => {
     setAccepted(call);
+    setCallOptions(call.options);
     onOpenRef.current();
+    if (call.options.captions || call.options.voice)
+      void startListening({ call, options: call.options });
     // A saved, valid route can start directly from the native approval. Otherwise show setup.
     if (
+      call.options.microphone &&
       inputs.some((d) => d.deviceId === input) &&
       outputs.some((d) => d.name === output) &&
       route === "virtual"
     )
       void start(false, call);
   };
+  function chooseOptions(next: CallOptions) {
+    setCallOptions(next);
+    saveCallOptions(next);
+  }
+  function stopCaptionsPreview() {
+    if (previewTimer.current) clearInterval(previewTimer.current);
+    previewTimer.current = null;
+    setCaptionsPreview(null);
+  }
+  // A local preview of the captions window: no capture, no provider.
+  function previewCaptions() {
+    stopCaptionsPreview();
+    const frames = previewFrames(profiles.a.language);
+    let index = 0;
+    previewId.current = crypto.randomUUID();
+    setCaptionsPreview(frames[0]);
+    previewTimer.current = setInterval(() => {
+      index++;
+      if (index < frames.length) setCaptionsPreview(frames[index]);
+      else if (index > frames.length + 14) stopCaptionsPreview();
+    }, 170);
+  }
+  const live: CaptionsUpdate | null =
+    listen.sessionId && listen.options.captions
+      ? {
+          sessionId: listen.sessionId,
+          status: incoming.phase === "connecting" || incoming.phase === "idle" ? "starting" : "listening",
+          source: profiles.b.language,
+          target: profiles.a.language,
+          lines: captionLines(incoming.turns),
+        }
+      : null;
+  // When a sample finishes on its own, its last captions stay readable before the window closes.
+  const lastCaptions = useRef<CaptionsUpdate | null>(null);
+  const [lingering, setLingering] = useState<CaptionsUpdate | null>(null);
+  useEffect(() => {
+    if (live) lastCaptions.current = live;
+  });
+  useEffect(() => {
+    const last = lastCaptions.current;
+    if (listen.sessionId) lastCaptions.current = live;
+    if (listen.sessionId || listen.ended !== "finished" || !last?.lines.length) {
+      setLingering(null);
+      return;
+    }
+    lastCaptions.current = null;
+    setLingering({ ...last, lines: last.lines.map((line) => ({ ...line, live: false })) });
+    const timer = setTimeout(() => setLingering(null), 6000);
+    return () => clearTimeout(timer);
+  }, [listen.sessionId, listen.ended]);
+  const captions: CaptionsUpdate | null = captionsPreview
+    ? {
+        sessionId: previewId.current,
+        status: "preview",
+        source: profiles.b.language,
+        target: profiles.a.language,
+        lines: captionsPreview,
+      }
+    : (live ?? lingering);
+  useCallCaptions(captions, setCaptionsError);
   useEffect(() => {
     if (!native) return;
     let mounted = true;
@@ -285,9 +431,9 @@ export function CallPanel({
       if (!mounted) return;
       setMonitor(snapshot);
       const active = activeCallRef.current;
-      if (active && snapshot.call?.id !== active) {
-        stop();
-      }
+      if (active && snapshot.call?.id !== active) stopMicrophone();
+      const listened = listening.getSnapshot().callId;
+      if (listened && snapshot.call?.id !== listened) listening.stop();
       setAccepted((previous) =>
         previous && snapshot.call?.id !== previous.id ? null : previous,
       );
@@ -325,7 +471,7 @@ export function CallPanel({
         () => {},
       );
     };
-  }, [native, controller, stop]);
+  }, [native, controller, stopMicrophone, listening]);
   useEffect(() => {
     void refresh();
     const changed = () => {
@@ -354,6 +500,19 @@ export function CallPanel({
     },
     [controller],
   );
+  useEffect(() => () => listening.dispose(), [listening]);
+  useEffect(
+    () => () => {
+      if (previewTimer.current) clearInterval(previewTimer.current);
+    },
+    [],
+  );
+  // The toast saves its choices in the shared storage of the app's windows.
+  useEffect(() => {
+    const changed = () => setCallOptions(loadCallOptions());
+    window.addEventListener("storage", changed);
+    return () => window.removeEventListener("storage", changed);
+  }, []);
   useEffect(() => {
     if (state.phase === "idle" && !preparing) {
       setSession(null);
@@ -402,9 +561,10 @@ export function CallPanel({
     >
       <div className="call-intro">
         <div>
-          <h1 id="calls-title">Votre voix, dans leur langue.</h1>
+          <h1 id="calls-title">Comprendre et vous faire comprendre.</h1>
           <p>
-            Traduisez votre microphone pendant un appel Meet, Zoom ou Teams.
+            Sous-titrez ou écoutez vos interlocuteurs dans votre langue, et
+            traduisez votre micro pendant Meet, Zoom ou Teams.
           </p>
         </div>
         <Phone size={24} aria-hidden="true" />
@@ -437,16 +597,19 @@ export function CallPanel({
           <button
             className="btn"
             type="button"
-            disabled={busy}
+            disabled={
+              anyBusy ||
+              !(callOptions.captions || callOptions.voice || callOptions.microphone)
+            }
             onClick={() => {
               const call = monitor.call!;
               if (native)
-                void answerCall(call.id, true).catch((e) =>
+                void answerCall(call.id, true, callOptions).catch((e) =>
                   setError(errorMessage(e)),
                 );
               else {
-                setAccepted(call);
                 setMonitor({ ...monitor, accepted: true });
+                handleAccept.current({ ...call, options: callOptions });
               }
             }}
           >
@@ -454,7 +617,7 @@ export function CallPanel({
           </button>
         </div>
       )}
-      {accepted && !busy && (
+      {accepted?.options.microphone && !busy && (
         <p className="call-notice" role="status">
           {accepted.app} : accord reçu. Vérifiez les périphériques puis démarrez
           la traduction.
@@ -463,10 +626,10 @@ export function CallPanel({
       <div className="call-languages">
         {(["a", "b"] as const).map((id) => (
           <label key={id}>
-            {id === "a" ? "Vous parlez" : "Votre interlocuteur entend"}
+            {id === "a" ? "Vous parlez" : "Votre interlocuteur parle"}
             <select
               value={profiles[id].language}
-              disabled={busy}
+              disabled={anyBusy}
               onChange={(e) =>
                 onLanguage(id, e.target.value as Profile["language"])
               }
@@ -480,6 +643,89 @@ export function CallPanel({
           </label>
         ))}
       </div>
+      <section className="call-listen" aria-labelledby="call-listen-title">
+        <h2 id="call-listen-title">Leur voix, dans votre langue</h2>
+        <CallOptionChecks
+          options={callOptions}
+          include={["captions", "voice"]}
+          disabled={listenBusy}
+          mine={profiles.a.language}
+          theirs={profiles.b.language}
+          onChange={chooseOptions}
+        />
+        <p className="note">
+          Seul le son de l’application d’appel détectée est capté. Sans appel
+          détecté, c’est tout le son du Mac, sauf Interprète. Avec la voix
+          traduite, portez un casque pour que vos interlocuteurs ne l’entendent
+          pas.
+        </p>
+        <div className="call-listen-status" aria-live="polite">
+          <span className="call-session-status">
+            <span
+              className="status-dot"
+              data-live={incoming.phase === "listening"}
+              aria-hidden="true"
+            />
+            <strong>
+              {!listenBusy
+                ? "Traduction de leur voix arrêtée"
+                : incoming.phase === "connecting" || incoming.phase === "idle"
+                  ? "Connexion au son de l’appel…"
+                  : incoming.phase !== "listening"
+                    ? "Fin de la traduction…"
+                    : listen.demo
+                    ? "Exemple audio en cours"
+                    : listen.scope === "app" && listen.app
+                      ? `À l’écoute de ${listen.app}`
+                      : "À l’écoute de tout le son du Mac"}
+            </strong>
+            {listenBusy && listen.options.voice && (
+              <span className="note">
+                {listen.voice
+                  ? `Voix ${listen.voice.name} · ${
+                      listen.voice.source === "jev"
+                        ? "choisie par Jev"
+                        : listen.voice.source === "pitch"
+                          ? "proche de leur voix"
+                          : "par défaut"
+                    }`
+                  : "Choix de la voix au premier mot…"}
+              </span>
+            )}
+          </span>
+          {listenBusy ? (
+            <button
+              type="button"
+              className="btn call-stop"
+              onClick={() => listening.stop()}
+            >
+              <Square size={14} fill="currentColor" aria-hidden="true" />
+              Arrêter
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn call-primary"
+              disabled={!(callOptions.captions || callOptions.voice)}
+              onClick={() => void startListening({})}
+            >
+              <Captions size={16} aria-hidden="true" />
+              Traduire leur voix
+            </button>
+          )}
+        </div>
+        {listen.notice && listenBusy && (
+          <p className="note" role="status">
+            {listen.notice}
+          </p>
+        )}
+        {(listen.error || incoming.error || incoming.warning || captionsError) && (
+          <p className="call-error" role="alert">
+            {listen.error || incoming.error || incoming.warning || captionsError}
+          </p>
+        )}
+      </section>
+      <h2 className="call-section-title">Votre voix dans l’appel</h2>
       <fieldset className="call-routing" disabled={busy}>
         <legend>Sortie de la traduction</legend>
         <label>
@@ -622,7 +868,7 @@ export function CallPanel({
           )}
         </div>
         {busy ? (
-          <button type="button" className="btn call-stop" onClick={stop}>
+          <button type="button" className="btn call-stop" onClick={stopMicrophone}>
             <Square size={14} fill="currentColor" aria-hidden="true" />
             Arrêter la traduction
           </button>
@@ -649,19 +895,30 @@ export function CallPanel({
         <p className="note">
           Simulez la détection, ou utilisez une voix synthétique pour vérifier
           la traduction {languageName(profiles.a.language)} →{" "}
-          {languageName(profiles.b.language)} sans ouvrir le micro.
+          {languageName(profiles.b.language)}, ou celle de votre interlocuteur
+          vers le {languageName(profiles.a.language).toLowerCase()}, sans
+          ouvrir le micro.
         </p>
         <div className="call-actions">
           <button
             type="button"
             className="btn"
-            disabled={busy || overlayPreview}
+            disabled={anyBusy || overlayPreview}
             onClick={() => {
               overlayId.current = crypto.randomUUID();
               setOverlayPreview(true);
             }}
           >
             Tester la pastille
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={listenBusy || !!captionsPreview}
+            onClick={previewCaptions}
+          >
+            <Captions size={15} aria-hidden="true" />
+            Tester les sous-titres
           </button>
           <button
             type="button"
@@ -680,6 +937,15 @@ export function CallPanel({
           >
             <Headphones size={15} aria-hidden="true" />
             Traduire l’exemple audio
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={listenBusy}
+            onClick={() => void startListening({ demo: true })}
+          >
+            <Captions size={15} aria-hidden="true" />
+            Sous-titrer l’exemple audio
           </button>
           {monitor?.call?.simulated && (
             <button
@@ -722,6 +988,11 @@ export function CallPanel({
               aria-label="Traduction en cours"
             />
           )}
+        </div>
+      )}
+      {!native && captions && (
+        <div className="captions-browser">
+          <CaptionsView captions={captions} />
         </div>
       )}
     </section>

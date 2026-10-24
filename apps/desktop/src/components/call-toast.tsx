@@ -4,14 +4,21 @@ import {
   answerCall,
   callSnapshot,
   desktopAvailable,
+  loadCallOptions,
   onCallStatus,
+  saveCallOptions,
+  storedLanguages,
+  type CallOptions,
   type CallSnapshot,
 } from "../lib/calls";
+import { CallOptionChecks } from "./call-options";
 
 export function CallToast() {
   const [status, setStatus] = useState<CallSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [options, setOptions] = useState<CallOptions>(loadCallOptions);
+  const [languages, setLanguages] = useState(storedLanguages);
   useEffect(() => {
     document.body.classList.add("toast-window");
     if (!desktopAvailable()) return;
@@ -21,6 +28,9 @@ export function CallToast() {
         setStatus(snapshot);
         setBusy(false);
         setError(null);
+        // The toast window lives for the whole app session; show the latest saved choices.
+        setOptions(loadCallOptions());
+        setLanguages(storedLanguages());
       }
     });
     void callSnapshot().then((snapshot) => {
@@ -32,11 +42,16 @@ export function CallToast() {
     };
   }, []);
   const call = status?.call;
+  const chosen = options.captions || options.voice || options.microphone;
+  function choose(next: CallOptions) {
+    setOptions(next);
+    saveCallOptions(next);
+  }
   async function answer(accept: boolean) {
     if (!call) return;
     setBusy(true);
     try {
-      await answerCall(call.id, accept);
+      await answerCall(call.id, accept, options);
     } catch (e) {
       setError(String(e));
       setBusy(false);
@@ -60,14 +75,18 @@ export function CallToast() {
         </button>
       </div>
       <p>{call?.app ?? "Recherche d’un appel…"}</p>
-      <p className="note">
-        Démarrer la traduction en direct avec vos réglages d’appel ?
-      </p>
-      <p className="note">
-        {localStorage.getItem("interprete-call-input-label") ||
-          "Microphone à configurer"}{" "}
-        → {localStorage.getItem("interprete-call-output") || "BlackHole 2ch"}
-      </p>
+      <CallOptionChecks
+        options={options}
+        include={["captions", "voice", "microphone"]}
+        disabled={busy || !call}
+        mine={languages.mine}
+        theirs={languages.theirs}
+        route={`${
+          localStorage.getItem("interprete-call-input-label") ||
+          "Microphone à configurer"
+        } → ${localStorage.getItem("interprete-call-output") || "BlackHole 2ch"}`}
+        onChange={choose}
+      />
       {error && (
         <p className="call-error" role="alert">
           {error}
@@ -85,7 +104,7 @@ export function CallToast() {
         <button
           type="button"
           className="btn call-primary"
-          disabled={busy || !call}
+          disabled={busy || !call || !chosen}
           onClick={() => void answer(true)}
         >
           Traduire l’appel

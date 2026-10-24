@@ -27,6 +27,26 @@ pub struct RouteStatus {
 fn is_virtual(name: &str) -> bool {
     name.to_lowercase().contains("blackhole")
 }
+// A participant's translated voice plays on the Mac's current output. Only this explicit
+// name opens speakers: a missing BlackHole can never fall back to them.
+pub const SYSTEM_OUTPUT: &str = "@system-output";
+fn output_device(name: &str) -> Result<cpal::Device, String> {
+    if name == SYSTEM_OUTPUT {
+        return cpal::default_host()
+            .default_output_device()
+            .ok_or_else(|| "Aucune sortie audio n’est disponible sur ce Mac.".into());
+    }
+    if !is_virtual(name) {
+        return Err("Choisissez BlackHole comme sortie virtuelle.".into());
+    }
+    cpal::default_host()
+        .devices()
+        .map_err(|e| e.to_string())?
+        .find(|d| d.name().is_ok_and(|n| n == name))
+        .ok_or_else(|| {
+            "BlackHole est absent. Installez le pilote puis actualisez les périphériques.".into()
+        })
+}
 fn devices() -> Result<Vec<OutputDevice>, String> {
     cpal::default_host()
         .devices()
@@ -99,6 +119,7 @@ impl Resampler {
 }
 struct Route {
     id: String,
+    name: String,
     _stream: cpal::Stream,
     producer: HeapProd<f32>,
     rate: u32,
@@ -107,16 +128,7 @@ struct Route {
 }
 impl Route {
     fn new(id: String, name: &str) -> Result<Self, String> {
-        if !is_virtual(name) {
-            return Err("Choisissez BlackHole comme sortie virtuelle.".into());
-        }
-        let device = cpal::default_host()
-            .devices()
-            .map_err(|e| e.to_string())?
-            .find(|d| d.name().is_ok_and(|n| n == name))
-            .ok_or(
-                "BlackHole est absent. Installez le pilote puis actualisez les périphériques.",
-            )?;
+        let device = output_device(name)?;
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
         let mut config = supported.config();
         // Ask for a small native callback where supported. CoreAudio chooses its hardware period.
@@ -154,12 +166,13 @@ impl Route {
                 error,
                 None,
             ),
-            _ => return Err("Format audio BlackHole non pris en charge.".into()),
+            _ => return Err("Format de sortie audio non pris en charge.".into()),
         }
         .map_err(|e| e.to_string())?;
         stream.play().map_err(|e| e.to_string())?;
         Ok(Self {
             id,
+            name: name.into(),
             _stream: stream,
             producer,
             rate,
@@ -169,9 +182,11 @@ impl Route {
     }
     fn push(&mut self, bytes: &[u8]) -> Result<(), String> {
         if self.failed.load(Ordering::Relaxed) {
-            return Err(
-                "La sortie virtuelle a été déconnectée. Arrêtez puis reconnectez BlackHole.".into(),
-            );
+            return Err(if self.name == SYSTEM_OUTPUT {
+                "La sortie audio du Mac a été déconnectée. Relancez la traduction.".into()
+            } else {
+                "La sortie virtuelle a été déconnectée. Arrêtez puis reconnectez BlackHole.".into()
+            });
         }
         let samples = self.resampler.convert(bytes, self.rate);
         if samples.len() > self.producer.vacant_len() {
@@ -208,33 +223,36 @@ impl Default for AudioRoute {
     fn default() -> Self {
         let (sender, receiver) = mpsc::sync_channel(32);
         // CPAL streams stay on their owner thread. The audio callback only accesses a lock-free ring.
+        // One route per device: the user's microphone into BlackHole and the call's translation on the Mac.
         std::thread::spawn(move || {
-            let mut route: Option<Route> = None;
+            let mut routes: Vec<Route> = Vec::new();
             for command in receiver {
                 match command {
                     Command::Open { id, name, reply } => {
-                        route = None;
-                        let result = Route::new(id, &name).map(|r| route = Some(r));
+                        routes.retain(|r| r.id != id && r.name != name);
+                        let result = if routes.len() >= 2 {
+                            Err("Trop de sorties audio sont ouvertes.".into())
+                        } else {
+                            Route::new(id, &name).map(|r| routes.push(r))
+                        };
                         let _ = reply.send(result);
                     }
                     Command::Push { id, bytes, reply } => {
-                        let result = route
-                            .as_mut()
-                            .filter(|r| r.id == id)
+                        let result = routes
+                            .iter_mut()
+                            .find(|r| r.id == id)
                             .ok_or("La sortie audio est arrêtée.".into())
                             .and_then(|r| r.push(&bytes));
                         let _ = reply.send(result);
                     }
                     Command::Close { id, reply } => {
-                        if route.as_ref().is_some_and(|r| r.id == id) {
-                            route = None;
-                        }
+                        routes.retain(|r| r.id != id);
                         let _ = reply.send(Ok(()));
                     }
                     Command::Status { id, reply } => {
-                        let result = route
-                            .as_ref()
-                            .filter(|r| r.id == id)
+                        let result = routes
+                            .iter()
+                            .find(|r| r.id == id)
                             .map(|r| RouteStatus {
                                 pending_seconds: r.producer.occupied_len() as f64 / r.rate as f64,
                                 failed: r.failed.load(Ordering::Relaxed),
@@ -361,9 +379,11 @@ mod tests {
         }
     }
     #[test]
-    fn output_is_restricted_to_loopback() {
+    fn output_is_restricted_to_loopback_or_explicit_speakers() {
         assert!(is_virtual("BlackHole 2ch"));
         assert!(!is_virtual("MacBook Pro Speakers"));
+        assert!(output_device("MacBook Pro Speakers").is_err());
+        assert!(!is_virtual(SYSTEM_OUTPUT));
     }
     #[test]
     fn enumerate_real_devices() {

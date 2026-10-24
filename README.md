@@ -2,7 +2,7 @@
 
 Traduction vocale en conversation ou pendant un appel sur Mac.
 
-Le mode **Appels sur Mac** détecte les applications qui utilisent le microphone, propose un toast de confirmation et envoie la traduction vers un microphone virtuel BlackHole. Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
+Le mode **Appels sur Mac** détecte les applications qui utilisent le microphone et propose un toast de confirmation : sous-titres en direct de vos interlocuteurs en bas de l’écran (cochés par défaut), lecture de leur traduction avec une voix proche choisie par Jev, et traduction de votre micro vers un microphone virtuel BlackHole. Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
 
 Le mode conversation permet la traduction vocale pour deux personnes qui parlent à tour de rôle sur **un seul appareil**. App desktop [Tauri 2](https://v2.tauri.app) (React, TypeScript, Vite, Tailwind CSS) et API [Hono](https://hono.dev) hébergée sur un VPS.
 

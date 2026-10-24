@@ -8,6 +8,7 @@ export const interpret = new Hono().post("/interpret", auth, json(interpretSchem
   const s = c.var.session;
   rateLimit(s.id, "interpret", 120);
   const data = c.req.valid("json");
-  const voiceId = resolveVoice(data.voice, s.id, data.speaker);
+  const voiceId =
+    data.speak === false ? null : resolveVoice(data.voice, s.id, data.speaker);
   return interpretResponse(data, voiceId, c.req.raw.signal);
 });

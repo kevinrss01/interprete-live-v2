@@ -5,6 +5,7 @@ import "./globals.css";
 import { Button } from "@/components/ui/button";
 import { TranslationOverlay } from "./components/translation-overlay";
 import { CallToast } from "./components/call-toast";
+import { CallCaptions } from "./components/call-captions";
 import { Interpreter } from "./components/interpreter";
 import { InterpreterController } from "./lib/interpreter";
 import { Onboarding } from "./onboarding/onboarding";
@@ -61,6 +62,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         <TranslationOverlay />
       ) : location.hash === "#call-toast" ? (
         <CallToast />
+      ) : location.hash === "#call-captions" ? (
+        <CallCaptions />
       ) : (
         <App />
       )}

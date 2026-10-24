@@ -19,6 +19,21 @@ pub struct CallSnapshot {
     pub dismissed: bool,
     pub error: Option<String>,
 }
+// What an accepted call translates: their speech as captions and/or voice, and the user's microphone.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CallOptions {
+    pub captions: bool,
+    pub voice: bool,
+    pub microphone: bool,
+}
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AcceptedCall {
+    #[serde(flatten)]
+    call: DetectedCall,
+    options: CallOptions,
+}
 #[derive(Default)]
 pub struct Monitor {
     pub snapshot: CallSnapshot,
@@ -40,24 +55,42 @@ struct Probe {
     error: Option<String>,
 }
 
+const CALL_APPS: [(&str, &str); 12] = [
+    ("us.zoom.", "Zoom"),
+    ("com.microsoft.teams", "Microsoft Teams"),
+    ("com.apple.facetime", "FaceTime"),
+    ("com.tinyspeck.slackmacgap", "Slack"),
+    ("com.hnc.discord", "Discord"),
+    ("com.google.chrome", "Chrome / Meet"),
+    ("com.apple.safari", "Safari / appel web"),
+    ("com.microsoft.edgemac", "Edge / appel web"),
+    ("org.mozilla.firefox", "Firefox / appel web"),
+    ("company.thebrowser.browser", "Arc / appel web"),
+    ("company.thebrowser.dia", "Dia / appel web"),
+    ("com.brave.browser", "Brave / appel web"),
+];
 fn call_app(bundle: &str) -> Option<&'static str> {
     let bundle = bundle.to_lowercase();
-    [
-        ("us.zoom.", "Zoom"),
-        ("com.microsoft.teams", "Microsoft Teams"),
-        ("com.apple.facetime", "FaceTime"),
-        ("com.tinyspeck.slackmacgap", "Slack"),
-        ("com.hnc.discord", "Discord"),
-        ("com.google.chrome", "Chrome / Meet"),
-        ("com.apple.safari", "Safari / appel web"),
-        ("com.microsoft.edgemac", "Edge / appel web"),
-        ("org.mozilla.firefox", "Firefox / appel web"),
-        ("company.thebrowser.browser", "Arc / appel web"),
-        ("company.thebrowser.dia", "Dia / appel web"),
-        ("com.brave.browser", "Brave / appel web"),
-    ]
-    .into_iter()
-    .find_map(|(prefix, name)| bundle.starts_with(prefix).then_some(name))
+    CALL_APPS
+        .into_iter()
+        .find_map(|(prefix, name)| bundle.starts_with(prefix).then_some(name))
+}
+// Bundle prefixes whose audio output carries a detected call. Helpers share the app prefix.
+// Safari plays through a WebKit process shared with other apps, and unknown or simulated
+// calls have no app: an empty list captures all audio except Interprète.
+pub fn tap_prefixes(app: &str) -> Vec<&'static str> {
+    if app == "Safari / appel web" {
+        return vec![];
+    }
+    let mut prefixes: Vec<&'static str> = CALL_APPS
+        .into_iter()
+        .filter_map(|(prefix, name)| (name == app).then_some(prefix))
+        .collect();
+    // FaceTime audio is rendered by the conferencing daemon.
+    if app == "FaceTime" {
+        prefixes.push("com.apple.avconferenced");
+    }
+    prefixes
 }
 fn probe() -> Result<Probe, String> {
     #[cfg(target_os = "macos")]
@@ -272,7 +305,11 @@ pub fn answer_call(
     state: tauri::State<CallState>,
     call_id: String,
     accept: bool,
+    options: CallOptions,
 ) -> Result<(), String> {
+    if accept && !options.captions && !options.voice && !options.microphone {
+        return Err("Choisissez au moins une traduction.".into());
+    }
     let mut m = state.0.lock().map_err(|e| e.to_string())?;
     let call = m
         .snapshot
@@ -288,11 +325,14 @@ pub fn answer_call(
     m.snapshot.dismissed = !accept;
     drop(m);
     if accept {
-        if let Some(main) = app.get_webview_window("main") {
+        // Captions and voice run over the call; only the microphone route may need the setup window.
+        if options.microphone
+            && let Some(main) = app.get_webview_window("main")
+        {
             let _ = main.show();
             let _ = main.set_focus();
         }
-        let _ = app.emit_to("main", "call-accepted", &call);
+        let _ = app.emit_to("main", "call-accepted", &AcceptedCall { call, options });
     }
     publish(&app);
     Ok(())
@@ -348,6 +388,40 @@ mod tests {
         assert_eq!(call_app("ai.impulselab.interprete"), None);
         assert_eq!(call_app("com.apple.WebKit.GPU"), None);
         assert_eq!(call_app("com.apple.VoiceMemos"), None);
+    }
+    #[test]
+    fn taps_follow_the_detected_app() {
+        assert_eq!(tap_prefixes("Zoom"), vec!["us.zoom."]);
+        assert_eq!(tap_prefixes("Chrome / Meet"), vec!["com.google.chrome"]);
+        assert!(call_app("com.google.Chrome.helper").is_some());
+        assert_eq!(
+            tap_prefixes("FaceTime"),
+            vec!["com.apple.facetime", "com.apple.avconferenced"]
+        );
+        assert!(tap_prefixes("Safari / appel web").is_empty());
+        assert!(tap_prefixes("Google Meet · test").is_empty());
+    }
+    #[test]
+    fn accepted_calls_carry_their_options() {
+        let accepted = AcceptedCall {
+            call: DetectedCall {
+                id: "call-1".into(),
+                app: "Zoom".into(),
+                simulated: false,
+            },
+            options: CallOptions {
+                captions: true,
+                voice: false,
+                microphone: false,
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(accepted).expect("json"),
+            serde_json::json!({
+                "id": "call-1", "app": "Zoom", "simulated": false,
+                "options": { "captions": true, "voice": false, "microphone": false }
+            })
+        );
     }
     #[test]
     fn system_probe_is_readable() {

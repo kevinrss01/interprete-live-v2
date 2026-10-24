@@ -60,10 +60,13 @@ type Player = Omit<Pick<
   sharedContext?: () => AudioContext;
   setVolume?: (value: number) => void;
 };
+// Calls translate other participants as captions (speak: false) or with a matched voice.
+export type SpeechChoice = { speak: boolean; voice?: string };
 export type InterpreterAdapters = {
   player?: Player;
   capture?: (options: CaptureOptions) => Capture;
   timing?: Partial<StreamTiming>;
+  speech?: (speaker: SpeakerId) => SpeechChoice | Promise<SpeechChoice>;
 };
 type Block = {
   id: string;
@@ -82,6 +85,7 @@ type Block = {
   final: boolean;
   reconcile: boolean;
   replaying: boolean;
+  emptyAttempt: string;
 };
 type Runtime = {
   id: string;
@@ -152,6 +156,7 @@ export class InterpreterController {
   private player: Player;
   private captureFactory: (options: CaptureOptions) => Capture;
   private timing?: Partial<StreamTiming>;
+  private speech?: InterpreterAdapters["speech"];
   private outputTail: ReturnType<typeof setTimeout> | null = null;
   private initPromise: Promise<void> | null = null;
   private samples: Record<SpeakerId, { files: Blob[]; seconds: number }> = {
@@ -165,6 +170,7 @@ export class InterpreterController {
   constructor(adapters: InterpreterAdapters = {}) {
     this.player = adapters.player ?? new AudioPlayer();
     this.timing = adapters.timing;
+    this.speech = adapters.speech;
     this.captureFactory =
       adapters.capture ?? ((options) => new MicrophoneCapture(options));
     this.player.setActivityListener((active) => {
@@ -432,7 +438,7 @@ export class InterpreterController {
     return {
       id, sequence, startedAt, text: "", translation: "", sourceCommitted: "",
       consumed: 0, rejectedThrough: 0, lastAttempt: "", pcm: [], pcmBytes: 0,
-      metrics: {}, firstPlaybackAt: null, final: false, reconcile: false, replaying: false,
+      metrics: {}, firstPlaybackAt: null, final: false, reconcile: false, replaying: false, emptyAttempt: "",
     };
   }
   private addTurn(r: Runtime, block: Block) {
@@ -536,6 +542,16 @@ export class InterpreterController {
   private async translateSegment(r: Runtime, block: Block, candidate: LiveSegment) {
     const previous = block.translation;
     let translation = "", accepted = false, allowed = block.final;
+    const choice = (await this.speech?.(r.speaker)) ?? { speak: true };
+    if (!this.isCurrent(r)) return;
+    const speak = choice.speak;
+    // Spoken audio commits a source prefix; for captions, the approved and completed text does.
+    const accept = () => {
+      if (accepted) return;
+      accepted = true;
+      block.consumed = candidate.endUnits;
+      block.rejectedThrough = block.consumed;
+    };
     const context = this.context();
     const precedingSource = appendTranslation(r.previousSource, block.sourceCommitted, r.profile.language);
     if (precedingSource) context.push({
@@ -547,8 +563,8 @@ export class InterpreterController {
       await streamInterpretation({
         text: candidate.text, followingText: candidate.followingText,
         sourceLanguage: r.profile.language, targetLanguage: r.target.language,
-        speaker: r.speaker, voice: this.state.profiles[r.speaker].voice,
-        isFinal: block.final, context: context.slice(-6),
+        speaker: r.speaker, voice: choice.voice ?? this.state.profiles[r.speaker].voice,
+        isFinal: block.final, speak, context: context.slice(-6),
       }, r.abort.signal, async (event) => {
         if (!this.isCurrent(r)) return;
         const display = () => this.turn(block.id, {
@@ -565,11 +581,7 @@ export class InterpreterController {
         if (event.type === "audio") {
           const bytes = base64ToBytes(event.audio);
           if (!bytes.length) return;
-          if (!accepted) {
-            accepted = true;
-            block.consumed = candidate.endUnits;
-            block.rejectedThrough = block.consumed;
-          }
+          accept();
           // Replay history is optional and bounded, live playback is never truncated.
           block.pcmBytes += bytes.length;
           if (block.pcmBytes <= 90 * 48_000) block.pcm.push(bytes);
@@ -584,6 +596,15 @@ export class InterpreterController {
           if (r.finishing) this.update({ phase: "playing" });
         }
         if (event.type === "done") {
+          if (!speak && allowed) {
+            // An empty caption is retried once; a second one is a filler with nothing to show.
+            if (!translation.trim() && block.emptyAttempt !== candidate.text) {
+              block.emptyAttempt = candidate.text;
+              throw new Error("La traduction n’a renvoyé aucun texte.");
+            }
+            accept();
+            display();
+          }
           if (event.spoken && !accepted) throw new Error("Aucun son reçu. Réessaie avec une voix provisoire.");
           if (!accepted) block.rejectedThrough = candidate.endUnits;
           block.metrics.translationMs ??= event.metrics.translationMs;
