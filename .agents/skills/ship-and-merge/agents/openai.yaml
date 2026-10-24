@@ -1,0 +1,7 @@
+interface:
+  display_name: "Ship and merge"
+  short_description: "Publish and merge the task PR after clean checks."
+  default_prompt: "Use $ship-and-merge to publish this Interprète task PR and merge it once checks, reviews, and conflicts are clean."
+
+policy:
+  allow_implicit_invocation: false
