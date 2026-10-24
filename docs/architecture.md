@@ -52,9 +52,13 @@ flowchart TB
   Desktop["apps/desktop<br/>@interprete/desktop<br/>React + Vite + Tauri"]
   Server["apps/server<br/>@interprete/server<br/>Hono sur Node"]
   Shared["packages/shared<br/>@interprete/shared<br/>types, langues, segmentation"]
+  Landing["apps/landing<br/>@interprete/landing<br/>page statique Vite"]
+  UI["packages/ui<br/>@interprete/ui<br/>composants, tokens, logos"]
   Scripts["scripts/<br/>benchmark hors app"]
 
-  Root --> Desktop & Server & Shared & Scripts
+  Root --> Desktop & Server & Shared & Landing & UI & Scripts
+  Desktop -- "import" --> UI
+  Landing -- "import" --> UI
   Desktop -- "import" --> Shared
   Server -- "import" --> Shared
   Desktop -. "import type AppType<br/>(types seulement)" .-> Server
@@ -65,6 +69,8 @@ flowchart TB
 | `apps/desktop` | Toute l'app. Le front est un export statique (`dist/`) embarqué par Tauri. | `src/lib/interpreter.ts` (orchestration d'un tour), `transcription.ts` (OpenAI Realtime), `audio.ts` (capture et lecture), `api.ts` (client RPC), `src-tauri/` (Rust, config, permissions) |
 | `apps/server` | API HTTP du VPS. Bundles ESM `dist/server.mjs` et `dist/db/migrate.mjs`. | `src/app.ts` (assemblage, CORS), `src/routes/*.ts` (un endpoint audio par fichier), `src/rpc/` (comptes/préférences), `src/auth.ts`, `src/db/`, `src/server.ts` (démarrage), `src/lib/*` (fournisseurs, sessions, validation) |
 | `packages/shared` | Code utilisé des deux côtés, publié en TypeScript source. | `contracts.ts`, `languages.ts`, `live-segments.ts`, `text.ts` |
+| `packages/ui` | Design system partagé par le desktop et la landing, publié en source (TSX/CSS, sans build). | `src/components/*` (primitives shadcn), `src/styles.css` (Tailwind, tokens, police), `src/assets/` (logos), `components.json` |
+| `apps/landing` | Landing page statique. Vercel la construit avec Root Directory `apps/landing`. | `index.html`, `src/main.css` (importe `@interprete/ui/styles.css`) |
 
 Le desktop importe **uniquement le type** `AppType` du serveur : le client `hc<AppType>` connaît les routes, leurs entrées et leurs réponses. Modifier une route casse la compilation du desktop, pas l'app en production. Aucun code serveur n'est embarqué dans le bundle desktop.
 

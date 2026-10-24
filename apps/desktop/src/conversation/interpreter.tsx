@@ -22,7 +22,8 @@ import { desktopAvailable } from "../lib/calls";
 import { Conversation } from "./conversation";
 import { SettingsSheet } from "./settings-sheet";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
-import { Button } from "@/components/ui/button";
+import { Button } from "@interprete/ui/components/button";
+import logo from "@interprete/ui/assets/logo.png";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,7 +33,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@interprete/ui/components/alert-dialog";
 
 type PendingConfirm =
   | { kind: "clear" }
@@ -172,7 +173,7 @@ export function Interpreter({
       <header className="topbar">
         <div className="frame topbar-inner">
           <a className="wordmark" href="#main">
-            <img src="/logo.png" alt="Interprète, accueil" />
+            <img src={logo} alt="Interprète, accueil" />
           </a>
           <div
             className="status"

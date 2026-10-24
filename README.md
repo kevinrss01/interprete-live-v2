@@ -9,7 +9,9 @@ Le mode conversation permet la traduction vocale pour deux personnes qui parlent
 ```
 apps/desktop     App Tauri : front React (export statique) + coque Rust (src-tauri)
 apps/server      API Hono (Node) : clés OpenAI / ElevenLabs, sessions signées, déployée en Docker
+apps/landing     Landing page statique (Vite), déployée sur Vercel
 packages/shared  Types, langues et segmentation communs aux deux
+packages/ui      Design system : composants shadcn, tokens CSS, logos
 scripts/         Benchmark et vérifications hors app
 ```
 
