@@ -12,7 +12,7 @@ const ORIGINS = (
 export function allowedOrigin(origin: string | null) {
   return origin !== null && ORIGINS.includes(origin);
 }
-type Claims = {
+export type Claims = {
   id: string;
   expires: number;
   purpose: "session" | "voice";

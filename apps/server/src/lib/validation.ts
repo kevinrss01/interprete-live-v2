@@ -30,7 +30,7 @@ export const interpretSchema = z
     (x) => x.sourceLanguage !== x.targetLanguage,
     "Les deux langues doivent être différentes.",
   );
-export async function bodyJson(request: Request) {
+export async function bodyJson(request: { text(): Promise<string> }) {
   const text = await request.text();
   if (text.length > 25000)
     throw new AppError("PAYLOAD", "Cette phrase est trop longue.", 413);

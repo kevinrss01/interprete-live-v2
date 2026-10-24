@@ -16,11 +16,13 @@
     "@interprete/shared": "workspace:*",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "~2.8.3",
+    "hono": "4.13.13",
     "lucide-react": "1.61.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@interprete/server": "workspace:*",
     "@tailwindcss/vite": "4.3.3",
     "@tauri-apps/cli": "^2",
     "@types/node": "26.6.5",

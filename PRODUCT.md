@@ -6,7 +6,7 @@
 web
 
 ## Stack
-Next.js App Router, TypeScript, Tailwind CSS. Server routes on Vercel. Cloud speech processing; browser captures and plays audio.
+Tauri 2 desktop app (React, TypeScript, Vite, Tailwind CSS) and a Hono API on a VPS. Cloud speech processing; the app captures and plays audio.
 
 ## Users
 Two people speaking different languages, taking turns around one shared device. Kevin wants a working low-latency translation app with separate voice identities.

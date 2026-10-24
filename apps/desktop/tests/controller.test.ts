@@ -44,12 +44,12 @@ test("two rapid start commands keep only the latest speaker during session boots
 test("cancel during bootstrap prevents a delayed microphone/session start", async () => {
   const original = globalThis.fetch;
   let resolveStatus!: (value: Response) => void;
+  const pending = new Promise<Response>((resolve) => {
+    resolveStatus = resolve;
+  });
   let sessionCalls = 0;
   globalThis.fetch = async (url) => {
-    if (String(url) === "/api/status")
-      return new Promise<Response>((r) => {
-        resolveStatus = r;
-      });
+    if (String(url) === "/api/status") return pending;
     sessionCalls++;
     throw new Error("Unexpected session request");
   };

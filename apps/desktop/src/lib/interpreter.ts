@@ -5,7 +5,7 @@ import {
   makeWav,
   type CaptureOptions,
 } from "./audio";
-import { fetchJson, saveSession, streamInterpretation } from "./api";
+import { api, call, saveSession, streamInterpretation } from "./api";
 import { ContinuousTranscription, type ConnectionState, type StreamTiming, type Transcript } from "./transcription";
 import type {
   HistoryItem,
@@ -223,10 +223,7 @@ export class InterpreterController {
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
       try {
-        const result = await fetchJson<{
-          services: NonNullable<Snapshot["services"]>;
-          session: string;
-        }>("/api/status");
+        const result = await call(api.api.status.$get());
         saveSession(result.session);
         try {
           const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
@@ -715,18 +712,16 @@ export class InterpreterController {
       form.set("seconds", String(sample.seconds));
       for (const [i, blob] of sample.files.entries())
         form.append("files", blob, `voice-${i}.webm`);
-      const result = await fetchJson<{
-        voice: string;
-        requiresVerification: boolean;
-      }>("/api/voice/clone", { method: "POST", body: form });
+      const result = await call(
+        api.api.voice.clone.$post(undefined, { init: { body: form } }),
+      );
       if (
         !this.state.profiles[id].consent ||
         this.state.profiles[id].consentId !== profile.consentId
       ) {
-        await fetchJson("/api/voice/delete", {
-          method: "POST",
-          body: JSON.stringify({ speaker: id, voice: result.voice }),
-        });
+        await call(
+          api.api.voice.delete.$post({ json: { speaker: id, voice: result.voice } }),
+        );
         return;
       }
       if (result.requiresVerification)
@@ -765,10 +760,7 @@ export class InterpreterController {
       const voice =
         p.cloneVoice || (p.cloneStatus === "ready" ? p.voice : undefined);
       if (voice)
-        await fetchJson("/api/voice/delete", {
-          method: "POST",
-          body: JSON.stringify({ speaker: id, voice }),
-        });
+        await call(api.api.voice.delete.$post({ json: { speaker: id, voice } }));
       this.setProfile(id, {
         cloneVoice: undefined,
         consentId: p.consent ? crypto.randomUUID() : undefined,

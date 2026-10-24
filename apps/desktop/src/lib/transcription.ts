@@ -1,5 +1,5 @@
 import { bytesToBase64 } from "./audio";
-import { fetchJson } from "./api";
+import { api, call } from "./api";
 
 export type Transcript = {
   id: string;
@@ -246,11 +246,9 @@ export class ContinuousTranscription {
   private async open(): Promise<Connection> {
     const abort = new AbortController();
     const signal = AbortSignal.any([this.options.signal, abort.signal, AbortSignal.timeout(this.timing.connectTimeoutMs)]);
-    const session = await fetchJson<{ token: string }>("/api/session", {
-      method: "POST",
-      body: JSON.stringify({ language: this.options.language }),
-      signal,
-    });
+    const session = await call(
+      api.api.session.$post({ json: { language: this.options.language } }, { init: { signal } }),
+    );
     signal.throwIfAborted();
     if (this.stopped) throw new DOMException("Stopped", "AbortError");
     const connection: Connection = {

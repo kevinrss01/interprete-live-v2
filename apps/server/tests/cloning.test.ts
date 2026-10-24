@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { POST as clone } from "../src/app/api/voice/clone/route";
-import { POST as remove } from "../src/app/api/voice/delete/route";
+import { app } from "../src/app";
 import {
   bootstrapSession,
   verify,
@@ -10,6 +9,8 @@ import {
 } from "../src/lib/session";
 
 process.env.SESSION_SECRET = "clone-tests-only";
+const clone = (request: Request) => app.request(request);
+const remove = clone;
 process.env.ELEVENLABS_API_KEY = "mock-key";
 function request(form: FormData, token: string) {
   return new Request("https://interpreter.test/api/voice/clone", {

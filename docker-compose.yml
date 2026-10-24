@@ -1,0 +1,25 @@
+# VPS: API behind Caddy (automatic HTTPS). Secrets live in apps/server/.env.local on the host.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    env_file: apps/server/.env.local
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN, e.g. api.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

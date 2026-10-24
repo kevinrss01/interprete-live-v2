@@ -3,6 +3,17 @@ import test from "node:test";
 import { streamInterpretation } from "../src/lib/api";
 import { base64ToBytes, bytesToBase64, makeWav } from "../src/lib/audio";
 
+const body = {
+  text: "Bonjour",
+  sourceLanguage: "fr",
+  targetLanguage: "en",
+  speaker: "a" as const,
+  voice: "sarah",
+  isFinal: true,
+  followingText: "",
+  context: [],
+};
+
 function sse(parts: string[]) {
   return new Response(
     new ReadableStream({
@@ -26,14 +37,14 @@ test("fragmented text/audio streams require an explicit successful end", async (
         'data: {"type":"done","text":"Bonjour","spoken":true,"metrics":{}}\n\n',
       ]);
     const events: string[] = [];
-    await streamInterpretation({}, new AbortController().signal, (e) =>
+    await streamInterpretation(body, new AbortController().signal, (e) =>
       events.push(e.type),
     );
     assert.deepEqual(events, ["text", "done"]);
     globalThis.fetch = async () =>
       sse(['data: {"type":"text","delta":"partial"}\n\n']);
     await assert.rejects(
-      () => streamInterpretation({}, new AbortController().signal, () => {}),
+      () => streamInterpretation(body, new AbortController().signal, () => {}),
       /avant la fin/,
     );
     globalThis.fetch = async () =>
@@ -41,7 +52,7 @@ test("fragmented text/audio streams require an explicit successful end", async (
         'data: {"type":"error","message":"Provider unavailable","code":"UPSTREAM"}\n\n',
       ]);
     await assert.rejects(
-      () => streamInterpretation({}, new AbortController().signal, () => {}),
+      () => streamInterpretation(body, new AbortController().signal, () => {}),
       /Provider unavailable/,
     );
   } finally {

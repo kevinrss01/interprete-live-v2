@@ -1,10 +1,10 @@
 # Interprète
 
-Traduction vocale pour deux personnes qui parlent à tour de rôle sur **un seul appareil**. App desktop [Tauri 2](https://v2.tauri.app) (React, TypeScript, Vite, Tailwind CSS) et API Next.js hébergée sur un VPS.
+Traduction vocale pour deux personnes qui parlent à tour de rôle sur **un seul appareil**. App desktop [Tauri 2](https://v2.tauri.app) (React, TypeScript, Vite, Tailwind CSS) et API [Hono](https://hono.dev) hébergée sur un VPS.
 
 ```
 apps/desktop     App Tauri : front React (export statique) + coque Rust (src-tauri)
-apps/server      API Next.js (route handlers uniquement) : clés OpenAI / ElevenLabs, sessions signées
+apps/server      API Hono (Node) : clés OpenAI / ElevenLabs, sessions signées, déployée en Docker
 packages/shared  Types, langues et segmentation communs aux deux
 scripts/         Benchmark et vérifications hors app
 ```
@@ -27,6 +27,8 @@ Le bouton d’exemple utilise un enregistrement synthétique pour tester toute l
 
 ## Architecture
 
+Documentation détaillée, avec les diagrammes : [docs/architecture.md](docs/architecture.md).
+
 ```mermaid
 flowchart LR
   Micro[Micro du navigateur] --> ASR[OpenAI · gpt-live-transcribe]
@@ -41,7 +43,8 @@ flowchart LR
   Clone -->|Dès le prochain segment| Speech
 ```
 
-- Tauri n’embarque qu’un front statique : toute la logique serveur (clés, SSE, WebSocket ElevenLabs) vit dans `apps/server`. L’app obtient une session signée via `/api/status`, la garde dans son stockage local et l’envoie en `Authorization: Bearer`. Le serveur n’accepte que les origines de `ALLOWED_ORIGINS` (CORS dans `src/proxy.ts`).
+- Tauri n’embarque qu’un front statique : toute la logique serveur (clés, SSE, WebSocket ElevenLabs) vit dans `apps/server`. L’app obtient une session signée via `/api/status`, la garde dans son stockage local et l’envoie en `Authorization: Bearer`. Le serveur n’accepte que les origines de `ALLOWED_ORIGINS` (CORS dans `apps/server/src/app.ts`).
+- Le front appelle l’API avec le client RPC typé de Hono (`hc<AppType>` dans `apps/desktop/src/lib/api.ts`) : les types des requêtes et réponses viennent des routes du serveur, donc modifier une route casse la compilation du desktop au lieu de casser l’app.
 - La webview capture du PCM 24 kHz par trames de 20 ms et se connecte à OpenAI avec un jeton éphémère délivré par `/api/session`. La capture et la connexion commencent en parallèle ; les premières trames attendent en mémoire si la connexion n’est pas encore prête. Les clés permanentes restent sur le serveur.
 - `/api/interpret` traduit en streaming et communique avec ElevenLabs par WebSocket. La réponse audio revient au navigateur en SSE.
 - OpenAI utilise `gpt-live-transcribe` avec `delay: minimal`. Ses deltas sont découpés en fragments lexicaux ; Jev estime quand un fragment peut être traduit sans attendre une phrase entière. Un contexte des mots suivants aide à attendre une négation ou un nombre incomplet. Jev ne garantit ni la vérité de la transcription ni la qualité de la traduction.
@@ -83,7 +86,7 @@ Voir [les vérifications effectuées](docs/VALIDATION.md). Les latences de démo
 
 ## Déploiement
 
-- **API (VPS)** : `pnpm install --frozen-lockfile && pnpm build:server`, puis `pnpm --filter @interprete/server start` (port 3035) derrière un reverse proxy HTTPS. Une seule instance : les limites de requêtes sont en mémoire. Ne pas activer de buffering proxy sur `/api/interpret` (SSE).
+- **API (VPS)** : copier le repo et `apps/server/.env.local` sur le serveur, puis `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtient le certificat HTTPS et relaie le SSE sans buffering ; l’image ne contient que le bundle `dist/server.cjs`. Une seule instance : les limites de requêtes sont en mémoire.
 - **Desktop** : `pnpm build:desktop`. Sur macOS, `Info.plist` déclare l’usage du micro et `Entitlements.plist` l’autorise sous hardened runtime ; la signature et la notarisation se configurent à part.
 
 Le clonage d’une voix réelle nécessite l’accord de cette personne et un échantillon propre. Les deux personnes prennent toujours la parole à tour de rôle ; seule la traduction synthétique chevauche la parole. L’identification automatique des personnes et la séparation de deux voix humaines simultanées ne sont pas prises en charge.

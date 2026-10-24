@@ -2,29 +2,34 @@
   "name": "@interprete/server",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3035",
-    "build": "next build",
-    "start": "next start --port 3035",
+    "dev": "tsx watch --env-file-if-exists=.env.local src/server.ts",
+    "build": "esbuild src/server.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/server.cjs --external:bufferutil --external:utf-8-validate",
+    "start": "node --env-file-if-exists=.env.local dist/server.cjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "@hono/node-server": "2.1.5",
     "@interprete/shared": "workspace:*",
-    "next": "16.4.2",
-    "react": "19.3.1",
-    "react-dom": "19.3.1",
+    "hono": "4.13.13",
     "ws": "8.22.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@eslint/js": "9.39.5",
     "@types/node": "26.6.5",
-    "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0",
     "@types/ws": "8.18.2",
+    "esbuild": "0.28.2",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.4.2",
     "tsx": "4.23.15",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/app.ts"
+    }
   }
 }

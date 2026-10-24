@@ -1,14 +1,9 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
-export default defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  globalIgnores([
-    ".next/**",
-    "report/**",
-    "scripts/**",
-    "benchmark-*/**",
-    "next-env.d.ts",
-  ]),
-]);
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+export default tseslint.config(
+  js.configs.recommended,
+  tseslint.configs.recommended,
+  // Best-effort cleanup (closing sockets, reading provider error bodies) is intentional.
+  { rules: { "no-empty": ["error", { allowEmptyCatch: true }] } },
+  { ignores: ["dist/**"] },
+);

@@ -1,3 +1,5 @@
+import { hc, type ClientResponse, type InferRequestType } from "hono/client";
+import type { AppType } from "@interprete/server";
 import type { InterpretationEvent } from "@interprete/shared/contracts";
 // ponytail: empty in tests, where fetch is mocked on bare paths.
 const API_URL = import.meta.env?.VITE_API_URL ?? "";
@@ -10,46 +12,37 @@ function authorization(): Record<string, string> {
   const token = globalThis.localStorage?.getItem(SESSION_KEY);
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
-export async function fetchJson<T>(
-  url: string,
-  options: RequestInit = {},
-): Promise<T> {
-  const response = await fetch(API_URL + url, {
-    ...options,
-    headers: {
-      ...authorization(),
-      ...(options.body instanceof FormData
-        ? {}
-        : { "Content-Type": "application/json" }),
-      ...options.headers,
-    },
-  });
+// Shape of errorResponse() on the server; not part of the route types.
+type ServerError = { error?: string; code?: string };
+// Typed client generated from the server routes: a route change breaks this build, not the app.
+export const api = hc<AppType>(API_URL, {
+  headers: authorization,
+  // Resolved per call so tests can swap globalThis.fetch.
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+});
+// Unwraps an RPC call; server errors become an Error carrying the server's code.
+export async function call<T>(request: Promise<ClientResponse<T>>): Promise<T> {
+  const response = await request;
   const type = response.headers.get("content-type") || "";
   if (!type.includes("application/json"))
     throw new Error("La session a expiré. Recharge la page pour continuer.");
   const json = await response.json();
   if (!response.ok) {
-    const error = new Error(json.error || "La demande a échoué.");
-    Object.assign(error, { code: json.code });
-    throw error;
+    const { error: message, code } = json as ServerError;
+    throw Object.assign(new Error(message || "La demande a échoué."), { code });
   }
   return json as T;
 }
 export async function streamInterpretation(
-  body: unknown,
+  body: InferRequestType<typeof api.api.interpret.$post>["json"],
   signal: AbortSignal,
   onEvent: (event: InterpretationEvent) => void,
 ) {
-  const response = await fetch(API_URL + "/api/interpret", {
-    method: "POST",
-    headers: { ...authorization(), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
+  const response = await api.api.interpret.$post({ json: body }, { init: { signal } });
   if (!response.ok) {
-    const value = await response
+    const value = (await response
       .json()
-      .catch(() => ({ error: "La traduction n’a pas abouti." }));
+      .catch(() => ({ error: "La traduction n’a pas abouti." }))) as ServerError;
     throw new Error(value.error);
   }
   if (

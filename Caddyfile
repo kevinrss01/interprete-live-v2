@@ -1,0 +1,6 @@
+{$API_DOMAIN} {
+	# flush_interval -1 streams /api/interpret (SSE) without buffering.
+	reverse_proxy api:3035 {
+		flush_interval -1
+	}
+}
