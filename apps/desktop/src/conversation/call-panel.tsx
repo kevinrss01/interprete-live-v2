@@ -676,7 +676,7 @@ export function CallPanel({
         <div className="call-notice" role="status">
           <span>
             <strong>{monitor.call.app}</strong> ·{" "}
-            {monitor.call.simulated ? "simulation" : "microphone actif"}
+            {monitor.call.simulated ? "simulation" : "appel détecté"}
           </span>
           <button
             className="btn call-primary"

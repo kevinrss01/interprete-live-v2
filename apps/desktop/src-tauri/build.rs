@@ -20,6 +20,9 @@ fn main() {
             .compile("interprete_call_probe");
         println!("cargo:rustc-link-lib=framework=Foundation");
         println!("cargo:rustc-link-lib=framework=CoreAudio");
+        println!("cargo:rustc-link-lib=framework=CoreMediaIO");
+        println!("cargo:rustc-link-lib=framework=AppKit");
+        println!("cargo:rustc-link-lib=framework=QuartzCore");
         println!("cargo:rerun-if-changed=src/call_probe.m");
         println!("cargo:rerun-if-changed=src/virtual_microphone.m");
         println!("cargo:rerun-if-changed=src/system_audio.m");

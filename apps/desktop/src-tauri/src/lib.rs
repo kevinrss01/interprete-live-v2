@@ -51,7 +51,19 @@ pub fn run() {
                 ctrlc::set_handler(move || handle.exit(0))?;
             }
             #[cfg(target_os = "macos")]
-            for label in ["call-toast", "translation-overlay", "call-captions"] {
+            if let Some(prompt) = app.get_webview_window("call-toast")
+                && let Ok(window) = prompt.ns_window()
+            {
+                unsafe extern "C" {
+                    fn interprete_configure_call_prompt(window: *mut std::ffi::c_void);
+                }
+                // Tauri setup runs on the UI thread and keeps this native window alive.
+                unsafe {
+                    interprete_configure_call_prompt(window);
+                }
+            }
+            #[cfg(target_os = "macos")]
+            for label in ["translation-overlay", "call-captions"] {
                 if let Some(toast) = app.get_webview_window(label)
                     && let Ok(window) = toast.ns_window()
                 {
