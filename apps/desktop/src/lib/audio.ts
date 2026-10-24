@@ -156,6 +156,8 @@ export type CaptureOptions = {
   shouldRecordSample?: () => boolean;
   onSample?: (sample: { blob: Blob; seconds: number }) => void;
   demoUrl?: string;
+  deviceId?: string;
+  echoCancellation?: boolean;
 };
 export class MicrophoneCapture {
   private ctx: AudioContext | null = null;
@@ -257,8 +259,9 @@ export class MicrophoneCapture {
     } else {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          ...(this.options.deviceId ? { deviceId: { exact: this.options.deviceId } } : {}),
           channelCount: 1,
-          echoCancellation: true,
+          echoCancellation: this.options.echoCancellation ?? true,
           noiseSuppression: true,
           autoGainControl: true,
         },
@@ -273,7 +276,7 @@ export class MicrophoneCapture {
         if (!this.stopped) this.options.onError("Le microphone a été déconnecté.");
       };
       const modes = track?.getCapabilities?.().echoCancellation as unknown;
-      if (Array.isArray(modes) && modes.includes("all")) {
+      if (this.options.echoCancellation !== false && Array.isArray(modes) && modes.includes("all")) {
         await track
           .applyConstraints({
             echoCancellation: { exact: "all" },

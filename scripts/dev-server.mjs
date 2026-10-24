@@ -4,16 +4,25 @@ import { fileURLToPath } from "node:url";
 const cwd = fileURLToPath(new URL("../", import.meta.url));
 const compose = ["compose", "-f", "docker-compose.db.yml"];
 const windows = process.platform === "win32";
+const includeDesktop = process.argv.includes("--desktop");
 const children = [];
 let shutdownPromise;
 
-function start(command, args) {
+function start(command, args, waitForApi = false) {
   const child = spawn(command, args, {
     cwd,
-    stdio: "inherit",
+    stdio: waitForApi ? ["inherit", "pipe", "inherit"] : "inherit",
     detached: !windows,
     shell: windows && command === "pnpm",
   });
+  const ready = waitForApi ? new Promise((resolve) => {
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      process.stdout.write(chunk);
+      output = (output + chunk.toString()).slice(-1024);
+      if (output.includes("API listening on :")) resolve();
+    });
+  }) : Promise.resolve();
   const exited = new Promise((resolve) => {
     child.once("error", (error) => {
       console.error(`Impossible de lancer ${command}: ${error.message}`);
@@ -21,7 +30,7 @@ function start(command, args) {
     });
     child.once("exit", (code) => resolve(code ?? 1));
   });
-  const running = { child, exited };
+  const running = { child, exited, ready };
   children.push(running);
   return running;
 }
@@ -76,13 +85,34 @@ async function main() {
   if (shutdownPromise) return;
   if (code !== 0) return shutdown(code);
 
-  const api = start("pnpm", ["--filter", "@interprete/server", "dev"]);
+  const api = start("pnpm", ["--filter", "@interprete/server", "dev"], includeDesktop);
   const studio = start("pnpm", ["--filter", "@interprete/server", "db:studio"]);
-  console.log("API + Drizzle Studio lancés. Ctrl+C arrête le backend et conserve les données.");
-  code = await Promise.race([api.exited, studio.exited]);
+  if (includeDesktop) {
+    let timer;
+    const startup = await Promise.race([
+      api.ready.then(() => ({ ready: true, code: 0 })),
+      api.exited.then((code) => ({ ready: false, code: code || 1 })),
+      studio.exited.then((code) => ({ ready: false, code: code || 1 })),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve({ ready: false, code: 1 }), 30_000);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (shutdownPromise) return;
+    if (!startup.ready) return shutdown(startup.code);
+  }
+  const desktop = includeDesktop
+    ? start("pnpm", ["--filter", "@interprete/desktop", "dev"])
+    : null;
+  console.log(`${includeDesktop ? "App + " : ""}API + Drizzle Studio lancés. Ctrl+C arrête les processus et conserve les données.`);
+  const processes = desktop ? [api, studio, desktop] : [api, studio];
+  const first = await Promise.race(
+    processes.map((running) => running.exited.then((code) => ({ running, code }))),
+  );
   if (!shutdownPromise) {
+    if (first.running === desktop && first.code === 0) return shutdown(0);
     console.error("Un processus du backend s’est arrêté. Arrêt des autres composants.");
-    await shutdown(code || 1);
+    await shutdown(first.code || 1);
   }
 }
 

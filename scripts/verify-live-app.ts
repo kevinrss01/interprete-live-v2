@@ -29,7 +29,7 @@ async function main() {
   const originalFetch = globalThis.fetch;
   const originalSocket = globalThis.WebSocket;
   globalThis.WebSocket = WebSocket as unknown as typeof globalThis.WebSocket;
-  let cookie = "";
+  let session = "";
   const requests: Array<{
     text: string;
     atMs: number;
@@ -46,8 +46,11 @@ async function main() {
     const url = new URL(String(input), base);
     const headers = new Headers(init?.headers);
     if (url.origin === new URL(base).origin) {
-      headers.set("Origin", url.origin);
-      if (cookie) headers.set("Cookie", cookie);
+      headers.set(
+        "Origin",
+        process.env.APP_TEST_ORIGIN || "http://localhost:1420",
+      );
+      if (session) headers.set("Authorization", `Bearer ${session}`);
     }
     if (url.pathname === "/api/interpret") {
       const body = JSON.parse(String(init?.body));
@@ -58,9 +61,10 @@ async function main() {
       });
     }
     const response = await originalFetch(url, { ...init, headers });
-    const setCookie = response.headers.get("set-cookie");
-    if (setCookie && url.origin === new URL(base).origin)
-      cookie = setCookie.split(";")[0];
+    if (url.pathname === "/api/status" && response.ok) {
+      const value = (await response.clone().json()) as { session?: string };
+      session = value.session || "";
+    }
     if (url.pathname === "/api/interpret") {
       const record = requests.at(-1)!;
       observations.push(
@@ -170,8 +174,12 @@ async function main() {
 
   const controller = new InterpreterController({
     timing: {
-      ...(process.env.APP_TEST_RENEW_MS ? { renewMs: Number(process.env.APP_TEST_RENEW_MS) } : {}),
-      ...(process.env.APP_TEST_CHECKPOINT_MS ? { checkpointMs: Number(process.env.APP_TEST_CHECKPOINT_MS) } : {}),
+      ...(process.env.APP_TEST_RENEW_MS
+        ? { renewMs: Number(process.env.APP_TEST_RENEW_MS) }
+        : {}),
+      ...(process.env.APP_TEST_CHECKPOINT_MS
+        ? { checkpointMs: Number(process.env.APP_TEST_CHECKPOINT_MS) }
+        : {}),
     },
     player: new SilentPlayer(),
     capture: (options) => new Input(options),

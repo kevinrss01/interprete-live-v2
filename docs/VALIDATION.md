@@ -1,4 +1,32 @@
-# Vérifications de l’app — 23 octobre 2026
+# Vérifications de l’app — 24 octobre 2026
+
+## Intégration avec les comptes et l’onboarding — 24 octobre
+
+- L’intégration conserve les écrans de connexion/onboarding et leur contrôleur partagé, avec des routes indépendantes pour les fenêtres `#call-toast` et `#translation-overlay`.
+- `pnpm dev` réutilise l’orchestrateur backend avec l’option `--desktop` : PostgreSQL et les migrations précèdent le démarrage de l’API et de Studio ; l’app Tauri attend le message d’écoute de l’API. Les tests de cycle de vie vérifient le démarrage, l’ordre, l’interruption, la fermeture normale de l’app, les erreurs et la conservation du volume avec des exécutables simulés. Aucun lancement réel de Docker n’a été effectué pour cette intégration.
+- TypeScript, lint serveur, 8 tests de cycle de vie, 13 tests serveur et 34 tests desktop passent. Les builds serveur, Vite et le bundle macOS de développement passent ; 11 tests Rust passent et le test matériel reste ignoré par défaut. Les résultats matériels et natifs de la version locale ci-dessous restent distincts de ces vérifications d’intégration.
+
+## Commande unique et pastille flottante — 24 octobre
+
+- Avant intégration du backend PostgreSQL, la commande unique démarrait l’API, Vite et l’app Tauri. Démarrage natif et réponses HTTP 200 sur les ports 3035/1420 vérifiés ; `Ctrl+C` libérait les deux ports. Ces observations concernent la commande précédente, sans PostgreSQL ni Studio.
+- Nouvelle fenêtre transparente indépendante, ovale, à droite de l’écran, avec état, langues et bouton d’arrêt. L’indicateur suit l’identifiant de session réel, reste pendant la restitution finale et disparaît à l’arrêt. Les modes conversation et appel utilisent un seul propriétaire de la pastille.
+- **Tester la pastille** ne capture aucun audio et n’appelle aucun fournisseur. Son affichage et sa fermeture par le bouton carré ont été vérifiés dans Chrome ; aucun son de test n’a été émis.
+- 41 tests TypeScript et 11 tests Rust passent, ainsi que TypeScript, ESLint, Clippy avec avertissements bloquants et le build Vite. Les nouveaux tests couvrent l’arrêt d’une session précise, les mises à jour d’état concurrentes, l’aperçu, la fin de session et les anciens instantanés et l’arrêt retardé d’une session remplacée. La fenêtre est configurée pour ne pas prendre le focus et accepter le premier clic ; l’arrêt est revérifié contre le propriétaire réel dans le contrôleur appel comme dans le contrôleur conversation. Le test matériel BlackHole reste ignoré par défaut et n’a pas été réexécuté pour ce changement d’interface.
+- L’automatisation native reste indisponible (`cgWindowNotFound`) ; le navigateur intégré a aussi échoué deux fois par timeout. La validation visuelle au-dessus d’une autre application ou d’une fenêtre plein écran n’est donc pas confirmée par l’automatisation. La revue de code indépendante a validé les corrections de focus, de clic initial et d’arrêt ciblé après remplacement de session ; aucun blocage supplémentaire n’a été identifié.
+
+## Mode appel sur macOS — 24 octobre
+
+Voir [le guide de configuration et de test](CALL-MODE.md). Le mode appel conserve l’architecture de transcription/traduction/synthèse existante et ajoute une détection CoreAudio, un toast natif de confirmation, la sélection d’un micro physique et une sortie PCM native vers BlackHole.
+
+- 37 tests TypeScript et 7 tests Rust réussis ; TypeScript, ESLint, Clippy avec avertissements bloquants, build Vite, build serveur et bundle macOS de développement réussis.
+- La sonde de processus et l’énumération native des périphériques ont été exécutées sur le Mac. La détection exclut les processus WebKit génériques de l’app elle-même ; les transports d’entrée virtuels et agrégés sont exclus par CoreAudio.
+- Parcours navigateur réel : exemple synthétique français → traduction anglaise terminée et retour à l’état micro arrêté ; Échap pendant le démarrage puis nouvelle tentative réussie.
+- Deux vérifications silencieuses avec les vrais fournisseurs : entrée synthétique de 4,23 s ; premier texte à 1,72 s / 1,64 s ; premier signal vocal planifié à 2,75 s / 3,85 s, avant la fin de l’entrée. Aucun micro physique utilisé. Ce sont deux observations, sans mesure acoustique ni statistiques P50/P95.
+- Régressions spécifiques : paquets PCM impairs, annulation d’ouverture native, vidage de sortie, erreurs fatales de périphérique, rejet d’un agrégat au nom personnalisé, segment audio de 24 secondes conservé intégralement par contre-pression, et consommation SSE qui attend la livraison audio. Un test du contrôleur vérifie que le segment suivant démarre alors que plus de trois secondes du précédent restent à lire sur la sortie virtuelle.
+- BlackHole 2ch 0.7.1 a été installé avec accord explicite. Après un premier échec dû au pilote non chargé, le service CoreAudio a été redémarré avec accord explicite : le périphérique apparaît alors avec deux canaux d’entrée et de sortie à 48 kHz. Le test matériel `pnpm test:virtual-mic` a **réussi** : 145 664 trames reçues, composante synthétique de 997 Hz mesurée à une amplitude de 0,131. Cela confirme le chemin de sortie natif → entrée du microphone virtuel. Le test reste ignoré dans la suite ordinaire car il requiert le pilote installé. Une réunion Meet / Zoom réelle n’a pas été utilisée.
+- Le redémarrage de CoreAudio a modifié les sorties par défaut et interrompu le son de l’utilisateur. La sortie audio et la sortie des sons système ont été remises sur le casque Bluetooth précédemment sélectionné, puis vérifiées via CoreAudio ; le volume existant de 69 % a été conservé. Les tests audio ont ensuite été arrêtés.
+- La vérification visuelle du toast macOS, du plein écran et d’une session minimisée de longue durée n’a pas pu être exécutée : l’automatisation native renvoie `cgWindowNotFound` pour toutes les applications testées. Le bundle compile, mais cela ne constitue pas une preuve visuelle de ces états.
+- Les changements restent locaux sur `main`, sans commit ni push. Greptile n’a pas été exécuté : aucun commit non fusionné n’existe par rapport à `origin/main`, et ce CLI ignore les changements non committés. Trois passes de revue indépendante ont été effectuées. Les huit défauts initiaux puis les corrections de continuité, d’annulation et de notifications d’activité ont été résolus et couverts par les tests ciblés ; la dernière petite course du timer d’activité a aussi été corrigée avec un accusé natif retardé en test.
 
 ## Conversation continue — correction du 23 octobre
 

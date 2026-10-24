@@ -9,7 +9,7 @@ Follow [AGENTS.md](../../../AGENTS.md). Inspect existing processes, environment
 examples, and tests before starting anything. Use the local API and configured
 `VITE_API_URL`; do not default to a production service or copy another app's login.
 
-- Browser UI: `pnpm --filter @interprete/desktop dev` on port 1420; API:
+- Browser UI: `pnpm --filter @interprete/desktop dev:web` on port 1420; API:
   `pnpm dev:server` on port 3035. Use authorized local configuration without
   overwriting existing environment files. Missing credentials are a blocker for
   live calls, not a reason to point tests at an unrelated backend.

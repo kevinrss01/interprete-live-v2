@@ -15,6 +15,7 @@ import { basename } from "node:path";
 const args = process.argv.slice(2);
 const role = args[0] === "api-child" ? "api-child"
   : basename(process.argv[1]) === "docker" ? (args.includes("up") ? "database" : "stop-database")
+  : args.includes("@interprete/desktop") ? "desktop"
   : args.at(-1);
 const log = (event) => appendFileSync(process.env.DEV_TEST_LOG, JSON.stringify({ event, args, pid: process.pid }) + "\\n");
 log("start:" + role);
@@ -25,8 +26,13 @@ if (role === "stop-database") {
 if (role === "db:migrate") process.exit(process.env.DEV_TEST_MODE === "migration-fails" ? 3 : 0);
 if (role === "database" && process.env.DEV_TEST_MODE !== "interrupt-startup") process.exit(0);
 process.on("SIGTERM", () => { log("stop:" + role); process.exit(0); });
-if (role === "dev") spawn(process.execPath, [process.argv[1], "api-child"], { stdio: "inherit" });
+if (role === "dev") {
+  spawn(process.execPath, [process.argv[1], "api-child"], { stdio: "inherit" });
+  setTimeout(() => { log("ready:api"); console.log("API listening on :3035"); }, 100);
+}
 if (role === "db:studio" && process.env.DEV_TEST_MODE === "studio-fails") setTimeout(() => process.exit(4), 200);
+if (role === "desktop" && process.env.DEV_TEST_MODE === "desktop-fails") setTimeout(() => process.exit(5), 200);
+if (role === "desktop" && process.env.DEV_TEST_MODE === "desktop-closes") setTimeout(() => process.exit(0), 200);
 setInterval(() => {}, 1000);
 `;
 
@@ -34,14 +40,15 @@ test("backend lifecycle preserves the database and cleans up its processes", {
   skip: process.platform === "win32" ? "Executable fixtures use POSIX shebangs." : false,
   timeout: 20_000,
 }, async (t) => {
-  for (const mode of ["normal", "migration-fails", "interrupt-startup", "studio-fails"]) {
+  for (const mode of ["normal", "normal-desktop", "migration-fails", "interrupt-startup", "studio-fails", "desktop-fails", "desktop-closes"]) {
     await t.test(mode, async () => {
       const directory = await mkdtemp(join(tmpdir(), "interprete-dev-test-"));
       const log = join(directory, "events.jsonl");
       await writeFile(log, "");
       for (const name of ["docker", "pnpm"])
         await writeFile(join(directory, name), fixture, { mode: 0o755 });
-      const runner = spawn(process.execPath, [script], {
+      const withDesktop = mode.includes("desktop");
+      const runner = spawn(process.execPath, [script, ...(withDesktop ? ["--desktop"] : [])], {
         env: {
           ...process.env,
           PATH: directory + delimiter + process.env.PATH,
@@ -60,26 +67,32 @@ test("backend lifecycle preserves the database and cleans up its processes", {
         assert.fail(`Missing event: ${event}`);
       };
       try {
-        if (mode === "normal") {
+        if (mode === "normal" || mode === "normal-desktop") {
           await waitFor("start:api-child");
           await waitFor("start:db:studio");
+          if (withDesktop) await waitFor("start:desktop");
           runner.kill("SIGINT");
         } else if (mode === "interrupt-startup") {
           await waitFor("start:database");
           runner.kill("SIGTERM");
         }
         const code = await Promise.race([done, delay(8000, "timeout", { ref: false })]);
-        assert.equal(code, mode === "migration-fails" ? 3 : mode === "studio-fails" ? 4 : 0);
+        assert.equal(code, mode === "migration-fails" ? 3 : mode === "studio-fails" ? 4 : mode === "desktop-fails" ? 5 : 0);
         const records = await events();
         const names = records.map((item) => item.event);
         assert.equal(names.filter((name) => name === "start:stop-database").length, 1);
         assert.equal(names.at(-1), "start:stop-database");
         assert.ok(records.every(({ args }) => !args.includes("down") && !args.includes("--volumes") && !args.includes("-v")));
-        if (mode === "normal" || mode === "studio-fails") {
+        if (mode !== "migration-fails" && mode !== "interrupt-startup") {
           assert.ok(names.indexOf("start:db:migrate") < names.indexOf("start:dev"));
           assert.ok(names.includes("stop:dev"));
           assert.ok(names.includes("stop:api-child"));
-          if (mode === "normal") assert.ok(names.includes("stop:db:studio"));
+          if (mode !== "studio-fails") assert.ok(names.includes("stop:db:studio"));
+          if (withDesktop) {
+            assert.ok(names.indexOf("start:db:migrate") < names.indexOf("start:desktop"));
+            assert.ok(names.indexOf("ready:api") < names.indexOf("start:desktop"));
+            if (mode === "normal-desktop") assert.ok(names.includes("stop:desktop"));
+          } else assert.ok(!names.includes("start:desktop"));
         } else {
           assert.ok(!names.includes("start:dev"));
           assert.ok(!names.includes("start:db:studio"));

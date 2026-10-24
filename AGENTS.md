@@ -43,7 +43,7 @@ Use Node 22+ and the pnpm version in root `package.json` (`packageManager`). Run
 
 - Install: `pnpm install --frozen-lockfile`.
 - API development: `pnpm dev:server` (port 3035).
-- Native app development: `pnpm dev:desktop`; browser-only UI: `pnpm --filter @interprete/desktop dev` (port 1420).
+- Native app development: `pnpm dev:desktop`; browser-only UI: `pnpm --filter @interprete/desktop dev:web` (port 1420).
 - App checks: `pnpm typecheck`, `pnpm lint`, `pnpm test`. Root lint currently covers the server only; do not claim desktop lint coverage.
 - API bundle: `pnpm build:server`; static UI build: `pnpm --filter @interprete/desktop build`.
 - Native bundle: `pnpm build:desktop` (requires Rust and platform tools); run when native configuration or packaging is affected.

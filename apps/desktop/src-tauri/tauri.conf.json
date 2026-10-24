@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "ai.impulselab.interprete",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm dev:web",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
@@ -17,12 +17,46 @@
         "height": 820,
         "center": true,
         "minWidth": 420,
-        "minHeight": 560
+        "minHeight": 560,
+        "backgroundThrottling": "disabled"
+      },
+      {
+        "label": "call-toast",
+        "title": "Appel détecté",
+        "url": "index.html#call-toast",
+        "width": 384,
+        "height": 250,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "shadow": true
+      },
+      {
+        "label": "translation-overlay",
+        "title": "Traduction instantanée",
+        "url": "index.html#translation-overlay",
+        "width": 248,
+        "height": 72,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "shadow": false,
+        "backgroundThrottling": "disabled",
+        "focusable": false,
+        "acceptFirstMouse": true
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

@@ -1,6 +1,10 @@
 # Interprète
 
-Traduction vocale pour deux personnes qui parlent à tour de rôle sur **un seul appareil**. App desktop [Tauri 2](https://v2.tauri.app) (React, TypeScript, Vite, Tailwind CSS) et API [Hono](https://hono.dev) hébergée sur un VPS.
+Traduction vocale en conversation ou pendant un appel sur Mac.
+
+Le mode **Appels sur Mac** détecte les applications qui utilisent le microphone, propose un toast de confirmation et envoie la traduction vers un microphone virtuel BlackHole. Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
+
+Le mode conversation permet la traduction vocale pour deux personnes qui parlent à tour de rôle sur **un seul appareil**. App desktop [Tauri 2](https://v2.tauri.app) (React, TypeScript, Vite, Tailwind CSS) et API [Hono](https://hono.dev) hébergée sur un VPS.
 
 ```
 apps/desktop     App Tauri : front React (export statique) + coque Rust (src-tauri)
@@ -17,15 +21,14 @@ Prérequis : Node 22+, pnpm, Docker démarré (avec Compose), Rust ([prérequis 
 pnpm install
 cp apps/server/.env.example apps/server/.env.local   # renseigner les secrets
 cp apps/desktop/.env.example apps/desktop/.env.local # VITE_API_URL
-pnpm dev:server    # terminal 1 : PostgreSQL + migrations + API + Drizzle Studio
-pnpm dev:desktop   # terminal 2 : fenêtre Tauri (Vite sur :1420)
+pnpm dev          # PostgreSQL + migrations + API + Studio + app macOS Tauri
 ```
 
-Le backend est accessible sur `http://localhost:3035` et Studio sur https://local.drizzle.studio. Ctrl+C dans le terminal backend arrête l’API, Studio et le conteneur PostgreSQL, en conservant le volume et toutes les données. Le prochain lancement réutilise cette base.
+Après la première configuration, `pnpm dev` suffit à tout lancer depuis la racine du dépôt. Le backend est accessible sur `http://localhost:3035`, Vite sur `http://localhost:1420` et Studio sur https://local.drizzle.studio. `Ctrl+C` arrête les processus de développement et le conteneur PostgreSQL, en conservant son volume et les données. Les commandes `pnpm dev:server` et `pnpm dev:desktop` restent disponibles pour démarrer chaque partie séparément ; `pnpm --filter @interprete/desktop dev:web` lance uniquement Vite.
 
 Choisir les deux langues, puis utiliser le bouton de la personne qui parle. La traduction commence pendant sa prise de parole, par petits segments, sans attendre l’arrêt du micro. Le micro reste ouvert pendant les pauses et la lecture ; seul le bouton Terminer clôt son tour. Les touches **A**, **B** et **Échap** permettent aussi de piloter la session.
 
-Le bouton d’exemple utilise un enregistrement synthétique pour tester toute la chaîne sans microphone. Il ne sert jamais au clonage.
+Le bouton d’exemple utilise un enregistrement synthétique pour tester toute la chaîne sans microphone. Il ne sert jamais au clonage. Une pastille ovale à droite de l’écran indique la session en cours et permet de l’arrêter depuis n’importe quelle application. **Appels sur Mac → Tester la pastille** affiche son aperçu sans ouvrir le micro.
 
 ## Architecture
 

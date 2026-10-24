@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { NativePcmPlayer } from "../src/lib/calls";
 import { InterpreterController } from "../src/lib/interpreter";
 import {
   nextSegment,
@@ -21,6 +22,8 @@ function harness(
   reject?: (text: string) => boolean,
   session?: Promise<Response>,
   autoSession = true,
+  nativePlayer?: NativePcmPlayer,
+  audio = "ABQAFA==",
 ) {
   const originalFetch = globalThis.fetch,
     originalSocket = globalThis.WebSocket;
@@ -101,7 +104,7 @@ function harness(
       },
       { type: "text", delta: "translation " + input.text },
       ...(spoken
-        ? [{ type: "audio", audio: "ABQAFA==", sampleRate: 24000 }]
+        ? [{ type: "audio", audio, sampleRate: 24000 }]
         : []),
       { type: "done", spoken, text: "translation " + input.text, metrics: {} },
     ];
@@ -148,7 +151,7 @@ function harness(
     },
   };
   const controller = new InterpreterController({
-    player,
+    player: nativePlayer ?? player,
     capture: (options) => {
       captureOptions = options;
       return capture;
@@ -181,6 +184,7 @@ test("translation audio is delivered while capture is still running, and finaliz
     await waitFor(() => h.player.chunks === 1);
     assert.equal(h.capture.stopped, false);
     assert.equal(h.controller.getSnapshot().phase, "listening");
+    assert.ok(h.controller.getSnapshot().sessionId, "the floating overlay follows this active session");
     assert.equal(h.controller.getSnapshot().outputActive, true);
     assert.equal(
       h.capture.outputActive,
@@ -195,6 +199,7 @@ test("translation audio is delivered while capture is still running, and finaliz
     );
     assert.equal(h.player.chunks, 2);
     assert.equal(h.controller.getSnapshot().turns[0].status, "done");
+    assert.equal(h.controller.getSnapshot().sessionId, null, "the floating overlay hides after playback completes");
     assert.equal(
       h.controller.getSnapshot().turns[0].translation,
       "translation Bonjour, translation je voudrais un café.",
@@ -365,4 +370,39 @@ test("early output still waits for dangling prepositions, known negation and unf
   assert.equal(usablePrefix("I want", "not now", "en"), false);
   assert.equal(usablePrefix("Le prix est cent", "vingt euros", "fr"), false);
   assert.equal(usablePrefix("Bonjour.", "pas de problème", "fr"), true);
+});
+
+test("virtual-mic translation of the next segment overlaps five seconds already queued", async () => {
+  let queued = 0;
+  const player = new NativePcmPlayer("BlackHole 2ch", () => {}, async <T>(name: string, args: Record<string, unknown>) => {
+    if (name === "audio_route_push") queued += Buffer.from(String(args.audio), "base64").length / 48000;
+    return (name === "audio_route_status" ? { pendingSeconds: queued, failed: false } : undefined) as T;
+  });
+  const h = harness(undefined, undefined, true, player, Buffer.alloc(5 * 48000).toString("base64"));
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Bonjour, ");
+    await waitFor(() => queued >= 5);
+    h.socket.delta("je voudrais un café.");
+    await waitFor(() => h.requests.length >= 2);
+    assert.ok(player.pendingSeconds > 3, "the next request must begin while the first segment is still queued");
+    assert.equal(h.controller.getSnapshot().phase, "listening");
+  } finally { h.cleanup(); }
+});
+
+test("a delayed overlay stop cannot cancel a replacement interpreter session", async () => {
+  const h = harness();
+  try {
+    await h.controller.start("a");
+    const first = h.controller.getSnapshot().sessionId!;
+    await h.controller.start("b");
+    const second = h.controller.getSnapshot().sessionId!;
+    assert.notEqual(first, second);
+    assert.equal(h.controller.cancelSession(first), false);
+    assert.equal(h.controller.getSnapshot().sessionId, second);
+    assert.equal(h.controller.getSnapshot().phase, "listening");
+    assert.equal(h.controller.cancelSession(second), true);
+    assert.equal(h.controller.getSnapshot().sessionId, null);
+    assert.equal(h.controller.getSnapshot().phase, "idle");
+  } finally { h.cleanup(); }
 });

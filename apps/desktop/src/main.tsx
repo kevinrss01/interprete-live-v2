@@ -2,6 +2,8 @@ import { Component, StrictMode, useEffect, useState, type ReactNode } from "reac
 import ReactDOM from "react-dom/client";
 import "@fontsource-variable/inter";
 import "./globals.css";
+import { TranslationOverlay } from "./components/translation-overlay";
+import { CallToast } from "./components/call-toast";
 import { Interpreter } from "./components/interpreter";
 import { InterpreterController } from "./lib/interpreter";
 import { Onboarding } from "./onboarding/onboarding";
@@ -54,7 +56,13 @@ function App() {
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      {location.hash === "#translation-overlay" ? (
+        <TranslationOverlay />
+      ) : location.hash === "#call-toast" ? (
+        <CallToast />
+      ) : (
+        <App />
+      )}
     </ErrorBoundary>
   </StrictMode>,
 );

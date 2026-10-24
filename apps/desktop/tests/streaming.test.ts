@@ -37,9 +37,9 @@ test("fragmented text/audio streams require an explicit successful end", async (
         'data: {"type":"done","text":"Bonjour","spoken":true,"metrics":{}}\n\n',
       ]);
     const events: string[] = [];
-    await streamInterpretation(body, new AbortController().signal, (e) =>
-      events.push(e.type),
-    );
+    await streamInterpretation(body, new AbortController().signal, (e) => {
+      events.push(e.type);
+    });
     assert.deepEqual(events, ["text", "done"]);
     globalThis.fetch = async () =>
       sse(['data: {"type":"text","delta":"partial"}\n\n']);
@@ -70,4 +70,35 @@ test("PCM round trip and WAV header preserve odd network chunks", async () => {
   assert.equal(wav.getUint32(40, true), 6);
   assert.equal(wav.getInt16(46, true), 32767);
   assert.equal(wav.getInt16(48, true), -32768);
+});
+
+test("SSE waits for asynchronous audio delivery before advancing the stream", async () => {
+  const original = globalThis.fetch;
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const seen: string[] = [];
+  globalThis.fetch = async () =>
+    sse([
+      'data: {"type":"audio","audio":"AAE="}\n\ndata: {"type":"done","spoken":true,"text":"Hello","metrics":{}}\n\n',
+    ]);
+  try {
+    const streaming = streamInterpretation(
+      body,
+      new AbortController().signal,
+      async (event) => {
+        seen.push(event.type);
+        if (event.type === "audio") await blocked;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(seen, ["audio"]);
+    release();
+    await streaming;
+    assert.deepEqual(seen, ["audio", "done"]);
+  } finally {
+    release();
+    globalThis.fetch = original;
+  }
 });

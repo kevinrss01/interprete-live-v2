@@ -6,7 +6,8 @@ const API_URL = import.meta.env?.VITE_API_URL ?? "";
 const SESSION_KEY = "interprete-session";
 // The server signs the session; it is kept here because the app has no cookies.
 export function saveSession(token: unknown) {
-  if (typeof token === "string") globalThis.localStorage?.setItem(SESSION_KEY, token);
+  if (typeof token === "string")
+    globalThis.localStorage?.setItem(SESSION_KEY, token);
 }
 function authorization(): Record<string, string> {
   const token = globalThis.localStorage?.getItem(SESSION_KEY);
@@ -36,13 +37,18 @@ export async function call<T>(request: Promise<ClientResponse<T>>): Promise<T> {
 export async function streamInterpretation(
   body: InferRequestType<typeof api.api.interpret.$post>["json"],
   signal: AbortSignal,
-  onEvent: (event: InterpretationEvent) => void,
+  onEvent: (event: InterpretationEvent) => void | Promise<void>,
 ) {
-  const response = await api.api.interpret.$post({ json: body }, { init: { signal } });
+  const response = await api.api.interpret.$post(
+    { json: body },
+    { init: { signal } },
+  );
   if (!response.ok) {
     const value = (await response
       .json()
-      .catch(() => ({ error: "La traduction n’a pas abouti." }))) as ServerError;
+      .catch(() => ({
+        error: "La traduction n’a pas abouti.",
+      }))) as ServerError;
     throw new Error(value.error);
   }
   if (
@@ -68,7 +74,7 @@ export async function streamInterpretation(
           const event = JSON.parse(line.slice(5)) as InterpretationEvent;
           if (event.type === "error") throw new Error(event.message);
           if (event.type === "done") completed = true;
-          onEvent(event);
+          await onEvent(event);
         }
       }
     }

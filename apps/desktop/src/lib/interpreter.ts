@@ -28,6 +28,7 @@ export type Snapshot = {
   profiles: Record<SpeakerId, Profile>;
   turns: Turn[];
   phase: Phase;
+  sessionId: string | null;
   active: SpeakerId;
   level: number;
   error: string | null;
@@ -42,7 +43,7 @@ export type Snapshot = {
   } | null;
 };
 type Capture = Pick<MicrophoneCapture, "start" | "stop" | "setOutputActive">;
-type Player = Pick<
+type Player = Omit<Pick<
   AudioPlayer,
   | "unlock"
   | "enqueue"
@@ -51,7 +52,10 @@ type Player = Pick<
   | "play"
   | "dispose"
   | "setActivityListener"
-> & { readonly pendingSeconds?: number };
+>, "enqueue"> & {
+  enqueue: (input: Uint8Array) => number | null | Promise<number | null>;
+  readonly pendingSeconds?: number;
+};
 export type InterpreterAdapters = {
   player?: Player;
   capture?: (options: CaptureOptions) => Capture;
@@ -120,6 +124,7 @@ const initial: Snapshot = {
   profiles: initialProfiles,
   turns: [],
   phase: "idle",
+  sessionId: null,
   active: "a",
   level: 0,
   error: null,
@@ -354,7 +359,7 @@ export class InterpreterController {
     this.runtime = r;
     this.addTurn(r, r.blocks[0]);
     this.update({
-      phase: "connecting", connection: "connecting", active: speaker,
+      phase: "connecting", sessionId: id, connection: "connecting", active: speaker,
       error: null, warning: null, outputActive: false,
     });
     r.transcriber = new ContinuousTranscription({
@@ -521,7 +526,7 @@ export class InterpreterController {
         sourceLanguage: r.profile.language, targetLanguage: r.target.language,
         speaker: r.speaker, voice: this.state.profiles[r.speaker].voice,
         isFinal: block.final, context: context.slice(-6),
-      }, r.abort.signal, (event) => {
+      }, r.abort.signal, async (event) => {
         if (!this.isCurrent(r)) return;
         const display = () => this.turn(block.id, {
           translation: appendTranslation(previous, translation, r.target.language),
@@ -546,7 +551,8 @@ export class InterpreterController {
           block.pcmBytes += bytes.length;
           if (block.pcmBytes <= 90 * 48_000) block.pcm.push(bytes);
           else block.pcm = [];
-          const at = this.player.enqueue(bytes);
+          const at = await this.player.enqueue(bytes);
+          if (!this.isCurrent(r)) return;
           if (block.firstPlaybackAt === null && at !== null) {
             block.firstPlaybackAt = at;
             block.metrics.firstAudioMs = Math.max(0, at - block.startedAt);
@@ -620,7 +626,7 @@ export class InterpreterController {
       await this.player.idle(r.abort.signal);
       if (!this.isCurrent(r)) return;
       this.runtime = null;
-      this.update({ phase: "idle", connection: null, active: r.speaker === "a" ? "b" : "a", level: 0, outputActive: false });
+      this.update({ phase: "idle", sessionId: null, connection: null, active: r.speaker === "a" ? "b" : "a", level: 0, outputActive: false });
     } catch (error) {
       if (this.isCurrent(r)) this.fail(r, error);
     }
@@ -631,6 +637,12 @@ export class InterpreterController {
     for (const block of r.blocks) this.turn(block.id, { status: "error", error: message(error) });
     this.update({ error: message(error) });
   }
+  cancelSession = (sessionId: string) => {
+    // Read the live owner rather than a rendered React snapshot during handoffs.
+    if (this.runtime?.id !== sessionId) return false;
+    this.cancel();
+    return true;
+  };
   cancel = (clearError = true) => {
     this.startGeneration++;
     this.replayAbort?.abort();
@@ -646,7 +658,7 @@ export class InterpreterController {
     }
     this.player.stop();
     if (this.outputTail) clearTimeout(this.outputTail);
-    this.update({ phase: "idle", connection: null, outputActive: false, level: 0,
+    this.update({ phase: "idle", sessionId: null, connection: null, outputActive: false, level: 0,
       ...(clearError ? { error: null, warning: null } : {}),
     });
   };
