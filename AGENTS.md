@@ -57,7 +57,7 @@ Check existing processes before starting servers. UI changes need relevant visua
 
 - Review the complete task diff before committing. Stage only task files/hunks. Use the configured GitHub no-reply identity; check `git var GIT_AUTHOR_IDENT` and `git var GIT_COMMITTER_IDENT` before creating or pushing commits. Do not replace the identity with a placeholder or personal email.
 - Push, PR creation, merge, and manual deployment are distinct actions. Follow the user's scope. Explicit `/ship-and-merge` or `$ship-and-merge` authorizes the task PR publication/merge workflow in [.agents/skills/ship-and-merge/SKILL.md](.agents/skills/ship-and-merge/SKILL.md); asking to edit that skill does not invoke it.
-- `.agents/skills/ship-and-merge/` is canonical; `.codex/skills/ship-and-merge` and `.claude/skills/ship-and-merge` link to it. `CLAUDE.md` loads this guide.
+- `.agents/skills/` contains canonical project skills; matching `.codex/skills/` and `.claude/skills/` entries link to them. `CLAUDE.md` loads this guide. See the [skill catalog](docs/agent-skills.md) for task routing; load only the skills relevant to the request.
 - The API deploys via Docker Compose and Caddy on a VPS; desktop releases require native builds. `VITE_API_URL` is embedded at build time. A merge or successful static build does not prove deployment; verify the target runtime when deployment is requested.
 - Update existing architecture/validation docs for material behavior changes. Keep historical results distinct from checks performed for the current task.
 
