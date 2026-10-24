@@ -352,6 +352,39 @@ kbd {
   color: var(--ink-2);
   font-size: 13px;
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+}
+.topbar-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+.topbar-action:hover:not(:disabled) {
+  background: var(--fill);
+  color: var(--ink);
+}
+.topbar-action:disabled {
+  opacity: 0.4;
+}
+.topbar-action:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
 .status-text {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -424,6 +457,9 @@ kbd {
 }
 .empty .btn {
   margin-top: 18px;
+}
+.conversation .turns {
+  padding-top: 20px;
 }
 .conversation-tools {
   display: flex;
@@ -1793,6 +1829,73 @@ p.call-notice {
   display: grid;
   place-items: center;
   padding: 48px 0;
+}
+.history {
+  padding: 28px 0 48px;
+}
+.history h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.history > .empty-text,
+.history > .note {
+  margin-top: 8px;
+}
+.history-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 -12px 12px;
+}
+.history-list {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.history-list li:last-child .history-row {
+  border-bottom: 1px solid var(--line);
+}
+.history-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.history-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.history-meta {
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.history-row:hover .history-title {
+  color: var(--ink);
+}
+.history-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.history .turns {
+  margin-top: 8px;
 }
 @media (max-width: 720px) {
   .sidebar {

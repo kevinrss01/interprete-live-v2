@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   type Ref,
   useRef,
   useState,
@@ -12,7 +13,6 @@ import {
   Captions,
   ChevronDown,
   Headphones,
-  LoaderCircle,
   Mic,
   Phone,
   RefreshCw,
@@ -55,6 +55,7 @@ import {
 import type { OverlayUpdate } from "../lib/translation-overlay";
 import { CallListening } from "../lib/call-listening";
 import { CAPTION_SIZES, captionPosition, useCaptionPreferences } from "../lib/caption-preferences";
+import { useDiscussion } from "../lib/use-discussion";
 import {
   captionLines,
   previewFrames,
@@ -63,6 +64,7 @@ import {
   type CaptionsUpdate,
 } from "../lib/call-captions";
 import { CallOptionChecks } from "../components/call-options";
+import { DiscussionTurns } from "./conversation";
 import { CaptionsView } from "../windows/call-captions";
 import { Checkbox } from "@interprete/ui/components/checkbox";
 import { Label } from "@interprete/ui/components/label";
@@ -89,7 +91,11 @@ function save(key: string, value: string) {
   } catch {}
 }
 
-export type CallPanelHandle = { stop: (sessionId: string) => void; previewCaptions: (visible: boolean) => void };
+export type CallPanelHandle = {
+  stop: (sessionId: string) => void;
+  previewCaptions: (visible: boolean) => void;
+  clearDiscussion: () => void;
+};
 
 export function CallPanel({
   visible,
@@ -100,6 +106,7 @@ export function CallPanel({
   onBusy,
   onOverlayChange,
   onCaptionError,
+  onNewDiscussion,
   ref,
 }: {
   ref?: Ref<CallPanelHandle>;
@@ -111,6 +118,7 @@ export function CallPanel({
   onBusy: (busy: boolean) => void;
   profiles: Record<SpeakerId, Profile>;
   onLanguage: (id: SpeakerId, language: Profile["language"]) => void;
+  onNewDiscussion: () => void;
 }) {
   const native = desktopAvailable();
   const captionPreferences = useCaptionPreferences();
@@ -203,6 +211,23 @@ export function CallPanel({
   );
   const busy = preparing || state.phase !== "idle";
   const anyBusy = busy || listenBusy;
+  const callId = listen.callId ?? session?.callId ?? accepted?.id ?? null;
+  const participantNames = {
+    you: profiles.a.name,
+    them: profiles.b.name,
+  };
+  const callTurns = useMemo(
+    () => [...incoming.turns, ...state.turns],
+    [incoming.turns, state.turns],
+  );
+  const callTitle = listen.app || accepted?.app;
+  const { messages: callMessages } = useDiscussion({
+    kind: "call",
+    turns: callTurns,
+    names: participantNames,
+    title: callTitle,
+    callId,
+  });
   useEffect(() => onBusy(anyBusy), [anyBusy, onBusy]);
   const busyRef = useRef(false);
   const startGeneration = useRef(0);
@@ -286,8 +311,12 @@ export function CallPanel({
         setCaptionsError(null);
         setSettingsPreview(visible);
       },
+      clearDiscussion: () => {
+        listening.controller.clearConversation();
+        runtime.current?.clearConversation();
+      },
     }),
-    [stop],
+    [stop, listening],
   );
   useEffect(() => {
     // One pill for the call: the microphone direction when active, otherwise the participants'.
@@ -679,7 +708,6 @@ export function CallPanel({
       setError(errorMessage(e));
     }
   }
-  const latest = state.turns.at(-1);
   const outputOptions = [
     ...(output && !outputs.some((d) => d.name === output)
       ? [{ value: output, label: `${output} · not installed` }]
@@ -1012,6 +1040,28 @@ export function CallPanel({
           </details>
         </div>
       </div>
+      {callMessages.length > 0 && (
+        <div className="call-section">
+          <h2>Discussion</h2>
+          <div className="call-section-body">
+            <div className="conversation-tools">
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={anyBusy}
+                onClick={onNewDiscussion}
+              >
+                New discussion
+              </button>
+            </div>
+            <DiscussionTurns
+              messages={callMessages}
+              live={[...incoming.turns, ...state.turns]}
+              follow
+            />
+          </div>
+        </div>
+      )}
       <div className="call-section">
         <h2>Detection</h2>
         <label className="check" data-disabled={!native}>
@@ -1172,30 +1222,6 @@ export function CallPanel({
           </div>
         </details>
       </details>
-      {latest && (
-        <div className="call-transcript" aria-live="polite">
-          <p className="note">
-            {latest.demo ? "Synthetic sample" : "Your microphone"} ·{" "}
-            {latest.status === "done"
-              ? "Done"
-              : busy
-                ? "Live"
-                : "Stopped"}
-          </p>
-          <p>{latest.source || "Waiting for speech…"}</p>
-          <p className="call-translation">
-            {latest.translation ||
-              (busy ? "The translation will appear here…" : "No translation.")}
-          </p>
-          {busy && !latest.translation && (
-            <LoaderCircle
-              size={16}
-              className="spin"
-              aria-label="Translating"
-            />
-          )}
-        </div>
-      )}
       {!native && captions && (
         <div className="captions-browser">
           <div className="captions-positioned" style={{ ...captionPosition(captionPreferences), width: CAPTION_SIZES[captionPreferences.size].width }}>
