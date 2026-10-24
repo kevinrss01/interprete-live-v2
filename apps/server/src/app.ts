@@ -12,6 +12,7 @@ import { session } from "./routes/session.post";
 import { interpret } from "./routes/interpret.post";
 import { voiceClone } from "./routes/voice-clone.post";
 import { voiceDelete } from "./routes/voice-delete.post";
+import { voicePreview } from "./routes/voice-preview.post";
 import { createContext } from "./rpc/base";
 import { router } from "./rpc/router";
 
@@ -54,6 +55,7 @@ export const app = new Hono()
   .route("/api", interpret)
   .route("/api", voiceClone)
   .route("/api", voiceDelete)
+  .route("/api", voicePreview)
   .notFound(() =>
     errorResponse(new AppError("NOT_FOUND", "Cette route n’existe pas.", 404)),
   )

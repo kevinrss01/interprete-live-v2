@@ -668,7 +668,8 @@ export class InterpreterController {
       if (this.replayAbort === abort) this.replayAbort = null;
     }
   }
-  private async collect(id: SpeakerId, blob: Blob, seconds: number) {
+  // Public for onboarding, which records its own sample before cloning.
+  async collect(id: SpeakerId, blob: Blob, seconds: number) {
     const profile = this.state.profiles[id];
     if (
       !profile.consent ||

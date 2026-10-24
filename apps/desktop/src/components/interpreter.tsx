@@ -7,13 +7,12 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { InterpreterController } from "../lib/interpreter";
+import type { InterpreterController } from "../lib/interpreter";
 import { SpeakerPanel, VoiceSettings } from "./speaker-panel";
 import { Conversation } from "./conversation";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 
-export function Interpreter() {
-  const [controller] = useState(() => new InterpreterController());
+export function Interpreter({ controller }: { controller: InterpreterController }) {
   const state = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
@@ -21,10 +20,6 @@ export function Interpreter() {
   );
   const [showSettings, setShowSettings] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    void controller.init();
-    return () => controller.dispose();
-  }, [controller]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;

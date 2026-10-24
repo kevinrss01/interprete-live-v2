@@ -13,8 +13,9 @@
     "windows": [
       {
         "title": "Interprète",
-        "width": 1100,
-        "height": 780,
+        "width": 1280,
+        "height": 820,
+        "center": true,
         "minWidth": 420,
         "minHeight": 560
       }

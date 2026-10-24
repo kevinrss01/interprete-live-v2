@@ -22,8 +22,8 @@ function createAuth() {
     database: drizzleAdapter(getDb(), { provider: "pg", schema }),
     trustedOrigins: allowedOrigins,
     plugins: [bearer()],
-    // Sign-in providers will be selected when the frontend auth flow is added.
-    emailAndPassword: { enabled: false },
+    // Email + password for now; the email is the unique key. No verification yet.
+    emailAndPassword: { enabled: true },
     rateLimit: { enabled: true },
   });
 }
