@@ -185,6 +185,7 @@ export type CaptureOptions = {
   shouldRecordSample?: () => boolean;
   onSample?: (sample: { blob: Blob; seconds: number }) => void;
   demoUrl?: string;
+  demoAudible?: boolean;
   deviceId?: string;
   // Used when connected; otherwise the system default microphone.
   preferredDeviceId?: string;
@@ -196,6 +197,7 @@ export class MicrophoneCapture {
   private stream: MediaStream | null = null;
   private node: AudioWorkletNode | null = null;
   private source: AudioNode | null = null;
+  private demoGain: GainNode | null = null;
   private sampleChunks: Uint8Array[] = [];
   private sampleBytes = 0;
   private lastSpeech = 0;
@@ -209,6 +211,11 @@ export class MicrophoneCapture {
   private lastLevelAt = 0;
   private ownsContext = false;
   constructor(private options: CaptureOptions) {}
+  setDemoAudible(audible: boolean) {
+    this.options.demoAudible = audible;
+    if (this.demoGain && this.ctx)
+      this.demoGain.gain.setTargetAtTime(audible ? 1 : 0, this.ctx.currentTime, 0.008);
+  }
   setOutputActive(active: boolean) {
     this.outputActive = active;
   }
@@ -289,6 +296,10 @@ export class MicrophoneCapture {
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(this.node);
+      this.demoGain = this.ctx.createGain();
+      this.demoGain.gain.value = this.options.demoAudible ? 1 : 0;
+      source.connect(this.demoGain);
+      this.demoGain.connect(this.ctx.destination);
       source.onended = () => {
         if (!this.stopped) this.options.onEnded();
       };
@@ -339,6 +350,8 @@ export class MicrophoneCapture {
   }
   private async finish() {
     if (this.stopped) return null;
+    this.demoGain?.disconnect();
+    this.demoGain = null;
     if (this.node) {
       await Promise.race([
         new Promise<void>((resolve) => {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { Turn, VoiceFeatures } from "@interprete/shared/contracts";
 import {
@@ -285,6 +286,8 @@ function fakeListening({
     listening,
     captured,
     speech: () => speech(),
+    sample: (demoUrl: string) =>
+      (capture({ ...options, demoUrl }) as { options: CaptureOptions }).options,
     feed: (frames: Uint8Array[]) => {
       const created = capture(options) as unknown;
       void created;
@@ -297,6 +300,77 @@ const profiles = {
   a: { id: "a", name: "You", language: "fr", voice: "sarah", consent: false, cloneStatus: "off", sampleSeconds: 0 },
   b: { id: "b", name: "Eux", language: "en", voice: "george", consent: true, cloneStatus: "ready", sampleSeconds: 0 },
 } as const;
+
+test("incoming English demos use the NASA clip; French demos keep their synthetic sample", async () => {
+  const h = fakeListening({ match: async () => assert.fail("captions need no voice") });
+  try {
+    await h.listening.start({ profiles, options: { captions: true, voice: false }, demo: true });
+    const sample = h.sample("/samples/en.wav");
+    assert.equal(sample.demoUrl, "/samples/nasa-en.wav");
+    assert.equal(sample.recordSample, false);
+    assert.equal(sample.demoAudible, false);
+    h.listening.setSampleAudible(true);
+    assert.equal(sample.demoAudible, true, "source monitoring can change during a sample");
+    h.listening.stop();
+    assert.equal(sample.demoAudible, false, "stop mutes the old sample immediately");
+    assert.equal(h.captured.length, 0, "a demo never starts system audio capture");
+    await h.listening.start({
+      profiles: { a: { ...profiles.a, language: "en" }, b: { ...profiles.b, language: "fr" } },
+      options: { captions: true, voice: false },
+      demo: true,
+    });
+    assert.equal(h.sample("/samples/fr.wav").demoUrl, "/samples/fr.wav");
+  } finally {
+    h.listening.dispose();
+  }
+});
+
+test("the three-voice sample is selectable without opening system capture or cloning", async () => {
+  const h = fakeListening({ match: async () => assert.fail("captions need no voice") });
+  try {
+    await h.listening.start({ profiles, options: { captions: true, voice: false }, demo: true, sample: "group" });
+    const sample = h.sample("/samples/en.wav");
+    assert.equal(sample.demoUrl, "/samples/nasa-three-speakers-en.wav");
+    assert.equal(sample.recordSample, false);
+    assert.equal(sample.demoAudible, false);
+    assert.equal(h.captured.length, 0);
+    await h.listening.start({ profiles, options: { captions: true, voice: false }, demo: true });
+    assert.equal(h.sample("/samples/en.wav").demoUrl, "/samples/nasa-en.wav", "the default sample is restored");
+    await h.listening.start({
+      profiles: { a: { ...profiles.a, language: "en" }, b: { ...profiles.b, language: "fr" } },
+      options: { captions: true, voice: false }, demo: true, sample: "group",
+    });
+    assert.equal(h.sample("/samples/fr.wav").demoUrl, "/samples/fr.wav", "English audio never replaces a French input");
+  } finally {
+    h.listening.dispose();
+  }
+});
+
+for (const [file, maximum] of [["nasa-en.wav", 25], ["nasa-three-speakers-en.wav", 30]] as const) {
+  test(`${file} contains 20–${maximum} seconds of mono 24 kHz PCM speech`, () => {
+    const wav = readFileSync(new URL(`../public/samples/${file}`, import.meta.url));
+    assert.equal(wav.toString("ascii", 0, 4), "RIFF");
+    assert.equal(wav.toString("ascii", 8, 12), "WAVE");
+    let format = false;
+    let data: Buffer | undefined;
+    for (let at = 12; at + 8 <= wav.length;) {
+      const size = wav.readUInt32LE(at + 4);
+      const chunk = wav.toString("ascii", at, at + 4);
+      if (chunk === "fmt ") {
+        assert.equal(wav.readUInt16LE(at + 8), 1, "PCM");
+        assert.equal(wav.readUInt16LE(at + 10), 1, "mono");
+        assert.equal(wav.readUInt32LE(at + 12), 24000);
+        assert.equal(wav.readUInt16LE(at + 22), 16);
+        format = true;
+      }
+      if (chunk === "data") data = wav.subarray(at + 8, at + 8 + size);
+      at += 8 + size + (size % 2);
+    }
+    assert.ok(format && data);
+    assert.ok(data.length / 48000 >= 20 && data.length / 48000 <= maximum);
+    assert.ok(data.some((byte) => byte !== 0), "the fixture is not silent");
+  });
+}
 
 test("captions-only sessions never synthesize, and their audio is never a cloning sample", async () => {
   const h = fakeListening({ match: async () => assert.fail("no voice is matched for captions") });

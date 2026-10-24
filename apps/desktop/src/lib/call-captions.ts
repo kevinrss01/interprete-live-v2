@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import type { Turn } from "@interprete/shared/contracts";
 import type { OverlayInvoke } from "./translation-overlay";
+import type { CaptionLayout } from "./caption-preferences";
 
 export type CaptionLine = { id: string; text: string; live: boolean };
 export type CaptionsStatus = "idle" | "starting" | "listening" | "preview";
@@ -12,6 +13,7 @@ export type CaptionsUpdate = {
   source: string;
   target: string;
   lines: CaptionLine[];
+  layout?: CaptionLayout;
 };
 export type CaptionsSnapshot = CaptionsUpdate & { revision: number };
 export const idleCaptions: CaptionsUpdate = {
@@ -104,10 +106,11 @@ export class CaptionsPublisher {
 export function useCallCaptions(
   update: CaptionsUpdate | null,
   onError: (message: string) => void,
+  layout: CaptionLayout,
 ) {
   const native = isTauri();
   const [publisher] = useState(() => new CaptionsPublisher(onError));
-  const serialized = JSON.stringify(update ?? idleCaptions);
+  const serialized = JSON.stringify({ ...(update ?? idleCaptions), layout: { x: layout.x, y: layout.y, size: layout.size, monitor: layout.monitor } });
   useEffect(() => {
     if (native) publisher.publish(JSON.parse(serialized) as CaptionsUpdate);
   }, [native, publisher, serialized]);
@@ -121,6 +124,9 @@ export function useCallCaptions(
 export const getCaptions = () => invoke<CaptionsSnapshot>("call_captions_snapshot");
 export const onCaptions = (listener: (state: CaptionsSnapshot) => void) =>
   listen<CaptionsSnapshot>("call-captions-state", (event) => listener(event.payload));
+export const getCaptionPosition = (expected: CaptionLayout) => invoke<CaptionLayout | null>("call_captions_position", {
+  expected: { x: expected.x, y: expected.y, size: expected.size, monitor: expected.monitor },
+});
 
 const PREVIEW: Record<string, string[]> = {
   fr: [

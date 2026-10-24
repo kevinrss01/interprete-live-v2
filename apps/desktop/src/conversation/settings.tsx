@@ -25,6 +25,10 @@ import { rpc } from "../lib/account";
 import { MicrophoneCapture } from "../lib/audio";
 import { MICROPHONE_KEY, savedMicrophone } from "../lib/call-preferences";
 import {
+  CAPTION_THEMES, CAPTION_SIZES, DEFAULT_CAPTION_PREFERENCES,
+  saveCaptionPreferences, useCaptionPreferences, type CaptionPreferences,
+} from "../lib/caption-preferences";
+import {
   desktopAvailable,
   microphoneName,
   physicalInputNames,
@@ -524,8 +528,95 @@ function MicrophoneSettings() {
   );
 }
 
+const CAPTION_POSITIONS = [
+  { value: "top-left", label: "Top left", x: 0, y: 0 },
+  { value: "top", label: "Top center", x: 0.5, y: 0 },
+  { value: "top-right", label: "Top right", x: 1, y: 0 },
+  { value: "left", label: "Center left", x: 0, y: 0.5 },
+  { value: "center", label: "Center", x: 0.5, y: 0.5 },
+  { value: "right", label: "Center right", x: 1, y: 0.5 },
+  { value: "bottom-left", label: "Bottom left", x: 0, y: 1 },
+  { value: "bottom", label: "Bottom center", x: 0.5, y: 1 },
+  { value: "bottom-right", label: "Bottom right", x: 1, y: 1 },
+];
+function CaptionSettings({ onPreview, busy, previewError }: { onPreview: (visible: boolean) => void; busy: boolean; previewError: string | null }) {
+  const native = desktopAvailable();
+  const preferences = useCaptionPreferences();
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState(false);
+  useEffect(() => {
+    onPreview(preview && !busy);
+    return () => onPreview(false);
+  }, [preview, busy, onPreview]);
+  function change(patch: Partial<CaptionPreferences>) {
+    try {
+      saveCaptionPreferences({ ...preferences, ...patch });
+      setError(null);
+    } catch {
+      setError("The caption settings could not be saved on this device.");
+    }
+  }
+  const position = CAPTION_POSITIONS.find((p) => p.x === preferences.x && p.y === preferences.y)?.value ?? "custom";
+  return (
+    <>
+      <SettingsSection title="Placement">
+        <SettingsRow label="Preview">
+          <Button variant="outline" disabled={!native || busy} aria-pressed={preview && !busy} onClick={() => setPreview(!preview)}>
+            {preview && !busy ? "Hide captions" : "Show captions"}
+          </Button>
+        </SettingsRow>
+        <SettingsRow label="Position" htmlFor="caption-position">
+          <Select
+            items={[...CAPTION_POSITIONS, { value: "custom", label: "Custom position" }]}
+            value={position}
+            onValueChange={(value) => {
+              const next = CAPTION_POSITIONS.find((p) => p.value === value);
+              if (next) change({ x: next.x, y: next.y });
+            }}
+          >
+            <SelectTrigger id="caption-position" className="h-11"><SelectValue /></SelectTrigger>
+            <SelectContent align="end" alignItemWithTrigger={false}>
+              {CAPTION_POSITIONS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+              <SelectItem value="custom" disabled>Custom position</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+        <SettingsRow label="Size">
+          <div className="caption-choices" role="group" aria-label="Caption size">
+            {Object.entries(CAPTION_SIZES).map(([value, size]) => (
+              <Button key={value} variant="outline" aria-pressed={preferences.size === value} onClick={() => change({ size: value as CaptionPreferences["size"] })}>{size.label}</Button>
+            ))}
+          </div>
+        </SettingsRow>
+      </SettingsSection>
+      {previewError && <p className="call-error" role="alert">{previewError}</p>}
+      <SettingsSection title="Appearance">
+        <SettingsRow label="Theme">
+          <div className="caption-choices" role="group" aria-label="Caption theme">
+            {Object.entries(CAPTION_THEMES).map(([value, theme]) => (
+              <Button key={value} variant="outline" aria-pressed={preferences.theme === value} onClick={() => change({ theme: value as CaptionPreferences["theme"], opacity: theme.opacity, color: theme.color })}>{theme.label}</Button>
+            ))}
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Background opacity" htmlFor="caption-opacity">
+          <div className="volume">
+            <input id="caption-opacity" type="range" min={0} max={100} value={preferences.opacity} style={{ "--volume": `${preferences.opacity}%` } as CSSProperties} onChange={(event) => change({ opacity: Number(event.target.value) })} />
+            <span className="tabular">{Math.round(preferences.opacity)} %</span>
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Text color" htmlFor="caption-color">
+          <Input id="caption-color" className="caption-color" type="color" value={preferences.color} onChange={(event) => change({ color: event.target.value })} />
+        </SettingsRow>
+      </SettingsSection>
+      {error && <p className="call-error" role="alert">{error}</p>}
+      <div className="settings-footer"><Button variant="outline" onClick={() => change({ ...DEFAULT_CAPTION_PREFERENCES, monitor: undefined })}>Restore defaults</Button></div>
+    </>
+  );
+}
+
 const TABS = [
   { id: "general", label: "General" },
+  { id: "captions", label: "Floating captions" },
   { id: "voices", label: "Voices" },
   { id: "account", label: "Account" },
   { id: "permissions", label: "Permissions" },
@@ -591,6 +682,8 @@ export function SettingsPage({
   onRemove,
   onVolume,
   onSignOut,
+  onCaptionPreview,
+  captionError,
 }: {
   profiles: Record<SpeakerId, Profile>;
   busy: boolean;
@@ -601,6 +694,8 @@ export function SettingsPage({
   onRemove: (id: SpeakerId) => void;
   onVolume: (volume: number) => void;
   onSignOut: () => void;
+  onCaptionPreview: (visible: boolean) => void;
+  captionError: string | null;
 }) {
   const [tab, setTab] = useState<TabId>("general");
   const [account] = useState(loadOnboardingAccount);
@@ -694,6 +789,7 @@ export function SettingsPage({
         {tab === "permissions" && (
           <MicrophoneSettings />
         )}
+        {tab === "captions" && <CaptionSettings onPreview={onCaptionPreview} busy={busy} previewError={captionError} />}
       </div>
     </section>
   );

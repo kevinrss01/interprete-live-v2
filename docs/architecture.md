@@ -269,3 +269,13 @@ flowchart LR
 | | `ALLOWED_ORIGINS` | Origines autorisées (CORS et contrôle de session) |
 | | `PORT` | Port d'écoute, 3035 par défaut |
 | `apps/desktop/.env.local` | `VITE_API_URL` | URL de l'API, intégrée au build |
+
+### Préférences de sous-titres flottants (24 octobre 2026)
+
+`apps/desktop/src/lib/caption-preferences.ts` valide et conserve localement la position normalisée, la taille, le thème, l’opacité du fond et la couleur du texte. Les fenêtres réagissent aux événements de stockage ; les mises à jour de la fenêtre principale utilisent aussi un événement local. Aucune préférence de barre ni conversation n’est envoyée au serveur.
+
+`useCallCaptions` transmet la position, la taille et le nom optionnel du moniteur avec l’état des sous-titres. `call_captions.rs` valide ces valeurs et recalcule une géométrie bornée par la zone de travail du moniteur mémorisé, ou de celui de la fenêtre principale si l’écran choisi est absent. Les calculs utilisent les pixels physiques et le facteur d’échelle.
+
+La fenêtre `call-captions` démarre le déplacement natif Tauri au clic-glissé. Après stabilisation des événements de déplacement, `call_captions_position` relit sa géométrie et convertit sa position en coordonnées normalisées ; cette commande est réservée à la fenêtre de sous-titres. La requête inclut la disposition attendue pour ignorer les positions devenues obsolètes ; une modification plus récente des réglages gagne aussi côté frontend. Les arrondis de pixels ne déclenchent pas de boucle de sauvegarde. La préférence de moniteur reste locale. Les sous-titres visibles acceptent les clics pour être déplacés ; lorsqu’ils s’effacent, la fenêtre ignore les clics.
+
+**Settings → Floating captions → Show captions** pilote un texte fictif persistant dans cette même fenêtre, via l’unique publisher de `CallPanel`. Il ne reste plus d’aperçu intégré aux réglages. Les modifications d’apparence passent par les préférences locales et celles de géométrie par les mises à jour natives. Masquer l’aperçu, changer d’onglet ou quitter les réglages libère cet aperçu sans capture ni fournisseur.

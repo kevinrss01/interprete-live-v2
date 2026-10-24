@@ -45,11 +45,13 @@ Une pastille ovale séparée de la fenêtre principale affiche l’état et les 
 
 Le toast d’appel propose trois cases, mémorisées d’un appel à l’autre :
 
-- **Sous-titres** (cochée par défaut) : ce que disent vos interlocuteurs, traduit dans votre langue, s’affiche en direct dans une fenêtre transparente en bas de l’écran, au-dessus des barres d’outils de Meet, Zoom ou Teams. Elle ne capte aucun clic, apparaît sur tous les bureaux et en plein écran, puis s’efface après quelques secondes de silence.
+- **Sous-titres** (cochée par défaut) : ce que disent vos interlocuteurs, traduit dans votre langue, s’affiche en direct dans une fenêtre transparente en bas de l’écran, au-dessus des barres d’outils de Meet, Zoom ou Teams. Glissez la fenêtre pour la déplacer. Elle apparaît sur tous les bureaux et en plein écran, puis s’efface après quelques secondes de silence ; lorsqu’elle est effacée, les clics passent à l’application dessous.
 - **Voix traduite** : leur traduction est lue sur la sortie actuelle du Mac. Jev choisit, une fois par session, une voix ElevenLabs prédéfinie proche de la leur (hauteur, étendue et timbre mesurés sur l’appareil ; seuls ces trois nombres sont envoyés). Si Jev ne répond pas assez vite, la voix la plus proche en hauteur est utilisée. Aucun clonage : leur voix n’est ni enregistrée ni utilisée comme échantillon. Portez un casque, sinon votre micro renverra cette voix à vos interlocuteurs.
 - **Ma voix dans l’appel** : la traduction de votre micro décrite plus bas. Elle est cochée par défaut si un microphone d’appel a déjà été configuré.
 
 Les deux cases peuvent être combinées. Les mêmes choix et un bouton **Traduire leur voix** se trouvent dans **Réunion en ligne › Leur voix**, sans attendre la détection. La pastille arrête toutes les traductions de l’appel.
+
+Les nouveaux fragments apparaissent progressivement, sans carré ni surlignage de mot. Les derniers mots restent visibles quand le texte déborde. Les animations respectent « Réduire les animations ».
 
 ### Capture du son
 
@@ -61,9 +63,23 @@ Le son capté suit la chaîne existante : trames PCM de 20 ms à 24 kHz, transcr
 
 ### Tester sans appel
 
-- Dans **Essayer sans appel**, **Tester les sous-titres** affiche un aperçu local, sans capture ni fournisseur.
-- **Sous-titrer l’exemple audio** envoie l’exemple synthétique de la langue de votre interlocuteur (français ou anglais) dans la vraie chaîne de traduction. Les sous-titres et, si elle est cochée, la voix traduite sont produits par les fournisseurs payants.
+- Dans **Test without joining a call**, **Start the recording test** lance le test principal, avec une explication de son entrée et de sa sortie. Si **They speak** est réglé sur **English**, un extrait NASA anglais de 22,723 secondes remplace la capture système et alimente la vraie traduction entrante. Réglez **You speak** sur **Français** pour tester anglais → français. Les sous-titres flottants sont toujours activés pour ce test ; aucun micro n’est ouvert.
+- Pour l’anglais, **Choose a recording** propose **One voice · 23 seconds** et **Three voices · 24 seconds**. Le second extrait est un échange continu entre Suni Williams, Houston et Bill Nelson. Arrêtez le test avant de changer d’extrait. Il permet de tester les changements de voix dans un flux commun ; il n’ajoute ni identification automatique des personnes, ni étiquettes par locuteur, ni trois voix de synthèse distinctes.
+- **Play the original English audio** permet d’écouter ou de couper le son source pendant la lecture, sans relancer le fichier ni interrompre la transcription. Le son source est coupé par défaut. **Also read the French translation aloud** ajoute la voix traduite ; ce choix partage la préférence **Translated voice** de l’appel. Laissez les deux options audio décochées pour une vérification silencieuse. La traduction nécessite internet et utilise les fournisseurs payants. Utilisez un casque pour comparer parole et sous-titres. L’exemple français reste synthétique ; ces exemples ne servent jamais au clonage. Source et reproduction : [samples/README.md](../apps/desktop/public/samples/README.md).
+- **Other checks**, replié par défaut, sépare quatre outils avec une explication par action : aperçu local des sous-titres (**Show text preview**, sans audio ni fournisseur), traduction sortante synthétique (**Test outgoing audio**), aperçu de la pastille (**Show stop control**) et simulation du toast (**Show call prompt**). Accepter ce dernier peut démarrer une vraie capture selon les options sélectionnées.
 - `pnpm test:system-audio` vérifie sur ce Mac que le tap système livre des trames de 20 ms pendant une seconde. Il ne conserve ni n’envoie le son, et peut déclencher la demande d’autorisation.
+
+## Personnaliser les sous-titres flottants
+
+**Settings → Floating captions** permet de modifier la barre et d’enregistrer ses préférences sur ce Mac :
+
+- **Show captions** affiche la vraie fenêtre Tauri avec un texte fictif, sans miniature intégrée aux réglages. Changez les réglages pour voir le résultat en direct, puis utilisez **Hide captions**. Quitter cet onglet ferme également l’aperçu. Ce contrôle est disponible dans l’app macOS, à l’arrêt des traductions.
+- Neuf positions prédéfinies accessibles au clavier, ou glisser-déposer directement sur la fenêtre affichée sur le bureau, en aperçu comme pendant un appel. Sa position est enregistrée après déplacement.
+- Trois tailles (**Small**, **Medium**, **Large**) qui modifient la largeur et la taille du texte.
+- Thèmes **Dark**, **Light** et **Transparent**, opacité du fond et couleur du texte. Les préréglages associent des couleurs contrastées.
+- **Restore defaults** rétablit le thème sombre, la taille moyenne et la position en bas au centre.
+
+L’aperçu ne démarre aucune capture, aucun son ni aucun fournisseur. Son texte reste visible jusqu’à sa fermeture. Les réglages s’appliquent aux sous-titres, y compris pendant une session active. La position est relative à la zone de travail de l’écran choisi par déplacement, avec une marge pour garder la barre visible et dégager la barre d’outils de l’appel. Le nom de l’écran est mémorisé localement ; si cet écran est débranché, l’app utilise celui de la fenêtre principale. La fenêtre de sous-titres reçoit les clics lorsqu’elle est visible pour permettre son déplacement, sans prendre le focus clavier de l’appel. La pastille d’arrêt conserve son apparence et son emplacement.
 
 ## Détection et accord
 

@@ -1,5 +1,54 @@
 # Vérifications de l’app — 24 octobre 2026
 
+## Finition des réglages de sous-titres — 24 octobre
+
+- **Show captions / Hide captions** est intégré à la ligne **Preview** de la section **Placement**, avec les contrôles existants des réglages. Les paragraphes d’introduction et d’aide autour du bouton, ainsi que les indications de contraste/transparence, ont été retirés.
+- Typecheck et build Vite réussis. Le vrai composant React, avec IPC Tauri simulée, a été revérifié à 820 et 390 px : affichage/masquage, changement de taille/thème, fermeture à la sortie de l’onglet, absence des textes supprimés et absence de débordement. Pas de nouveau contrôle natif pour cette finition visuelle.
+
+## Déplacement natif et aperçu sur le bureau — 24 octobre
+
+- Retrait de la miniature de placement intégrée aux réglages. **Show captions on my screen** affiche le texte fictif dans la même fenêtre Tauri que les appels ; **Hide desktop preview** et la sortie de l’onglet la ferment. Les réglages d’apparence et de taille restent appliqués en direct. Les sections historiques ci-dessous décrivent l’ancien aperçu intégré.
+- Les sous-titres visibles acceptent le déplacement natif Tauri. La position normalisée et le nom du moniteur sont enregistrés localement ; les requêtes obsolètes et les arrondis de pixels ne doivent pas écraser un choix plus récent ni produire une boucle de repositionnement. Les sous-titres effacés laissent passer les clics.
+- Vérification silencieuse des vrais composants React avec IPC Tauri simulée : à 820 et 390 px, ouverture/fermeture par l’unique publisher natif, absence de miniature, changement de taille/thème, fermeture à la sortie de l’onglet et absence de débordement. Le composant de fenêtre a aussi été testé à 1024 et 390 px : demande de déplacement natif, sauvegarde après événement de mouvement, thème en direct, requête ancienne ignorée et réponse de fenêtre masquée ignorée. Aucun son, micro ni fournisseur.
+- Six tests Rust de sous-titres passent, dont la conversion aller-retour d’un déplacement sans dérive sur écrans Retina et à origine négative. Les tests de préférences couvrent aussi la validation et la persistance du moniteur. Typecheck, lint serveur, 13 tests de scripts, 18 tests serveur, 66 tests desktop, builds serveur/Vite, bundle macOS debug et Clippy passent. `cargo fmt --check` global retrouve les différences historiques de `audio_route.rs` et `system_microphone.rs`, laissées intactes.
+- Le bundle macOS a été lancé sans modifier l’authentification ni l’onboarding : les commandes natives d’aperçu ont confirmé une fenêtre visible et dimensionnée, puis masquée. Les préférences antérieures ont été restaurées et l’instance de diagnostic fermée. Ce contrôle ne valide pas le geste physique de glisser-déposer ni le passage entre écrans/Spaces ; les interactions et la persistance de déplacement ont été vérifiées avec IPC simulée.
+
+## Deuxième extrait, trois voix — 24 octobre
+
+- Ajout de `nasa-three-speakers-en.wav` : échange NASA anglais continu de 24 s (00:24–00:48 du téléchargement officiel), avec Suni Williams, Houston et Bill Nelson. Source YouTube, téléchargement et reproduction dans [samples/README.md](../apps/desktop/public/samples/README.md). Sélection **Three voices · 24 seconds** sous **Choose a recording**, pour l’entrée anglaise uniquement, sans ajouter de bouton de lancement.
+- Le scénario conserve le flux entrant commun, les sous-titres et les options son original/voix traduite. Il n’ajoute ni diarisation ni voix de synthèse par personne. La capture micro, la capture système et le clonage restent exclus des exemples.
+- Deux régressions supplémentaires couvrent le choix du fichier, le retour au scénario par défaut, le maintien de l’exemple français et le format/durée du nouveau WAV. Typecheck, lint serveur, 13 tests de scripts, 18 tests serveur, 66 tests desktop, builds serveur/Vite réussis.
+- Vérification silencieuse du vrai composant React isolé à 820 et 390 px : sélection du scénario à trois voix, description mise à jour, transmission du choix au démarrage intercepté, sous-titres activés et aucune capture ni requête fournisseur. Pas de débordement horizontal. Les fournisseurs et la lecture sont simulés ; aucune écoute acoustique ni vérification native Tauri n’a été effectuée pour cet ajout.
+
+## Clarification des tests et retrait du repère — 24 octobre
+
+- **Test without joining a call** présente un seul test principal avec explication de l’extrait, de la langue de traduction, de la fenêtre de sortie et de l’absence de capture micro. Deux options expliquées séparent son original et voix traduite. Les quatre outils secondaires sont repliés dans **Other checks**, chacun accompagné d’une description de son effet.
+- Le carré autour du dernier mot a été retiré des sous-titres flottants ; le prompteur de l’onboarding reste inchangé. La section historique « Écoute de l’extrait et repère de lecture » ci-dessous décrit la version précédente.
+- Vérification silencieuse du vrai composant React isolé à 820 et 390 px : un seul bouton principal, outils repliés au départ, descriptions présentes, absence de débordement, aperçu local sans repère et sans appel réseau ni micro. Le démarrage du test a été intercepté : exemple activé, sous-titres forcés et voix désactivée selon le choix affiché. Aucun fournisseur ni audio réel n’a été utilisé.
+- Typecheck, 64 tests desktop, build Vite et `git diff --check` réussis. Le rendu natif macOS n’a pas été revérifié pour cette itération ; les contrôles de latence sont hors périmètre et confiés à un autre agent.
+
+## Extrait YouTube pour la traduction entrante — 24 octobre
+
+- Ajout d’un extrait NASA anglais de 22,723 s, mono PCM 24 kHz, sélectionné uniquement pour le test d’appel entrant anglais. Source et reproduction dans [samples/README.md](../apps/desktop/public/samples/README.md).
+- Vérification silencieuse dans une instance Tauri de développement : bouton **Caption NASA audio · 23 s**, sous-titres cochés et voix traduite décochée. Les vrais fournisseurs ont produit une traduction française diffusée progressivement par les événements natifs `call-captions-state` (`en` → `fr`), puis le contrôle est revenu à l’état prêt. Ni micro, ni sortie sonore, ni clonage. L’observation des événements ne constitue pas une validation visuelle de la fenêtre au-dessus d’un appel en plein écran.
+- Les deux nouvelles régressions vérifient la sélection du fichier, l’exclusion du clonage et de la capture système, ainsi que le format et la durée du WAV. Typecheck, lint serveur, 13 tests de scripts, 18 tests serveur, 59 tests desktop, build serveur et build Vite réussis. L’exécutable Tauri de développement a également compilé et démarré.
+- La capture système réelle, l’audio traduit et le comportement sur plusieurs écrans/Spaces restent non vérifiés pour ce changement.
+
+## Écoute de l’extrait et repère de lecture — 24 octobre
+
+- Ajout du contrôle **Hear the incoming audio sample**, coupé par défaut et modifiable pendant le test. Sa branche de sortie est indépendante des trames envoyées à la transcription ; l’arrêt la déconnecte avant d’attendre le vidage du worklet.
+- Le dernier mot traduit reçu est encadré, y compris pour les écritures sans espaces. Les derniers mots restent visibles dans les longues lignes ; le repère demeure présent sans animations. Ce suivi n’est pas un alignement audio mot à mot.
+- Vérification silencieuse avec Web Audio simulé : bascule active/coupée sans redémarrage du fichier, transcription inchangée, coupure immédiate à l’arrêt. Rendu réel du composant vérifié à 980 et 390 px avec texte long : un seul repère, visible, sans débordement horizontal. Le contrôle Tauri natif supplémentaire n’a pas pu être vérifié : « Sky Computer Use native pipe closed before response ». Aucune sortie sonore réelle ni nouveau test fournisseur pour cette itération.
+- Typecheck, lint serveur, 13 tests de scripts, 18 tests serveur, 61 tests desktop, builds serveur et Vite réussis.
+
+## Réglages de la barre flottante — 24 octobre
+
+- **Settings → Floating captions** : neuf placements, glisser-déposer dans l’aperçu, déplacement au clavier, trois tailles, thèmes sombre/clair/transparent, opacité, couleur et retour aux valeurs par défaut. Préférences validées et enregistrées localement ; indication de contraste et cibles tactiles de 44 px.
+- Vérification du vrai composant React dans un navigateur isolé à 760 et 390 px : onglet accessible, aperçu dans ses limites sans débordement horizontal, préréglages, flèches, déplacement par événements de pointeur, opacité, couleur du thème clair et réinitialisation. La capture du pointeur est simulée dans ce harnais ; ce contrôle ne valide pas le geste matériel ni le compositeur macOS. Aucun micro, son ni appel fournisseur.
+- Quatre tests de préférences couvrent valeurs invalides, bornes, déplacement, persistance, erreurs de sauvegarde et contraste. Cinq tests Rust de sous-titres couvrent aussi les anciennes mises à jour, les coordonnées invalides et la géométrie sur écrans étroits, Retina et moniteurs à origine négative.
+- Typecheck, lint serveur, suite de tests, builds serveur/Vite et bundle macOS debug réussis. Cargo check, tests (trois tests matériels ignorés) et Clippy `--all-targets --all-features -D warnings` passent. Le module Rust modifié passe rustfmt ; `cargo fmt --check` global signale du formatage déjà présent dans `audio_route.rs` et `system_microphone.rs`, laissés hors périmètre.
+- Le placement réel au-dessus d’un appel, les transitions entre Spaces/plein écran et la persistance entre fenêtres WebView restent à confirmer manuellement. Les tests du navigateur appliquent les préférences à un aperçu local ; ils ne remplacent pas ce contrôle natif.
+
 ## Toast d’appel dès la salle d’attente, au-dessus des apps — 24 octobre
 
 La détection compte aussi l’application d’appel au premier plan quand une caméra filme (une app qui tient le micro reste prioritaire) et reconnaît davantage d’applications d’appel et de navigateurs. Le toast devient un panneau macOS non activant, au niveau des fenêtres d’état, qui glisse depuis la droite de l’écran sous le pointeur.

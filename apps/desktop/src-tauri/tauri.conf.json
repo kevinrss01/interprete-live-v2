@@ -68,7 +68,8 @@
         "focus": false,
         "shadow": false,
         "backgroundThrottling": "disabled",
-        "focusable": false
+        "focusable": false,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

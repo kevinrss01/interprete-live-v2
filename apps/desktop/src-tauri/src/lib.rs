@@ -29,6 +29,7 @@ pub fn run() {
             translation_overlay::stop_translation_overlay,
             call_captions::set_call_captions,
             call_captions::call_captions_snapshot,
+            call_captions::call_captions_position,
             system_audio::system_audio_start,
             system_audio::system_audio_stop,
             calls::call_snapshot,
@@ -75,9 +76,6 @@ pub fn run() {
                         interprete_configure_toast(window);
                     }
                 }
-            }
-            if let Some(captions) = app.get_webview_window("call-captions") {
-                let _ = captions.set_ignore_cursor_events(true);
             }
             calls::start(app.handle().clone());
             Ok(())

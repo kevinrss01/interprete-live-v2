@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ArrowLeftRight,
   AudioLines,
@@ -65,7 +65,11 @@ export function Interpreter({
     controller.getServerSnapshot,
   );
   const callPanelRef = useRef<CallPanelHandle>(null);
+  const previewCaptions = useCallback((visible: boolean) => {
+    callPanelRef.current?.previewCaptions(visible);
+  }, []);
   const [callOverlay, setCallOverlay] = useState<OverlayUpdate | null>(null);
+  const [captionError, setCaptionError] = useState<string | null>(null);
   const [overlayError, setOverlayError] = useState<string | null>(null);
   const [callBusy, setCallBusy] = useState(false);
   const [view, setView] = useState<View>("conversation");
@@ -280,6 +284,7 @@ export function Interpreter({
         <CallPanel
           ref={callPanelRef}
           onOverlayChange={setCallOverlay}
+          onCaptionError={setCaptionError}
           onBusy={setCallBusy}
           visible={callMode}
           onOpen={() => openView("call")}
@@ -308,6 +313,8 @@ export function Interpreter({
             onRemove={(id) => setPending({ kind: "remove", id })}
             onVolume={(value) => controller.setVolume(value)}
             onSignOut={leave}
+            onCaptionPreview={previewCaptions}
+            captionError={captionError}
           />
         )}
         {(view === "history" || view === "voices") && (
