@@ -41,7 +41,6 @@ import {
 
 type View = "conversation" | "call" | "history" | "voices";
 
-// ponytail: History and Voices are empty prototype pages.
 const NAV: { view: View; label: string; icon: typeof Phone }[] = [
   { view: "conversation", label: "Conversation", icon: MessagesSquare },
   { view: "call", label: "Online meeting", icon: Phone },
@@ -230,7 +229,6 @@ export function Interpreter({
         </div>
       </aside>
       <div className="app panel">
-        {/* ponytail: status kept as-is for now; a better placement comes later. */}
         <header
           className="topbar"
           hidden={view === "history" || view === "voices" || (view === "call" && !callBusy)}
