@@ -74,6 +74,59 @@ flowchart TB
 
 Le desktop importe **uniquement le type** `AppType` du serveur : le client `hc<AppType>` connaît les routes, leurs entrées et leurs réponses. Modifier une route casse la compilation du desktop, pas l'app en production. Aucun code serveur n'est embarqué dans le bundle desktop.
 
+### Landing page
+
+La landing monte `LandingPage` depuis `packages/ui/src/components/landing-page.tsx` et charge
+`packages/ui/src/landing.css`. La hero centrée occupe environ 75 % de la hauteur de l'écran ;
+son fond de nuages s'efface vers le blanc avant les sections de présentation. Le premier
+bloc bénéficie de 192 px de padding supérieur sur desktop, 128 px sur tablette et 96 px
+sur mobile. La flèche de la hero a été retirée. Les images
+JPEG de 1280, 1920 et 3840 px sont sélectionnées avec `srcset` ; le grand format est un
+agrandissement, pas une génération 4K native. Une petite texture de grain statique se répète
+à l'échelle de l'écran, plus discrète derrière le texte et plus marquée sur les nuages.
+
+Le titre associe Manrope en graisse 650 et Instrument Serif en italique. Ces deux fontes sont
+hébergées localement et préchargées par `apps/landing/index.html` ; leurs licences sont
+livrées dans `apps/landing/public/licenses/`. Manrope porte les titres et la navigation ;
+l'italique Instrument Serif souligne aussi la seconde ligne des titres des deux blocs. Les liens nus restent en haut de l'écran, s'effacent à la descente et
+réapparaissent à la remontée ou au focus clavier. Ils restent visibles près du haut de page.
+Leur contraste s'adapte au fond par composition CSS ; la réduction des animations supprime
+leur transition.
+Un libellé « Live translation. Human connection. » encadré de lauriers dorés précède
+le titre. La hero ne contient pas de bouton d'ouverture de l'application, et aucun
+bouton flottant ne réapparaît sur mobile.
+
+Après la hero, la page se limite à deux blocs interactifs puis au CTA Download et au
+footer. Les sections séparées de procédure, de voix et de FAQ ont été retirées, ainsi
+que leurs styles et leurs liens devenus inutiles.
+
+La navigation Home / Features / Download cible des sections de la page. Le défilement
+fluide est défini uniquement dans `apps/landing/src/main.css` et reste instantané avec
+`prefers-reduced-motion`. L'exemple de
+traduction occupe un canevas ivoire pointillé : deux cartes de parole sont reliées par
+la marque orange, avec les seuls libellés « You » et « Other people ». La mention
+« Low-latency translation » met en avant le streaming sans afficher de mesure de délai.
+Le sélecteur English / Spanish / Japanese anime les mots,
+l'onde et un signal orange qui passe le long du trait entre les cartes. La marque
+effectue une brève impulsion avec une légère rotation à chaque sélection. Ces animations
+restent silencieuses, sans microphone ni lecture audio. Le second
+bloc remplace la bande noire par une console anthracite encadrée, avec onde sonore,
+statut et citation. Ses boutons Speak / Pause / Keep going / End turn illustrent
+que la pause ne termine pas le tour. Les sélecteurs de langue et d'étape utilisent
+un fond orange qui glisse vers le choix actif (360 ms), sans retarder la mise à jour
+du contenu. Les effets s'arrêtent après chaque
+interaction et sont désactivés avec `prefers-reduced-motion`.
+
+Le CTA affiche un panorama alpin généré, en ivoire et orange, avec un premier plan sombre
+pour le texte. Les deux WebP `download-landscape.webp` (1983 × 793 px natifs) et
+`download-landscape-1280.webp` sont chargés paresseusement avec `srcset`. Le grain existant
+est réutilisé à l'échelle de l'écran. Le bouton « Download for macOS » cible le DMG
+Apple Silicon (`Interprete-macOS-arm64.dmg`) de la dernière release GitHub du dépôt
+`kevinrss01/interprete-live-v2`. C'est l'unique action du CTA ; le contour visible de
+la carte et le lien secondaire vers l'application web ont été retirés. Le CTA ne contient
+pas de logo ; l'image et son grain sont inchangés.
+La page reste en `noindex` pour la revue locale.
+
 ## API
 
 | Méthode | Route | Auth | Limite | Rôle |
