@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -7,7 +8,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { Check, LoaderCircle, LogOut, Sparkles, Trash2 } from "lucide-react";
+import { Check, LoaderCircle, LogOut, Mic, Sparkles, Square, Trash2 } from "lucide-react";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 import { VOICE_PRESETS } from "@interprete/shared/languages";
 import { Button } from "@interprete/ui/components/button";
@@ -21,6 +22,14 @@ import {
   SelectValue,
 } from "@interprete/ui/components/select";
 import { rpc } from "../lib/account";
+import { MicrophoneCapture } from "../lib/audio";
+import { MICROPHONE_KEY, savedMicrophone } from "../lib/call-preferences";
+import {
+  desktopAvailable,
+  microphoneName,
+  physicalInputNames,
+  physicalMicrophones,
+} from "../lib/calls";
 import {
   loadOnboardingAccount,
   saveOnboardingAccount,
@@ -326,6 +335,195 @@ function VoiceSettings({
   );
 }
 
+type MicrophoneAccess = "checking" | "granted" | "prompt" | "blocked";
+
+// The onboarding asks for microphone access; here the user can switch microphones
+// and check the input level. The test only measures: nothing is sent or played.
+function MicrophoneSettings() {
+  const [access, setAccess] = useState<MicrophoneAccess>("checking");
+  const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
+  const [selected, setSelected] = useState(() => savedMicrophone() ?? "");
+  const [level, setLevel] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const test = useRef<MicrophoneCapture | null>(null);
+
+  const stopTest = useCallback(() => {
+    void test.current?.stop();
+    test.current = null;
+    setLevel(null);
+  }, []);
+
+  const refresh = useCallback(async (ask = false) => {
+    setError(null);
+    try {
+      const state = await navigator.permissions
+        ?.query({ name: "microphone" as PermissionName })
+        .then((status) => status.state, () => undefined);
+      if (state === "denied") {
+        setAccess("blocked");
+        return;
+      }
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      // Access granted during onboarding is not remembered by the page: device names stay
+      // hidden until the microphone opens once. The webview often reports "prompt" even
+      // when macOS already allows it, so the desktop app opens it without asking first.
+      const hidden = !devices.some((d) => d.kind === "audioinput" && d.label);
+      if (ask || (hidden && (state === "granted" || desktopAvailable()))) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream.getTracks().forEach((track) => track.stop());
+        devices = await navigator.mediaDevices.enumerateDevices();
+      }
+      const names = desktopAvailable() ? await physicalInputNames() : undefined;
+      const granted = devices.some((d) => d.kind === "audioinput" && d.label);
+      setAccess(granted ? "granted" : "prompt");
+      const found = physicalMicrophones(devices, names);
+      setMicrophones(found);
+      setSelected((current) => {
+        if (!found.length || found.some((d) => d.deviceId === current)) return current;
+        const system = devices.find((d) => d.kind === "audioinput" && d.deviceId === "default");
+        return (found.find((d) => microphoneName(d.label) === microphoneName(system?.label ?? "")) ?? found[0]).deviceId;
+      });
+    } catch (e) {
+      if ((e as DOMException).name === "NotAllowedError") setAccess("blocked");
+      else setError("The microphones could not be listed. Try again.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    const changed = () => void refresh();
+    navigator.mediaDevices?.addEventListener("devicechange", changed);
+    return () => {
+      navigator.mediaDevices?.removeEventListener("devicechange", changed);
+      stopTest();
+    };
+  }, [refresh, stopTest]);
+
+  async function startTest(deviceId: string) {
+    stopTest();
+    setError(null);
+    const capture = new MicrophoneCapture({
+      deviceId,
+      recordSample: false,
+      onAudio: () => {},
+      onEnded: () => {},
+      onLevel: (value) => {
+        if (test.current === capture) setLevel(value);
+      },
+      onError: (message) => {
+        if (test.current !== capture) return;
+        stopTest();
+        setError(message);
+      },
+    });
+    test.current = capture;
+    setLevel(0);
+    try {
+      await capture.start();
+    } catch {
+      if (test.current !== capture) return;
+      stopTest();
+      setError("The microphone could not start. Try again.");
+    }
+  }
+
+  function choose(deviceId: string) {
+    setSelected(deviceId);
+    try {
+      localStorage.setItem(MICROPHONE_KEY, deviceId);
+      localStorage.setItem(
+        "interprete-call-input-label",
+        microphones.find((d) => d.deviceId === deviceId)?.label ?? "",
+      );
+    } catch {}
+    if (test.current) void startTest(deviceId);
+  }
+
+  const testing = level !== null;
+  return (
+    <>
+      <SettingsSection title="Microphone">
+        <SettingsRow
+          label="Microphone access"
+          hint={
+            access === "blocked"
+              ? "Turn on Interprète in System Settings › Privacy & Security › Microphone."
+              : undefined
+          }
+        >
+          {access === "granted" && (
+            <span className="settings-value settings-status">
+              <Check size={14} aria-hidden="true" />
+              Already allowed
+            </span>
+          )}
+          {access === "blocked" && <span className="settings-value">Blocked</span>}
+          {access === "prompt" && (
+            <Button className="btn" onClick={() => void refresh(true)}>
+              Allow access
+            </Button>
+          )}
+        </SettingsRow>
+        <SettingsRow label="Input device" htmlFor="settings-microphone">
+          <Select
+            items={microphones.map((d) => ({ value: d.deviceId, label: microphoneName(d.label) }))}
+            value={selected || null}
+            disabled={!microphones.length}
+            onValueChange={(value) => {
+              if (typeof value === "string") choose(value);
+            }}
+          >
+            <SelectTrigger id="settings-microphone">
+              <SelectValue placeholder="No microphone found" />
+            </SelectTrigger>
+            <SelectContent align="end" alignItemWithTrigger={false}>
+              {microphones.map((d) => (
+                <SelectItem key={d.deviceId} value={d.deviceId} className="pl-3">
+                  {microphoneName(d.label)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+        <SettingsRow
+          label="Test the microphone"
+          hint={testing ? "Speak: the bar follows your voice." : "Check that your voice is picked up."}
+        >
+          <div className="mic-test">
+            <div
+              className="mic-level"
+              role="meter"
+              aria-label="Microphone level"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round((level ?? 0) * 100)}
+              style={{ "--level": level ?? 0 } as CSSProperties}
+            />
+            <Button
+              className="btn"
+              disabled={!selected}
+              aria-pressed={testing}
+              onClick={() => (testing ? stopTest() : void startTest(selected))}
+            >
+              {testing ? (
+                <Square size={13} fill="currentColor" aria-hidden="true" />
+              ) : (
+                <Mic size={15} aria-hidden="true" />
+              )}
+              {testing ? "Stop" : "Test"}
+            </Button>
+          </div>
+        </SettingsRow>
+      </SettingsSection>
+      {error && (
+        <p className="note settings-footnote" role="alert">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
 const TABS = [
   { id: "general", label: "General" },
   { id: "voices", label: "Voices" },
@@ -494,11 +692,7 @@ export function SettingsPage({
           </>
         )}
         {tab === "permissions" && (
-          <SettingsSection>
-            <SettingsRow label="Permissions">
-              <span className="settings-value">Coming soon</span>
-            </SettingsRow>
-          </SettingsSection>
+          <MicrophoneSettings />
         )}
       </div>
     </section>

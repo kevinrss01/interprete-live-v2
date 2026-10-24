@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   NativePcmPlayer,
+  microphoneName,
   physicalMicrophones,
   requirePhysicalMicrophone,
   type NativeInvoke,
@@ -230,4 +231,9 @@ test("system microphone switching requires a live output session and uses its ex
   });
   player.stop();
   await assert.rejects(player.activateSystemMicrophone(), /stopped/);
+});
+test("microphone names match System Settings", () => {
+  assert.equal(microphoneName("Default - MacBook Pro Microphone (Built-in)"), "MacBook Pro Microphone");
+  assert.equal(microphoneName("Shure MV7 (14ed:1012)"), "Shure MV7");
+  assert.equal(microphoneName("EarPods Microphone"), "EarPods Microphone");
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MicrophoneCapture } from "../lib/audio";
+import { savedMicrophone } from "../lib/call-preferences";
 import { ContinuousTranscription } from "../lib/transcription";
 
 export type OnboardingSample = { blob: Blob; seconds: number };
@@ -71,6 +72,7 @@ export function useOnboardingRecording(language: string) {
           setError(message);
         },
         recordSample: true,
+        preferredDeviceId: savedMicrophone(),
         onSample: (sample) => {
           if (!live()) return;
           s.samples.push(sample);

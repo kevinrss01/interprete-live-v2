@@ -6,6 +6,7 @@ import {
   type CaptureOptions,
 } from "./audio";
 import { api, call, saveSession, streamInterpretation } from "./api";
+import { savedMicrophone } from "./call-preferences";
 import { ContinuousTranscription, type ConnectionState, type StreamTiming, type Transcript } from "./transcription";
 import type {
   HistoryItem,
@@ -416,7 +417,9 @@ export class InterpreterController {
       onSample: (sample) => {
         if (this.isCurrent(r)) void this.collect(speaker, sample.blob, sample.seconds);
       },
-      ...(demo ? { demoUrl: `/samples/${profile.language}.wav` } : {}),
+      ...(demo
+        ? { demoUrl: `/samples/${profile.language}.wav` }
+        : { preferredDeviceId: savedMicrophone() }),
       context: this.player.sharedContext?.(),
     });
     try {

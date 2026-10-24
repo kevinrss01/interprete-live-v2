@@ -1867,6 +1867,38 @@ p.call-notice {
   color: var(--ink-2);
   text-align: right;
 }
+.settings-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mic-test {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.mic-level {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+.mic-level::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: calc(var(--level) * 100%);
+  border-radius: inherit;
+  background: var(--ink);
+  transition: width 80ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mic-level::after {
+    transition: none;
+  }
+}
 .settings-row-stack {
   display: block;
 }

@@ -32,6 +32,7 @@ import {
   onCallAccepted,
   onCallStatus,
   outputDevices,
+  microphoneName,
   physicalMicrophones,
   physicalInputNames,
   requirePhysicalMicrophone,
@@ -49,6 +50,7 @@ import {
   preferredOutput,
   displayedOutputs,
   savedRoute,
+  MICROPHONE_KEY,
 } from "../lib/call-preferences";
 import type { OverlayUpdate } from "../lib/translation-overlay";
 import { CallListening } from "../lib/call-listening";
@@ -114,7 +116,7 @@ export function CallPanel({
   );
   const [inputs, setInputs] = useState<MediaDeviceInfo[]>([]);
   const [outputs, setOutputs] = useState<OutputDevice[]>([]);
-  const [input, setInput] = useState(() => preference("interprete-call-input"));
+  const [input, setInput] = useState(() => preference(MICROPHONE_KEY));
   const [output, setOutput] = useState(
     () => preference("interprete-call-output") || APP_MICROPHONE_NAME,
   );
@@ -234,7 +236,7 @@ export function CallPanel({
           microphones[0];
         inputRef.current = selected.deviceId;
         setInput(selected.deviceId);
-        save("interprete-call-input", selected.deviceId);
+        save(MICROPHONE_KEY, selected.deviceId);
         save("interprete-call-input-label", selected.label);
       }
       if (outputResult.status === "fulfilled") {
@@ -372,7 +374,7 @@ export function CallPanel({
           if (selected) {
             inputRef.current = selected.deviceId;
             setInput(selected.deviceId);
-            save("interprete-call-input", selected.deviceId);
+            save(MICROPHONE_KEY, selected.deviceId);
             save("interprete-call-input-label", selected.label);
           }
         }
@@ -891,11 +893,11 @@ export function CallPanel({
                 value={input}
                 placeholder="Choose a microphone…"
                 disabled={busy}
-                options={inputs.map((d) => ({ value: d.deviceId, label: d.label }))}
+                options={inputs.map((d) => ({ value: d.deviceId, label: microphoneName(d.label) }))}
                 onChange={(value) => {
                   inputRef.current = value;
                   setInput(value);
-                  save("interprete-call-input", value);
+                  save(MICROPHONE_KEY, value);
                   save(
                     "interprete-call-input-label",
                     inputs.find((device) => device.deviceId === value)?.label ||

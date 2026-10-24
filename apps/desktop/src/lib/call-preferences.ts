@@ -1,6 +1,15 @@
 import appConfiguration from "../../src-tauri/tauri.conf.json";
 import type { OutputDevice } from "./calls";
 export const APP_MICROPHONE_NAME = appConfiguration.productName;
+// One microphone choice, shared by Settings, conversations, onboarding and calls.
+export const MICROPHONE_KEY = "interprete-call-input";
+export function savedMicrophone() {
+  try {
+    return localStorage.getItem(MICROPHONE_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+}
 export function preferredOutput(outputs: OutputDevice[], saved: string) {
   const branded = outputs.find((device) => device.appMic);
   if (

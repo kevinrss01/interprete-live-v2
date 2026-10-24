@@ -186,6 +186,8 @@ export type CaptureOptions = {
   onSample?: (sample: { blob: Blob; seconds: number }) => void;
   demoUrl?: string;
   deviceId?: string;
+  // Used when connected; otherwise the system default microphone.
+  preferredDeviceId?: string;
   echoCancellation?: boolean;
   context?: AudioContext;
 };
@@ -295,7 +297,11 @@ export class MicrophoneCapture {
     } else {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          ...(this.options.deviceId ? { deviceId: { exact: this.options.deviceId } } : {}),
+          ...(this.options.deviceId
+            ? { deviceId: { exact: this.options.deviceId } }
+            : this.options.preferredDeviceId
+              ? { deviceId: { ideal: this.options.preferredDeviceId } }
+              : {}),
           channelCount: 1,
           echoCancellation: this.options.echoCancellation ?? true,
           noiseSuppression: true,

@@ -99,6 +99,13 @@ export function physicalMicrophones(
       ),
   );
 }
+// The name System Settings shows: browsers may add a "Default - " prefix, "(Built-in)" or a USB vendor:product id.
+export function microphoneName(label: string) {
+  return label
+    .replace(/^(default|communications)\s*-\s*/i, "")
+    .replace(/\s*\(([0-9a-f]{4}:[0-9a-f]{4}|built-in)\)$/i, "")
+    .trim();
+}
 export function requirePhysicalMicrophone(
   devices: MediaDeviceInfo[],
   id: string,
