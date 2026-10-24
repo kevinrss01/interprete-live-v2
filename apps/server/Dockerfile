@@ -14,7 +14,8 @@ RUN pnpm --filter @interprete/server build
 FROM node:24-alpine
 WORKDIR /app
 ENV NODE_ENV=production PORT=3035
-COPY --from=build /repo/apps/server/dist/server.cjs .
+COPY --from=build /repo/apps/server/dist ./dist
+COPY --from=build /repo/apps/server/drizzle ./drizzle
 USER node
 EXPOSE 3035
-CMD ["node", "server.cjs"]
+CMD ["node", "dist/server.mjs"]

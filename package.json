@@ -4,13 +4,14 @@
   "type": "module",
   "packageManager": "pnpm@12.5.1",
   "scripts": {
-    "dev:server": "pnpm --filter @interprete/server dev",
+    "dev:server": "node scripts/dev-server.mjs",
+    "db:studio": "pnpm --filter @interprete/server db:studio",
     "dev:desktop": "pnpm --filter @interprete/desktop tauri dev",
     "build:server": "pnpm --filter @interprete/server build",
     "build:desktop": "pnpm --filter @interprete/desktop tauri build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
+    "test": "node --test scripts/dev-server.test.mjs && pnpm -r test",
     "benchmark": "node scripts/benchmark.mjs",
     "test:benchmark": "node --test scripts/*.test.mjs"
   },

@@ -11,15 +11,17 @@ scripts/         Benchmark et vérifications hors app
 
 ## Démarrer
 
-Prérequis : Node 22+, pnpm, Rust ([prérequis Tauri](https://v2.tauri.app/start/prerequisites/)).
+Prérequis : Node 22+, pnpm, Docker démarré (avec Compose), Rust ([prérequis Tauri](https://v2.tauri.app/start/prerequisites/)).
 
 ```sh
 pnpm install
 cp apps/server/.env.example apps/server/.env.local   # renseigner les secrets
 cp apps/desktop/.env.example apps/desktop/.env.local # VITE_API_URL
-pnpm dev:server    # API sur http://localhost:3035
-pnpm dev:desktop   # fenêtre Tauri (Vite sur :1420)
+pnpm dev:server    # terminal 1 : PostgreSQL + migrations + API + Drizzle Studio
+pnpm dev:desktop   # terminal 2 : fenêtre Tauri (Vite sur :1420)
 ```
+
+Le backend est accessible sur `http://localhost:3035` et Studio sur https://local.drizzle.studio. Ctrl+C dans le terminal backend arrête l’API, Studio et le conteneur PostgreSQL, en conservant le volume et toutes les données. Le prochain lancement réutilise cette base.
 
 Choisir les deux langues, puis utiliser le bouton de la personne qui parle. La traduction commence pendant sa prise de parole, par petits segments, sans attendre l’arrêt du micro. Le micro reste ouvert pendant les pauses et la lecture ; seul le bouton Terminer clôt son tour. Les touches **A**, **B** et **Échap** permettent aussi de piloter la session.
 
@@ -54,7 +56,32 @@ flowchart LR
 - Chaque profil possède sa langue, sa voix et ses échantillons. Le clonage démarre en arrière-plan après environ 30 secondes de parole autorisée, ou manuellement à partir de 10 secondes. La voix provisoire reste disponible pendant la création ; le clone est utilisé dès le prochain segment disponible. Un clone qui demande une vérification supplémentaire n’est pas activé.
 - Une nouvelle tentative de clonage recherche d’abord la voix déjà créée pour ce consentement, profil et session. Cela permet de récupérer une réponse réseau perdue sans réutiliser la voix d’une personne précédente.
 
-Il n’y a ni base de données ni enregistrement des conversations sur le serveur de l’app. Les 30 derniers passages et les trois derniers audios de réécoute restent en mémoire dans l’onglet. Les préférences et autorisations de voix sont conservées dans ce navigateur. Les voix clonées sont hébergées chez ElevenLabs jusqu’à leur suppression ; les fournisseurs appliquent leurs propres règles de conservation aux requêtes.
+Le serveur dispose d’un socle PostgreSQL + Drizzle pour les comptes Better Auth et les préférences, exposé par oRPC. Le front n’y est pas encore connecté et aucune méthode de connexion n’est activée. Il n’y a pas d’enregistrement des conversations sur le serveur de l’app. Les 30 derniers passages et les trois derniers audios de réécoute restent en mémoire dans l’onglet. Les préférences et autorisations de voix sont conservées dans ce navigateur. Les voix clonées sont hébergées chez ElevenLabs jusqu’à leur suppression ; les fournisseurs appliquent leurs propres règles de conservation aux requêtes.
+
+## Socle comptes et préférences
+
+Le [guide backend](docs/backend.md) décrit le routage, les contrôles, les procédures disponibles, les migrations et le branchement du futur frontend.
+
+```sh
+# Renseigner DATABASE_URL, BETTER_AUTH_URL et BETTER_AUTH_SECRET dans apps/server/.env.local.
+pnpm dev:server
+```
+
+La commande attend PostgreSQL, applique les migrations, puis lance l’API avec rechargement et Studio. La configuration d’exemple utilise PostgreSQL sur `localhost:5436`. Les identifiants du compose local sont réservés au développement. Le serveur seul reste accessible via `pnpm --filter @interprete/server dev` pour les usages avancés.
+
+Studio est déjà lancé par `pnpm dev:server` : ouvrir https://local.drizzle.studio. La commande autonome `pnpm db:studio` reste disponible si l’on souhaite lancer uniquement Studio contre une base déjà démarrée. Les commandes de base utilisent `DATABASE_URL` depuis `apps/server/.env.local`.
+
+Après une modification de `src/db/schema.ts`, exécuter `pnpm --filter @interprete/server db:generate`, relire et committer les fichiers `apps/server/drizzle/`, puis lancer `db:migrate`.
+
+En production, fournir une URL PostgreSQL accessible depuis le conteneur, une URL publique HTTPS dans `BETTER_AUTH_URL` et un secret distinct de `SESSION_SECRET`. Construire l’image, appliquer les migrations une seule fois, puis démarrer l’API :
+
+```sh
+API_DOMAIN=api.example.com docker compose build api
+API_DOMAIN=api.example.com docker compose run --rm api node dist/db/migrate.mjs
+API_DOMAIN=api.example.com docker compose up -d
+```
+
+Le stockage des jetons dans Tauri et les méthodes de connexion restent à intégrer avec le frontend. Ne pas utiliser le jeton anonyme `interprete-session` pour les comptes.
 
 ## Variables serveur
 
@@ -63,7 +90,10 @@ Il n’y a ni base de données ni enregistrement des conversations sur le serveu
 | `INTERPRETER_OPENAI_API_KEY` | Transcription et traduction OpenAI |
 | `ELEVENLABS_API_KEY` | Synthèse, inventaire, création et suppression des voix |
 | `AI_GATEWAY_API_KEY` | Évaluation Jev ; la traduction finale fonctionne aussi sans ce service |
-| `SESSION_SECRET` | Signature des sessions et autorisations de voix ; valeur aléatoire longue |
+| `SESSION_SECRET` | Signature des sessions anonymes et autorisations de voix ; valeur aléatoire longue |
+| `DATABASE_URL` | Connexion PostgreSQL pour les comptes et préférences |
+| `BETTER_AUTH_URL` | URL publique de l’API, HTTPS en production |
+| `BETTER_AUTH_SECRET` | Secret d’authentification distinct, au moins 32 caractères |
 | `ALLOWED_ORIGINS` | Origines autorisées (défaut : `tauri://localhost`, `http://tauri.localhost`, `http://localhost:1420`) |
 
 Côté desktop, `VITE_API_URL` (dans `apps/desktop/.env.local`) est intégré au build : le pointer vers l’URL HTTPS du VPS avant `pnpm build:desktop`.
@@ -80,13 +110,21 @@ pnpm build:server
 pnpm build:desktop   # bundle .app / .dmg / .msi selon la plateforme
 ```
 
+Les tests serveur couvrent aussi le routage oRPC et le refus des appels non authentifiés sans nécessiter de base. Le test d’intégration applique les migrations et crée/supprime ses propres utilisateurs ; il doit utiliser une base dédiée :
+
+```sh
+TEST_DATABASE_URL=postgresql://interprete:interprete@localhost:5436/interprete_test pnpm --filter @interprete/server test:db
+```
+
+Créer au préalable la base `interprete_test` dans le PostgreSQL local. Ce test utilise de vraies sessions Better Auth, sans activer de méthode de connexion ni appeler les fournisseurs IA.
+
 Les tests couvrent les signatures, la séparation des voix, le consentement, les flux incomplets, la lecture avant l’arrêt de la capture, l’absence de répétition finale et le démarrage parallèle. `pnpm exec tsx scripts/verify-live-app.ts <synthetic-24khz.wav>` teste silencieusement les vraies API, sans haut-parleur. Les anciens scripts de benchmark restent dans `scripts/` ; ils utilisent les services payants et ne sont pas exécutés par les tests de l’app.
 
 Voir [les vérifications effectuées](docs/VALIDATION.md). Les latences de démonstration sont des observations sur quelques phrases, pas un benchmark représentatif de toutes les langues et conditions réseau.
 
 ## Déploiement
 
-- **API (VPS)** : copier le repo et `apps/server/.env.local` sur le serveur, puis `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtient le certificat HTTPS et relaie le SSE sans buffering ; l’image ne contient que le bundle `dist/server.cjs`. Une seule instance : les limites de requêtes sont en mémoire.
+- **API (VPS)** : copier le repo et `apps/server/.env.local` sur le serveur, puis `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtient le certificat HTTPS et relaie le SSE sans buffering ; l’image contient les bundles ESM `dist/server.mjs`, `dist/db/migrate.mjs` et les migrations SQL. Pour le socle comptes, configurer PostgreSQL et suivre les [étapes de déploiement](docs/backend.md#déployer). Une seule instance : les limites de requêtes sont en mémoire.
 - **Desktop** : `pnpm build:desktop`. Sur macOS, `Info.plist` déclare l’usage du micro et `Entitlements.plist` l’autorise sous hardened runtime ; la signature et la notarisation se configurent à part.
 
 Le clonage d’une voix réelle nécessite l’accord de cette personne et un échantillon propre. Les deux personnes prennent toujours la parole à tour de rôle ; seule la traduction synthétique chevauche la parole. L’identification automatique des personnes et la séparation de deux voix humaines simultanées ne sont pas prises en charge.

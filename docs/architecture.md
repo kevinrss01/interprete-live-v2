@@ -1,6 +1,6 @@
 # Architecture
 
-Interprète est une app desktop [Tauri 2](https://v2.tauri.app) qui traduit à voix haute deux personnes parlant à tour de rôle sur un même appareil. Toute l'application (interface, micro, transcription, lecture) tourne dans Tauri ; le VPS n'héberge que l'API qui détient les clés des fournisseurs.
+Interprète est une app desktop [Tauri 2](https://v2.tauri.app) qui traduit à voix haute deux personnes parlant à tour de rôle sur un même appareil. Toute l'application (interface, micro, transcription, lecture) tourne dans Tauri ; le VPS héberge l’API et ses clés fournisseurs. Le socle comptes/préférences utilise PostgreSQL, configurable séparément.
 
 ## Vue d'ensemble
 
@@ -61,7 +61,7 @@ flowchart TB
 | Paquet | Rôle | Fichiers clés |
 | --- | --- | --- |
 | `apps/desktop` | Toute l'app. Le front est un export statique (`dist/`) embarqué par Tauri. | `src/lib/interpreter.ts` (orchestration d'un tour), `transcription.ts` (OpenAI Realtime), `audio.ts` (capture et lecture), `api.ts` (client RPC), `src-tauri/` (Rust, config, permissions) |
-| `apps/server` | API HTTP du VPS. Bundlée par esbuild en un seul `dist/server.cjs`. | `src/app.ts` (routes, CORS, auth), `src/server.ts` (démarrage), `src/lib/*` (fournisseurs, sessions, validation) |
+| `apps/server` | API HTTP du VPS. Bundles ESM `dist/server.mjs` et `dist/db/migrate.mjs`. | `src/app.ts` (assemblage, CORS), `src/routes/*.ts` (un endpoint audio par fichier), `src/rpc/` (comptes/préférences), `src/auth.ts`, `src/db/`, `src/server.ts` (démarrage), `src/lib/*` (fournisseurs, sessions, validation) |
 | `packages/shared` | Code utilisé des deux côtés, publié en TypeScript source. | `contracts.ts`, `languages.ts`, `live-segments.ts`, `text.ts` |
 
 Le desktop importe **uniquement le type** `AppType` du serveur : le client `hc<AppType>` connaît les routes, leurs entrées et leurs réponses. Modifier une route casse la compilation du desktop, pas l'app en production. Aucun code serveur n'est embarqué dans le bundle desktop.
@@ -76,7 +76,7 @@ Le desktop importe **uniquement le type** `AppType` du serveur : le client `hc<A
 | POST | `/api/voice/clone` | Bearer | 4 / h | Clone la voix d'un profil (multipart, accord requis) |
 | POST | `/api/voice/delete` | Bearer | — | Supprime un clone appartenant à cette session |
 
-Chaîne de traitement d'une requête dans `src/app.ts` :
+Chaîne de traitement d’une requête audio dans `src/routes/`, montée par `src/app.ts` :
 
 ```mermaid
 flowchart LR
@@ -91,7 +91,7 @@ L'authentification passe avant la validation : une requête sans session reçoit
 
 ## Session et sécurité
 
-Les cookies ne fonctionnent pas entre `tauri://localhost` et le domaine du VPS. La session est donc un jeton signé (HMAC `SESSION_SECRET`, 30 jours) envoyé en `Authorization: Bearer`.
+L’interpréteur actuel utilise un jeton Bearer pour éviter la dépendance aux cookies entre Tauri et le domaine du VPS. Cette session anonyme est un jeton signé (HMAC `SESSION_SECRET`, 30 jours) envoyé en `Authorization: Bearer`.
 
 ```mermaid
 sequenceDiagram
@@ -110,7 +110,15 @@ sequenceDiagram
 - **Origines** : `tauri://localhost` (macOS, Linux), `http://tauri.localhost` (Windows), `http://localhost:1420` (dev Vite). Configurables via `ALLOWED_ORIGINS`.
 - **Voix clonées** : l'app ne reçoit jamais l'identifiant ElevenLabs brut, mais une autorisation signée liée à la session et au profil (`voiceGrant`). Elle ne peut ni utiliser ni supprimer la voix d'une autre session.
 - **Limites** : les limites de requêtes sont en mémoire, ce qui suppose une seule instance de l'API.
-- **Ce que la session ne protège pas** : n'importe quel client qui appelle `/api/status` obtient une session. Pour réserver l'API payante à des utilisateurs connus, il faudra des comptes (par exemple avec Postgres).
+- **Ce que la session ne protège pas** : n'importe quel client qui appelle `/api/status` obtient une session. Le socle Better Auth protège uniquement `/rpc/*`. Pour réserver aussi l’API payante aux comptes, il faudra migrer explicitement ses routes et les autorisations de voix.
+
+## Comptes et préférences
+
+Le serveur comprend un socle Hono + oRPC + Zod + Better Auth + Drizzle + PostgreSQL. Les procédures `account.me`, `preferences.get` et `preferences.update` sont montées sous `/rpc/*` et protégées par une session utilisateur. Le frontend audio conserve son client Hono et ses sessions anonymes.
+
+Aucune méthode de connexion n’est encore activée. Le frontend, le stockage des jetons et la reprise des préférences locales restent à intégrer.
+
+Le [guide backend](backend.md) décrit la structure des fichiers, les contrôles, les tables, les procédures, un exemple de client frontend, le démarrage local, les migrations, les tests et le déploiement.
 
 ## Déroulé d'un tour de parole
 
@@ -165,7 +173,7 @@ flowchart LR
   end
   subgraph VPS["VPS"]
     Compose["docker compose up -d --build"]
-    Img["image node:24-alpine<br/>dist/server.cjs seul"]
+    Img["image node:24-alpine<br/>bundles ESM + migrations SQL"]
     C["Caddy :443"]
     Compose --> Img
     C --> Img
@@ -185,6 +193,9 @@ flowchart LR
 | | `ELEVENLABS_API_KEY` | Synthèse, clonage et suppression des voix |
 | | `AI_GATEWAY_API_KEY` | Jev ; optionnel, la traduction finale fonctionne sans |
 | | `SESSION_SECRET` | Signature des sessions et des autorisations de voix |
+| | `DATABASE_URL` | PostgreSQL pour les comptes et préférences |
+| | `BETTER_AUTH_URL` | URL publique de l’API |
+| | `BETTER_AUTH_SECRET` | Secret Better Auth distinct, 32 caractères minimum |
 | | `ALLOWED_ORIGINS` | Origines autorisées (CORS et contrôle de session) |
 | | `PORT` | Port d'écoute, 3035 par défaut |
 | `apps/desktop/.env.local` | `VITE_API_URL` | URL de l'API, intégrée au build |

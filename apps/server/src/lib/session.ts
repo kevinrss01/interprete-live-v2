@@ -3,14 +3,14 @@ import { credential } from "./config";
 import { AppError } from "./errors";
 import { VOICE_PRESETS } from "@interprete/shared/languages";
 // ponytail: Tauri origins (macOS/Linux, Windows) + Vite dev; override with ALLOWED_ORIGINS on the VPS.
-const ORIGINS = (
+export const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ||
   "tauri://localhost,http://tauri.localhost,http://localhost:1420"
 )
   .split(",")
   .map((s) => s.trim());
 export function allowedOrigin(origin: string | null) {
-  return origin !== null && ORIGINS.includes(origin);
+  return origin !== null && allowedOrigins.includes(origin);
 }
 export type Claims = {
   id: string;

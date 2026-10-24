@@ -1,0 +1,20 @@
+# Development only. Production uses DATABASE_URL supplied by the host.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: interprete
+      POSTGRES_PASSWORD: interprete
+      POSTGRES_DB: interprete
+    ports:
+      - "127.0.0.1:5436:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interprete -d interprete"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

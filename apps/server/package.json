@@ -3,33 +3,47 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env.local src/server.ts",
-    "build": "esbuild src/server.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/server.cjs --external:bufferutil --external:utf-8-validate",
-    "start": "node --env-file-if-exists=.env.local dist/server.cjs",
+    "build": "esbuild src/server.ts src/db/migrate.ts --bundle --platform=node --target=node22 --format=esm --outdir=dist --outbase=src --out-extension:.js=.mjs --external:bufferutil --external:utf-8-validate --external:pg-native --banner:js='import { createRequire } from \"node:module\"; const require = createRequire(import.meta.url);'",
+    "start": "node --env-file-if-exists=.env.local dist/server.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "node --env-file-if-exists=.env.local node_modules/drizzle-kit/bin.cjs studio --host=127.0.0.1",
+    "db:migrate": "tsx --env-file-if-exists=.env.local src/db/migrate.ts",
+    "test:db": "tsx --test tests/database.integration.ts"
   },
   "dependencies": {
     "@hono/node-server": "2.1.5",
     "@interprete/shared": "workspace:*",
+    "@orpc/server": "1.16.1",
+    "better-auth": "1.7.12",
+    "drizzle-orm": "0.45.4",
     "hono": "4.13.13",
+    "pg": "8.23.1",
     "ws": "8.22.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
     "@types/node": "26.6.5",
+    "@types/pg": "8.23.1",
     "@types/ws": "8.18.2",
+    "drizzle-kit": "0.31.11",
     "esbuild": "0.28.2",
     "eslint": "9.39.5",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.72.0"
+    "typescript-eslint": "8.72.0",
+    "@orpc/client": "1.16.1"
   },
   "type": "module",
   "exports": {
     ".": {
       "types": "./src/app.ts"
+    },
+    "./rpc": {
+      "types": "./src/rpc/router.ts"
     }
   }
 }
