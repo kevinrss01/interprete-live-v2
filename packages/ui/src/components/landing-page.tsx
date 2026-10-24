@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { ArrowUp, ArrowUpRight, Check, Download, Languages, Mic, Pause, Play, Zap } from "lucide-react";
 import { Button } from "./button";
 
@@ -22,6 +22,30 @@ const TURN_STAGES = [
   { label: "End turn", icon: Check, status: "Ready for their reply", message: "“What do you think?”", caption: "You end your turn explicitly. Now there is room for their reply." },
 ] as const;
 
+function useDemoCycle({ count, initialStep, intervalMs, ref }: { count: number; initialStep: number; intervalMs: number; ref: RefObject<HTMLElement | null> }) {
+  const [step, setStep] = useState(initialStep);
+  const [playing, setPlaying] = useState(() => !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  useEffect(() => {
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const stopForReducedMotion = () => { if (motion.matches) setPlaying(false); };
+    motion.addEventListener("change", stopForReducedMotion);
+    return () => motion.removeEventListener("change", stopForReducedMotion);
+  }, []);
+
+  useEffect(() => {
+    if (!playing) return;
+    const timer = window.setInterval(() => {
+      const bounds = ref.current?.getBoundingClientRect();
+      if (document.hidden || !bounds || bounds.bottom <= 0 || bounds.top >= window.innerHeight) return;
+      setStep((current) => (current + 1) % count);
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [count, intervalMs, playing, ref, step]);
+
+  return { step, setStep, playing, setPlaying };
+}
+
 // Crop the existing brand asset with its viewBox; no new mark or palette.
 function SpeechMark() {
   return <svg viewBox="50 130 500 450" aria-hidden="true" className="landing-speech-mark">
@@ -36,44 +60,46 @@ function Laurel() {
 }
 
 function ConversationScene() {
-  const [language, setLanguage] = useState<string>("en");
-  const [translationRun, setTranslationRun] = useState(0);
-  const example = EXAMPLES.find((item) => item.code === language) ?? EXAMPLES[0];
+  const ref = useRef<HTMLElement>(null);
+  const { step, setStep, playing, setPlaying } = useDemoCycle({ count: EXAMPLES.length, initialStep: 0, intervalMs: 3500, ref });
+  const example = EXAMPLES[step];
   const words = example.code === "ja" ? Array.from(example.text) : example.text.split(" ");
 
-  return <section className="landing-conversation" aria-label="Interactive translation example" data-playing={translationRun > 0}>
-    <div className="landing-demo-toolbar"><span><Languages aria-hidden="true" />Translation preview</span></div>
+  return <section ref={ref} className="landing-conversation" aria-label="Interactive translation example" data-playing="true">
+    <div className="landing-demo-toolbar"><span><Languages aria-hidden="true" />Translation preview</span><Button variant="ghost" className="landing-demo-autoplay" aria-label={playing ? "Pause automatic translation" : "Play automatic translation"} title={playing ? "Pause automatic translation" : "Play automatic translation"} onClick={() => setPlaying((current) => !current)}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</Button></div>
     <div className="landing-translation-canvas">
       <div className="landing-speech landing-speech-source">
         <div className="landing-speech-meta">You</div>
         <p lang="fr">Tu veux prendre<br />un café ?</p>
-        <div className="landing-speech-foot"><div className="landing-waveform" key={translationRun} aria-hidden="true">{WAVE_HEIGHTS.map((height, index) => <span key={index} style={{ height, animationDelay: `${index * 35}ms` }} />)}</div></div>
+        <div className="landing-speech-foot"><div className="landing-waveform" key={step} aria-hidden="true">{WAVE_HEIGHTS.map((height, index) => <span key={index} style={{ height, animationDelay: `${index * 35}ms` }} />)}</div></div>
       </div>
-      <div className="landing-voice-bridge" key={`bridge-${translationRun}`} aria-hidden="true"><span /><div><SpeechMark /></div><span /><p>Interprète</p></div>
+      <div className="landing-voice-bridge" key={`bridge-${step}`} aria-hidden="true"><span /><div><SpeechMark /></div><span /><p>Interprète</p></div>
       <div className="landing-speech landing-speech-translation">
         <div className="landing-speech-meta">Other people</div>
-        <div className="landing-translation-text" aria-live="polite" aria-atomic="true"><p key={`${language}-${translationRun}`} lang={example.code}>{words.map((word, index) => <span key={index} style={{ animationDelay: `${220 + index * 60}ms` }}>{word}{example.code !== "ja" && index < words.length - 1 ? " " : ""}</span>)}</p></div>
+        <div className="landing-translation-text" aria-live={playing ? "off" : "polite"} aria-atomic="true"><p key={step} lang={example.code}>{words.map((word, index) => <span key={index} style={{ animationDelay: `${220 + index * 60}ms` }}>{word}{example.code !== "ja" && index < words.length - 1 ? " " : ""}</span>)}</p></div>
         <div className="landing-speech-foot"><span className="landing-translation-state"><Zap aria-hidden="true" />Low-latency translation</span></div>
       </div>
     </div>
     <div className="landing-demo-controls">
       <span className="landing-language-label">Translate into</span>
       <div className="landing-language-controls" role="group" aria-label="Translation language">
-        <span className="landing-selection" aria-hidden="true" style={{ transform: `translateX(${EXAMPLES.indexOf(example) * 100}%)` }} />
-        {EXAMPLES.map((item) => <button type="button" key={item.code} aria-pressed={language === item.code} onClick={() => { setLanguage(item.code); setTranslationRun((current) => current + 1); }}>{item.language}</button>)}
+        <span className="landing-selection" aria-hidden="true" style={{ transform: `translateX(${step * 100}%)` }} />
+        {EXAMPLES.map((item, index) => <button type="button" key={item.code} aria-pressed={step === index} onClick={() => { setPlaying(false); setStep(index); }}>{item.language}</button>)}
       </div>
     </div>
   </section>;
 }
 
 function TurnScene() {
-  const [stage, setStage] = useState(1);
+  const ref = useRef<HTMLDivElement>(null);
+  const { step: stage, setStep: setStage, playing, setPlaying } = useDemoCycle({ count: TURN_STAGES.length, initialStep: 1, intervalMs: 4500, ref });
   const current = TURN_STAGES[stage];
   const speaking = stage === 0 || stage === 2;
   const StatusIcon = current.icon;
 
-  return <div className="landing-turn-scene">
-    <div className="landing-turn-copy" aria-live="polite" aria-atomic="true">
+  return <div ref={ref} className="landing-turn-scene">
+    <Button variant="ghost" className="landing-demo-autoplay" aria-label={playing ? "Pause automatic turn demo" : "Play automatic turn demo"} title={playing ? "Pause automatic turn demo" : "Play automatic turn demo"} onClick={() => setPlaying((current) => !current)}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</Button>
+    <div className="landing-turn-copy" aria-live={playing ? "off" : "polite"} aria-atomic="true">
       <div className="landing-turn-content" key={stage}>
         <p className="landing-turn-status"><StatusIcon aria-hidden="true" />{current.status}</p>
         <div className="landing-turn-waveform" data-speaking={speaking} data-stage={stage} aria-hidden="true">{[...WAVE_HEIGHTS, ...WAVE_HEIGHTS].map((height, index) => <span key={index} style={{ height: stage === 3 || (stage === 1 && index > 15) ? 4 : height * 2, animationDelay: `${index * 25}ms` }} />)}</div>
@@ -83,7 +109,7 @@ function TurnScene() {
     </div>
     <div className="landing-turn-controls" role="group" aria-label="Speaking turn stages">
       <span className="landing-selection" aria-hidden="true" style={{ transform: `translateX(${stage * 100}%)` }} />
-      {TURN_STAGES.map((item, index) => <button key={item.label} type="button" className="landing-turn-step" aria-pressed={stage === index} onClick={() => setStage(index)}><item.icon aria-hidden="true" />{item.label}</button>)}
+      {TURN_STAGES.map((item, index) => <button key={item.label} type="button" className="landing-turn-step" aria-pressed={stage === index} onClick={() => { setPlaying(false); setStage(index); }}><item.icon aria-hidden="true" />{item.label}</button>)}
     </div>
   </div>;
 }

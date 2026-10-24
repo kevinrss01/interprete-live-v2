@@ -114,8 +114,12 @@ bloc remplace la bande noire par une console anthracite encadrée, avec onde son
 statut et citation. Ses boutons Speak / Pause / Keep going / End turn illustrent
 que la pause ne termine pas le tour. Les sélecteurs de langue et d'étape utilisent
 un fond orange qui glisse vers le choix actif (360 ms), sans retarder la mise à jour
-du contenu. Les effets s'arrêtent après chaque
-interaction et sont désactivés avec `prefers-reduced-motion`.
+du contenu. La traduction avance toutes les 3,5 secondes et les étapes de parole toutes
+les 4,5 secondes, uniquement
+quand leur bloc est à l'écran et l'onglet visible. Un clic manuel ou le bouton pause
+arrête la boucle ; le bouton lecture la relance. La réduction des mouvements désactive
+la lecture automatique par défaut et supprime les animations CSS. Les mises à jour
+automatiques ne déclenchent pas d'annonces répétées pour les lecteurs d'écran.
 
 Le CTA affiche un panorama alpin généré, en ivoire et orange, avec un premier plan sombre
 pour le texte. Les deux WebP `download-landscape.webp` (1983 × 793 px natifs) et

@@ -73,6 +73,8 @@
 .landing-demo-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--ink-2); font-size: 12px; }
 .landing-demo-toolbar > span:first-child { display: flex; align-items: center; gap: 8px; }
 .landing-demo-toolbar svg { width: 16px; height: 16px; color: var(--brand); }
+.landing-demo-autoplay[data-slot="button"] { width: 44px; height: 44px; padding: 0; border-radius: 50%; color: var(--ink-2); }
+.landing-demo-autoplay svg { width: 14px; height: 14px; }
 .landing-translation-canvas { display: grid; grid-template-columns: minmax(0, 1fr) 144px minmax(0, 1fr); align-items: center; padding: 56px 24px; }
 .landing-speech { position: relative; padding: 24px; border-radius: 16px; background: var(--card); box-shadow: var(--landing-float); min-width: 0; }
 .landing-speech-source { transform: translateY(-16px); }
@@ -109,9 +111,11 @@
 .landing-pause-grid { display: grid; grid-template-columns: 0.85fr 1.15fr; align-items: center; gap: 96px; }
 .landing-turn-scene { position: relative; isolation: isolate; min-width: 0; padding: 24px 32px 16px; overflow: hidden; border-radius: var(--landing-scene-radius); background: var(--ink); color: var(--surface); }
 .landing-turn-scene::before { content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: url("./assets/hero-grain.png") repeat; background-size: 128px 128px; opacity: 0.1; }
+.landing-turn-scene .landing-demo-autoplay { position: absolute; top: 40px; right: 24px; color: var(--line-2); }
+.landing-turn-scene .landing-demo-autoplay:focus-visible { outline: 2px solid var(--surface); outline-offset: 2px; }
 .landing-turn-copy { margin-top: 16px; }
 .landing-turn-content { min-height: 292px; animation: landing-translation-in 200ms var(--ease); }
-.landing-turn-status { display: flex; justify-content: center; align-items: center; gap: 8px; margin: 0; color: var(--surface); font-size: 12px; }
+.landing-turn-status { display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; padding-right: 44px; margin: 0; color: var(--surface); font-size: 12px; }
 .landing-turn-status svg { width: 14px; height: 14px; color: var(--landing-peach); }
 .landing-turn-waveform { justify-content: center; gap: 5px; height: 96px; margin-block: 24px; color: var(--landing-peach); }
 .landing-turn-waveform > span { width: 4px; }
@@ -154,6 +158,7 @@
 @keyframes landing-translation-flow-vertical { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
 @keyframes landing-speech-wave { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.3); } }
 @media (hover: hover) {
+  .landing-turn-scene .landing-demo-autoplay:hover { background: color-mix(in srgb, var(--surface) 10%, transparent); }
   .landing-footer nav a:hover { color: var(--brand); }
   .landing-footer-top:hover svg { transform: translateY(-3px); }
   .landing-turn-step:hover { color: var(--surface); }
@@ -226,6 +231,7 @@
   .landing-pause { padding-block: 32px 56px; }
   .landing-body-copy { font-size: 17px; }
   .landing-turn-scene { padding: 20px 16px; }
+  .landing-turn-scene .landing-demo-autoplay { top: 36px; right: 12px; }
   .landing-turn-copy { margin-top: 16px; }
   .landing-turn-content { min-height: 320px; }
   .landing-turn-message { font-size: 24px; min-height: 96px; }
