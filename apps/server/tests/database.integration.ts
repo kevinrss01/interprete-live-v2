@@ -40,6 +40,13 @@ test("PostgreSQL migrations, Better Auth sessions and RPC isolate each user's pr
     const profile = await first.account.me();
     assert.equal(profile.id, users[0]);
     assert.deepEqual(Object.keys(profile).sort(), ["email", "emailVerified", "id", "image", "name"]);
+    assert.deepEqual(await first.account.updateName({ name: "  Alex  " }), { name: "Alex" });
+    assert.equal((await first.account.me()).name, "Alex");
+    assert.equal((await second.account.me()).name, "Test");
+    for (const input of [{ name: "" }, { name: "   " }, { name: "x".repeat(65) },
+      { name: "Alex", email: "other@example.com" }])
+      await assert.rejects(() => first.account.updateName(input), { code: "BAD_REQUEST" });
+    assert.equal((await first.account.me()).email, `${users[0]}@example.com`);
     assert.equal(await first.preferences.get(), null);
     assert.deepEqual(await first.preferences.update({ sourceLanguage: "fr", targetLanguage: "en" }),
       { sourceLanguage: "fr", targetLanguage: "en" });

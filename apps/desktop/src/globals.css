@@ -1889,3 +1889,29 @@ p.call-notice {
 .btn-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface));
 }
+/* Autosaved field: the save status sits inside the input, on the right. */
+.autosave-field {
+  position: relative;
+  width: 100%;
+}
+.autosave-field [data-slot="input"] {
+  width: 100%;
+  padding-right: 92px;
+  background: var(--surface);
+}
+.autosave-status {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+  font-size: 12px;
+  pointer-events: none;
+}
+.autosave-field[data-state="error"] .autosave-status {
+  color: var(--accent);
+  pointer-events: auto;
+}

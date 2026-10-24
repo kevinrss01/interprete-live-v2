@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -6,7 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { Check, LogOut, Sparkles, Trash2 } from "lucide-react";
+import { Check, LoaderCircle, LogOut, Sparkles, Trash2 } from "lucide-react";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 import { VOICE_PRESETS } from "@interprete/shared/languages";
 import { Button } from "@interprete/ui/components/button";
@@ -19,9 +20,103 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@interprete/ui/components/select";
-import { loadOnboardingAccount } from "../onboarding/onboarding-account";
+import { rpc } from "../lib/account";
+import {
+  loadOnboardingAccount,
+  saveOnboardingAccount,
+} from "../onboarding/onboarding-account";
 
 const SAMPLE_TARGET = 30;
+const NAME_SAVE_DELAY_MS = 700;
+
+type SaveState =
+  | { kind: "idle" }
+  | { kind: "saving" }
+  | { kind: "saved" }
+  | { kind: "error"; message: string };
+
+// Autosaves the account name once typing pauses; the status sits inside the field.
+function FirstNameField({ initial }: { initial: string }) {
+  const [value, setValue] = useState(initial);
+  const [save, setSave] = useState<SaveState>({ kind: "idle" });
+  const saved = useRef(initial.trim());
+  useEffect(() => {
+    const name = value.trim();
+    if (name === saved.current) return;
+    if (!name) {
+      setSave({ kind: "error", message: "Enter your first name." });
+      return;
+    }
+    let stale = false;
+    const timer = window.setTimeout(async () => {
+      setSave({ kind: "saving" });
+      try {
+        const result = await rpc.account.updateName({ name });
+        if (stale) return;
+        saved.current = result.name;
+        const account = loadOnboardingAccount();
+        if (account) saveOnboardingAccount({ ...account, firstName: result.name });
+        setSave({ kind: "saved" });
+      } catch (error) {
+        if (stale) return;
+        const code = (error as { code?: string }).code;
+        setSave({
+          kind: "error",
+          message:
+            code === "UNAUTHORIZED"
+              ? "Sign in to save your name."
+              : "Your name could not be saved. Try again.",
+        });
+      }
+    }, NAME_SAVE_DELAY_MS);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
+  }, [value]);
+  return (
+    <div className="autosave-field" data-state={save.kind}>
+      <Input
+        id="settings-first-name"
+        autoComplete="given-name"
+        maxLength={64}
+        placeholder="First name"
+        value={value}
+        aria-invalid={save.kind === "error"}
+        aria-describedby="settings-first-name-status"
+        onChange={(e) => {
+          setValue(e.target.value);
+          if (save.kind !== "saving") setSave({ kind: "idle" });
+        }}
+      />
+      <span
+        id="settings-first-name-status"
+        className="autosave-status"
+        role="status"
+        title={save.kind === "error" ? save.message : undefined}
+      >
+        {save.kind === "saving" && (
+          <>
+            <LoaderCircle size={12} className="spin" aria-hidden="true" />
+            Saving…
+          </>
+        )}
+        {save.kind === "saved" && (
+          <>
+            <Check size={12} aria-hidden="true" />
+            Saved
+          </>
+        )}
+        {save.kind === "error" && (
+          <>
+            <span aria-hidden="true">Not saved</span>
+            <span className="sr-only">{save.message}</span>
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
 
 // One settings layout for every tab: an optional title, then a card of rows
 // with the label on the left and the value or control on the right.
@@ -311,8 +406,6 @@ export function SettingsPage({
 }) {
   const [tab, setTab] = useState<TabId>("general");
   const [account] = useState(loadOnboardingAccount);
-  // Editable in the UI only; saving the name to the server is not wired yet.
-  const [firstName, setFirstName] = useState(account?.firstName ?? "");
   const percent = Math.round(volume * 100);
   return (
     <section className="settings-page" aria-labelledby="settings-title">
@@ -386,14 +479,7 @@ export function SettingsPage({
           <>
             <SettingsSection>
               <SettingsRow label="First name" htmlFor="settings-first-name">
-                <Input
-                  id="settings-first-name"
-                  autoComplete="given-name"
-                  maxLength={64}
-                  placeholder="First name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                />
+                <FirstNameField initial={account?.firstName ?? ""} />
               </SettingsRow>
               <SettingsRow label="Email">
                 <span className="settings-value">{account?.email || "—"}</span>
