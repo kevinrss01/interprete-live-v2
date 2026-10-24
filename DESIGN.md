@@ -172,9 +172,17 @@ Idle is white; next, connecting, working and playback are charcoal. Live recordi
 
 Native text fields and selects use (44px) height and neutral borders. Settings fields become (16px) text on compact screens. Consent uses a native checkbox within a (44px) minimum label row. Settings groups are divided by hairlines; the native dialog handles the secondary sheet.
 
+### Home
+
+Every launch opens on a single question, “Que voulez-vous traduire ?”, and two full-width rows divided by hairlines: Conversation (with the current language pair) and Réunion en ligne. Rows use a (20px) semibold title, a short supporting line and a trailing arrow; hover fills the row and nudges the arrow. The column is (560px) wide and vertically centred. The `a`/`b` speaking shortcuts only work inside the conversation.
+
+### Meeting setup
+
+The meeting view is a settings-style form: labelled sections (Langues, Son, Détection) in a (120px) label column, divided by hairlines, then the start control. The output route is a segmented control built on native radios. Test tools sit in a collapsed “Essayer sans appel” disclosure.
+
 ### Header, transcript and tags
 
-The compact header contains the wordmark, live status and settings control. Transcript turns pair a small identity mark with metadata, quieter source text and stronger translation. The small outlined “Exemple” tag identifies demo content without creating a competing accent.
+The compact header contains the wordmark on the home screen, or a back control and the view title elsewhere, plus live status and the settings control. Transcript turns pair a small identity mark with metadata, quieter source text and stronger translation. The small outlined “Exemple” tag identifies demo content without creating a competing accent.
 
 ## Do's and Don'ts
 

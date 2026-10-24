@@ -8,7 +8,9 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
+  ArrowLeftRight,
   Captions,
+  ChevronDown,
   Headphones,
   LoaderCircle,
   Mic,
@@ -53,6 +55,15 @@ import {
 } from "../lib/call-captions";
 import { CallOptionChecks } from "../components/call-options";
 import { CaptionsView } from "../windows/call-captions";
+import { Checkbox } from "@interprete/ui/components/checkbox";
+import { Label } from "@interprete/ui/components/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@interprete/ui/components/select";
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -280,7 +291,7 @@ export function CallPanel({
         (!native || !outputs.some((d) => d.name === output))
       )
         throw new Error(
-          "Installez BlackHole 2ch puis actualisez, ou choisissez Écoute locale pour tester.",
+          "Installez BlackHole 2ch puis actualisez, ou choisissez Tester au casque.",
         );
       if (!demo)
         requirePhysicalMicrophone(
@@ -413,6 +424,8 @@ export function CallPanel({
     setLingering({ ...last, lines: last.lines.map((line) => ({ ...line, live: false })) });
     const timer = setTimeout(() => setLingering(null), 6000);
     return () => clearTimeout(timer);
+    // Only a session change decides whether captions linger; live text is read from the ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listen.sessionId, listen.ended]);
   const captions: CaptionsUpdate | null = captionsPreview
     ? {
@@ -553,6 +566,12 @@ export function CallPanel({
     }
   }
   const latest = state.turns.at(-1);
+  const outputOptions = [
+    ...(output && !outputs.some((d) => d.name === output)
+      ? [{ value: output, label: `${output} · non installé` }]
+      : []),
+    ...outputs.map((d) => ({ value: d.name, label: d.name })),
+  ];
   return (
     <section
       className="call-panel"
@@ -560,42 +579,20 @@ export function CallPanel({
       aria-labelledby="calls-title"
     >
       <div className="call-intro">
-        <div>
-          <h1 id="calls-title">Comprendre et vous faire comprendre.</h1>
-          <p>
-            Sous-titrez ou écoutez vos interlocuteurs dans votre langue, et
-            traduisez votre micro pendant Meet, Zoom ou Teams.
-          </p>
-        </div>
-        <Phone size={24} aria-hidden="true" />
-      </div>
-      <div className="call-detection">
-        <label>
-          <input
-            type="checkbox"
-            checked={enabled && native}
-            disabled={!native}
-            onChange={(e) => void toggle(e.target.checked)}
-          />{" "}
-          Détecter les appels sur ce Mac
-        </label>
-        <span className="note" role="status">
-          {!native
-            ? "La détection et le micro virtuel nécessitent l’app macOS."
-            : (monitor?.error ??
-              (monitor?.supported
-                ? "Détection locale · confirmation avant capture"
-                : "Détection automatique : macOS 14.2 ou plus récent"))}
-        </span>
+        <h1 id="calls-title">Comprendre et vous faire comprendre.</h1>
+        <p>
+          Sous-titrez ou écoutez vos interlocuteurs dans votre langue, et
+          envoyez votre voix traduite dans Meet, Zoom ou Teams.
+        </p>
       </div>
       {monitor?.call && !monitor.accepted && !monitor.dismissed && (
         <div className="call-notice" role="status">
           <span>
-            {monitor.call.app} —{" "}
+            <strong>{monitor.call.app}</strong> ·{" "}
             {monitor.call.simulated ? "simulation" : "microphone actif"}
           </span>
           <button
-            className="btn"
+            className="btn call-primary"
             type="button"
             disabled={
               anyBusy ||
@@ -619,233 +616,246 @@ export function CallPanel({
       )}
       {accepted?.options.microphone && !busy && (
         <p className="call-notice" role="status">
-          {accepted.app} : accord reçu. Vérifiez les périphériques puis démarrez
-          la traduction.
+          {accepted.app} : accord reçu. Vérifiez le son puis démarrez la
+          traduction.
         </p>
       )}
-      <div className="call-languages">
-        {(["a", "b"] as const).map((id) => (
-          <label key={id}>
-            {id === "a" ? "Vous parlez" : "Votre interlocuteur parle"}
-            <select
-              value={profiles[id].language}
-              disabled={anyBusy}
-              onChange={(e) =>
-                onLanguage(id, e.target.value as Profile["language"])
-              }
-            >
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
+      <div className="call-section">
+        <h2>Langues</h2>
+        <div className="call-languages">
+          <CallSelect
+            id="call-language-a"
+            label="Vous parlez"
+            value={profiles.a.language}
+            disabled={anyBusy}
+            options={LANGUAGE_OPTIONS}
+            onChange={(value) => onLanguage("a", value as Profile["language"])}
+          />
+          <ArrowLeftRight
+            size={16}
+            className="call-languages-arrow"
+            aria-hidden="true"
+          />
+          <CallSelect
+            id="call-language-b"
+            label="Ils parlent"
+            value={profiles.b.language}
+            disabled={anyBusy}
+            options={LANGUAGE_OPTIONS}
+            onChange={(value) => onLanguage("b", value as Profile["language"])}
+          />
+        </div>
       </div>
-      <section className="call-listen" aria-labelledby="call-listen-title">
-        <h2 id="call-listen-title">Leur voix, dans votre langue</h2>
-        <CallOptionChecks
-          options={callOptions}
-          include={["captions", "voice"]}
-          disabled={listenBusy}
-          mine={profiles.a.language}
-          theirs={profiles.b.language}
-          onChange={chooseOptions}
-        />
-        <p className="note">
-          Seul le son de l’application d’appel détectée est capté. Sans appel
-          détecté, c’est tout le son du Mac, sauf Interprète. Avec la voix
-          traduite, portez un casque pour que vos interlocuteurs ne l’entendent
-          pas.
-        </p>
-        <div className="call-listen-status" aria-live="polite">
-          <span className="call-session-status">
-            <span
-              className="status-dot"
-              data-live={incoming.phase === "listening"}
-              aria-hidden="true"
-            />
-            <strong>
-              {!listenBusy
-                ? "Traduction de leur voix arrêtée"
-                : incoming.phase === "connecting" || incoming.phase === "idle"
-                  ? "Connexion au son de l’appel…"
-                  : incoming.phase !== "listening"
-                    ? "Fin de la traduction…"
-                    : listen.demo
-                    ? "Exemple audio en cours"
-                    : listen.scope === "app" && listen.app
-                      ? `À l’écoute de ${listen.app}`
-                      : "À l’écoute de tout le son du Mac"}
-            </strong>
-            {listenBusy && listen.options.voice && (
-              <span className="note">
-                {listen.voice
-                  ? `Voix ${listen.voice.name} · ${
-                      listen.voice.source === "jev"
-                        ? "choisie par Jev"
-                        : listen.voice.source === "pitch"
-                          ? "proche de leur voix"
-                          : "par défaut"
-                    }`
-                  : "Choix de la voix au premier mot…"}
-              </span>
+      <div className="call-section">
+        <h2>Leur voix</h2>
+        <div className="call-section-body">
+          <CallOptionChecks
+            options={callOptions}
+            include={["captions", "voice"]}
+            disabled={listenBusy}
+            mine={profiles.a.language}
+            theirs={profiles.b.language}
+            onChange={chooseOptions}
+          />
+          <p className="note">
+            Seul le son de l’application d’appel détectée est capté ; sans
+            appel détecté, tout le son du Mac, sauf Interprète. Avec la voix
+            traduite, portez un casque pour que vos interlocuteurs ne
+            l’entendent pas.
+          </p>
+          <div className="call-listen-status" aria-live="polite">
+            <span className="call-session-status">
+              <span
+                className="status-dot"
+                data-live={incoming.phase === "listening"}
+                aria-hidden="true"
+              />
+              <strong>
+                {!listenBusy
+                  ? "Prêt à traduire leur voix"
+                  : incoming.phase === "connecting" || incoming.phase === "idle"
+                    ? "Connexion au son de l’appel…"
+                    : incoming.phase !== "listening"
+                      ? "Fin de la traduction…"
+                      : listen.demo
+                        ? "Exemple audio en cours"
+                        : listen.scope === "app" && listen.app
+                          ? `À l’écoute de ${listen.app}`
+                          : "À l’écoute de tout le son du Mac"}
+              </strong>
+              {listenBusy && listen.options.voice && (
+                <span className="note">
+                  {listen.voice
+                    ? `Voix ${listen.voice.name} · ${
+                        listen.voice.source === "jev"
+                          ? "choisie par Jev"
+                          : listen.voice.source === "pitch"
+                            ? "proche de leur voix"
+                            : "par défaut"
+                      }`
+                    : "Choix de la voix au premier mot…"}
+                </span>
+              )}
+            </span>
+            {listenBusy ? (
+              <button
+                type="button"
+                className="btn call-stop"
+                onClick={() => listening.stop()}
+              >
+                <Square size={14} fill="currentColor" aria-hidden="true" />
+                Arrêter
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn call-primary"
+                disabled={!(callOptions.captions || callOptions.voice)}
+                onClick={() => void startListening({})}
+              >
+                <Captions size={16} aria-hidden="true" />
+                Traduire leur voix
+              </button>
             )}
-          </span>
-          {listenBusy ? (
-            <button
-              type="button"
-              className="btn call-stop"
-              onClick={() => listening.stop()}
-            >
-              <Square size={14} fill="currentColor" aria-hidden="true" />
-              Arrêter
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn call-primary"
-              disabled={!(callOptions.captions || callOptions.voice)}
-              onClick={() => void startListening({})}
-            >
-              <Captions size={16} aria-hidden="true" />
-              Traduire leur voix
-            </button>
+          </div>
+          {listen.notice && listenBusy && (
+            <p className="note" role="status">
+              {listen.notice}
+            </p>
+          )}
+          {(listen.error || incoming.error || incoming.warning || captionsError) && (
+            <p className="call-error" role="alert">
+              {listen.error || incoming.error || incoming.warning || captionsError}
+            </p>
           )}
         </div>
-        {listen.notice && listenBusy && (
-          <p className="note" role="status">
-            {listen.notice}
-          </p>
-        )}
-        {(listen.error || incoming.error || incoming.warning || captionsError) && (
-          <p className="call-error" role="alert">
-            {listen.error || incoming.error || incoming.warning || captionsError}
-          </p>
-        )}
-      </section>
-      <h2 className="call-section-title">Votre voix dans l’appel</h2>
-      <fieldset className="call-routing" disabled={busy}>
-        <legend>Sortie de la traduction</legend>
-        <label>
-          <input
-            type="radio"
-            name="call-route"
-            value="virtual"
-            checked={route === "virtual"}
-            onChange={() => setRoute("virtual")}
-          />{" "}
-          Micro virtuel · envoyer dans l’appel
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="call-route"
-            value="local"
-            checked={route === "local"}
-            onChange={() => setRoute("local")}
-          />{" "}
-          Écoute locale · tester au casque
-        </label>
-      </fieldset>
-      <div className="call-devices">
-        <label>
-          Microphone physique
-          <select
-            value={input}
-            disabled={busy}
-            onChange={(e) => {
-              setInput(e.target.value);
-              save("interprete-call-input", e.target.value);
-              save(
-                "interprete-call-input-label",
-                inputs.find((device) => device.deviceId === e.target.value)
-                  ?.label || "",
-              );
-            }}
-          >
-            <option value="">Choisir le microphone…</option>
-            {inputs.map((d) => (
-              <option key={d.deviceId} value={d.deviceId}>
-                {d.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {route === "virtual" ? "Sortie vers l’appel" : "Sortie du test"}
-          <select
-            value={route === "virtual" ? output : "local"}
-            disabled={busy || route === "local"}
-            onChange={(e) => {
-              setOutput(e.target.value);
-              save("interprete-call-output", e.target.value);
-            }}
-          >
-            {route === "local" ? (
-              <option value="local">Casque / sortie macOS actuelle</option>
-            ) : (
-              <>
-                <option value="">Choisir BlackHole…</option>
-                {!outputs.some((d) => d.name === output) && output && (
-                  <option value={output}>{output} · non installé</option>
-                )}
-                {outputs.map((d) => (
-                  <option key={d.name} value={d.name}>
-                    {d.name}
-                  </option>
-                ))}
-              </>
+      </div>
+      <div className="call-section">
+        <h2>Votre voix</h2>
+        <div className="call-section-body">
+          <fieldset className="segmented" disabled={busy}>
+            <legend className="sr-only">Sortie de la traduction</legend>
+            <label>
+              <input
+                type="radio"
+                name="call-route"
+                value="virtual"
+                checked={route === "virtual"}
+                onChange={() => setRoute("virtual")}
+              />
+              <span>Envoyer dans l’appel</span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="call-route"
+                value="local"
+                checked={route === "local"}
+                onChange={() => setRoute("local")}
+              />
+              <span>Tester au casque</span>
+            </label>
+          </fieldset>
+          <div className="call-devices" data-route={route}>
+            <CallSelect
+              id="call-input"
+              label="Microphone"
+              value={input}
+              placeholder="Choisir le microphone…"
+              disabled={busy}
+              options={inputs.map((d) => ({ value: d.deviceId, label: d.label }))}
+              onChange={(value) => {
+                setInput(value);
+                save("interprete-call-input", value);
+                save(
+                  "interprete-call-input-label",
+                  inputs.find((device) => device.deviceId === value)?.label ||
+                    "",
+                );
+              }}
+            />
+            {route === "virtual" && (
+              <CallSelect
+                id="call-output"
+                label="Sortie vers l’appel"
+                value={output}
+                placeholder="Choisir BlackHole…"
+                disabled={busy}
+                options={outputOptions}
+                onChange={(value) => {
+                  setOutput(value);
+                  save("interprete-call-output", value);
+                }}
+              />
             )}
-          </select>
+          </div>
+          <p className="note">
+            {route === "virtual" ? (
+              <>
+                Dans l’appel, choisissez{" "}
+                <strong>{output || "BlackHole 2ch"}</strong> comme microphone
+                et votre casque comme haut-parleur.
+              </>
+            ) : (
+              "La traduction est lue sur la sortie actuelle du Mac. Rien n’est envoyé dans l’appel."
+            )}
+          </p>
+          {route === "virtual" && !outputs.length && (
+            <div className="call-setup">
+              <p>
+                Installez le pilote BlackHole 2ch pour présenter la traduction
+                comme microphone :
+              </p>
+              <code>brew install blackhole-2ch</code>
+              <p className="note">
+                Redémarrez ensuite l’app et votre logiciel d’appel, puis
+                actualisez.
+              </p>
+            </div>
+          )}
+          <div className="call-device-actions">
+            <button
+              type="button"
+              className="btn btn-quiet"
+              disabled={busy}
+              onClick={() => void refresh(true)}
+            >
+              <Mic size={15} aria-hidden="true" />
+              Autoriser le micro
+            </button>
+            <button
+              type="button"
+              className="btn btn-quiet"
+              disabled={busy}
+              onClick={() => void refresh()}
+            >
+              <RefreshCw size={14} aria-hidden="true" />
+              Actualiser
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="call-section">
+        <h2>Détection</h2>
+        <label className="check" data-disabled={!native}>
+          <Checkbox
+            checked={enabled && native}
+            disabled={!native}
+            onCheckedChange={(checked) => void toggle(checked)}
+          />
+          <span>
+            <strong>Proposer la traduction quand un appel commence</strong>
+            <small role="status">
+              {!native
+                ? "Nécessite l’app macOS."
+                : (monitor?.error ??
+                  (monitor?.supported
+                    ? "Détection locale. Rien n’est capté sans votre accord."
+                    : "Nécessite macOS 14.2 ou plus récent."))}
+            </small>
+          </span>
         </label>
       </div>
-      <div className="call-device-actions">
-        <button
-          type="button"
-          className="btn btn-quiet"
-          disabled={busy}
-          onClick={() => void refresh(true)}
-        >
-          <Mic size={15} aria-hidden="true" />
-          Autoriser le micro
-        </button>
-        <button
-          type="button"
-          className="btn btn-quiet"
-          disabled={busy}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw size={14} aria-hidden="true" />
-          Actualiser
-        </button>
-      </div>
-      <p className="note call-route-help">
-        {route === "virtual" ? (
-          <>
-            Dans Meet / Zoom, choisissez{" "}
-            <strong>{output || "BlackHole 2ch"}</strong> comme microphone et
-            votre casque comme haut-parleur. Gardez le microphone physique
-            sélectionné ici. La sortie système du Mac reste inchangée.
-          </>
-        ) : (
-          "Portez un casque : la traduction sera audible sur la sortie actuelle du Mac. Ce mode ne transmet rien à un appel."
-        )}
-      </p>
-      {route === "virtual" && !outputs.length && (
-        <div className="call-setup">
-          <p>
-            Le pilote BlackHole 2ch est nécessaire pour présenter la traduction
-            comme microphone.
-          </p>
-          <code>brew install blackhole-2ch</code>
-          <p className="note">
-            Après installation, redémarrez l’app et Meet / Zoom, puis
-            actualisez. L’écoute locale fonctionne sans pilote.
-          </p>
-        </div>
-      )}
       <div className="call-session" data-active={busy} aria-live="polite">
         <div className="call-session-status">
           <span className="status-dot" data-live={busy} aria-hidden="true" />
@@ -856,7 +866,7 @@ export function CallPanel({
                 ? session?.mode === "virtual"
                   ? "Traduction envoyée dans l’appel"
                   : "Test en cours · écoute locale"
-                : "Microphone arrêté"}
+                : "Prêt à traduire"}
           </strong>
           {busy && (
             <meter
@@ -880,8 +890,8 @@ export function CallPanel({
           >
             <Mic size={16} aria-hidden="true" />
             {route === "virtual"
-              ? "Traduire mon micro dans l’appel"
-              : "Tester mon micro au casque"}
+              ? "Démarrer la traduction"
+              : "Démarrer le test au casque"}
           </button>
         )}
       </div>
@@ -890,26 +900,35 @@ export function CallPanel({
           {error || state.error || state.warning}
         </p>
       )}
-      <div className="call-test">
-        <h2>Essayer avant votre appel</h2>
+      <details className="call-test">
+        <summary>
+          Essayer sans appel
+          <ChevronDown size={16} aria-hidden="true" />
+        </summary>
         <p className="note">
-          Simulez la détection, ou utilisez une voix synthétique pour vérifier
-          la traduction {languageName(profiles.a.language)} →{" "}
-          {languageName(profiles.b.language)}, ou celle de votre interlocuteur
-          vers le {languageName(profiles.a.language).toLowerCase()}, sans
-          ouvrir le micro.
+          Vérifiez la traduction {languageName(profiles.a.language)} →{" "}
+          {languageName(profiles.b.language)}, ou celle de vos interlocuteurs
+          vers le {languageName(profiles.a.language).toLowerCase()}, sans ouvrir
+          le micro, ou simulez un appel.
         </p>
         <div className="call-actions">
           <button
             type="button"
             className="btn"
-            disabled={anyBusy || overlayPreview}
-            onClick={() => {
-              overlayId.current = crypto.randomUUID();
-              setOverlayPreview(true);
-            }}
+            disabled={busy}
+            onClick={() => void start(true)}
           >
-            Tester la pastille
+            <Headphones size={15} aria-hidden="true" />
+            Traduire l’exemple audio
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={listenBusy}
+            onClick={() => void startListening({ demo: true })}
+          >
+            <Captions size={15} aria-hidden="true" />
+            Sous-titrer l’exemple audio
           </button>
           <button
             type="button"
@@ -932,20 +951,13 @@ export function CallPanel({
           <button
             type="button"
             className="btn"
-            disabled={busy}
-            onClick={() => void start(true)}
+            disabled={anyBusy || overlayPreview}
+            onClick={() => {
+              overlayId.current = crypto.randomUUID();
+              setOverlayPreview(true);
+            }}
           >
-            <Headphones size={15} aria-hidden="true" />
-            Traduire l’exemple audio
-          </button>
-          <button
-            type="button"
-            className="btn"
-            disabled={listenBusy}
-            onClick={() => void startListening({ demo: true })}
-          >
-            <Captions size={15} aria-hidden="true" />
-            Sous-titrer l’exemple audio
+            Tester la pastille
           </button>
           {monitor?.call?.simulated && (
             <button
@@ -965,7 +977,7 @@ export function CallPanel({
             </button>
           )}
         </div>
-      </div>
+      </details>
       {latest && (
         <div className="call-transcript" aria-live="polite">
           <p className="note">
@@ -996,5 +1008,53 @@ export function CallPanel({
         </div>
       )}
     </section>
+  );
+}
+
+const LANGUAGE_OPTIONS = LANGUAGES.map((l) => ({
+  value: l.code,
+  label: l.native,
+}));
+
+function CallSelect({
+  id,
+  label,
+  value,
+  placeholder,
+  options,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  placeholder?: string;
+  options: { value: string; label: string }[];
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="field">
+      <Label htmlFor={id}>{label}</Label>
+      <Select
+        items={options}
+        value={value || null}
+        disabled={disabled}
+        onValueChange={(next) => {
+          if (typeof next === "string" && next) onChange(next);
+        }}
+      >
+        <SelectTrigger id={id}>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent align="start" alignItemWithTrigger={false}>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value} className="pl-3">
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
