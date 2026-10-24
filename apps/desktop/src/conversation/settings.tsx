@@ -326,7 +326,7 @@ export function SettingsPage({
       >
         {tab === "general" && (
           <>
-            <SettingsSection title="Playback">
+            <SettingsSection>
               <SettingsRow label="Translation volume" htmlFor="settings-volume">
                 <div className="volume">
                   <input
@@ -343,24 +343,22 @@ export function SettingsPage({
                 </div>
               </SettingsRow>
               <SettingsRow label="Keyboard shortcuts">
-                <span className="settings-value">
-                  <kbd>A</kbd> <kbd>B</kbd> speak · <kbd>Esc</kbd> stop
-                </span>
+                <span className="settings-value">A / B to speak, Esc to stop</span>
               </SettingsRow>
             </SettingsSection>
-            <SettingsSection title="Services">
-              <SettingsRow label="Transcription">
+            <SettingsSection>
+              <SettingsRow label="Transcription service">
                 <span className="settings-value">OpenAI · GPT Live Transcribe</span>
               </SettingsRow>
-              <SettingsRow label="Translation">
+              <SettingsRow label="Translation service">
                 <span className="settings-value">OpenAI · GPT-5.4 nano</span>
               </SettingsRow>
-              <SettingsRow label="Validation">
+              <SettingsRow label="Validation service">
                 <span className="settings-value">
                   Jev 1.14.0{decisionAvailable ? "" : " · unavailable"}
                 </span>
               </SettingsRow>
-              <SettingsRow label="Voices and cloning">
+              <SettingsRow label="Voice service">
                 <span className="settings-value">ElevenLabs · Flash v2.5</span>
               </SettingsRow>
             </SettingsSection>
