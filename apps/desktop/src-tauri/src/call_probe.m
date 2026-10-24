@@ -119,6 +119,35 @@ static Class InterpretePromptPanelClass(void) {
   return panel;
 }
 
+// Borderless windows grow a rectangular shadow again when shown or resized. Drop it, and the
+// webview's opaque plate, so only the rounded card is visible.
+static void InterpreteClearPromptChrome(NSWindow *native) {
+  native.opaque = NO;
+  native.backgroundColor = NSColor.clearColor;
+  native.hasShadow = NO;
+  NSView *content = native.contentView;
+  if (!content) {
+    [native invalidateShadow];
+    return;
+  }
+  content.wantsLayer = YES;
+  content.layer.backgroundColor = NSColor.clearColor.CGColor;
+  content.layer.shadowOpacity = 0;
+  Class webviewClass = NSClassFromString(@"WKWebView");
+  for (NSView *view in content.subviews) {
+    view.wantsLayer = YES;
+    view.layer.backgroundColor = NSColor.clearColor.CGColor;
+    view.layer.shadowOpacity = 0;
+    if (webviewClass && [view isKindOfClass:webviewClass]) {
+      @try {
+        [view setValue:@NO forKey:@"drawsBackground"];
+      } @catch (__unused NSException *exception) {
+      }
+    }
+  }
+  [native invalidateShadow];
+}
+
 // macOS only lets a regular app's NSWindow float over another app's full-screen space when
 // that app is active. A non-activating panel can, so the call prompt becomes one. Tauri's
 // window keeps its own instance variables after NSWindow's storage; the swap only happens when
@@ -145,14 +174,17 @@ void interprete_configure_call_prompt(void *window) {
       | NSWindowCollectionBehaviorStationary | NSWindowCollectionBehaviorIgnoresCycle;
   // Above floating call controls, below system alerts and menus.
   native.level = NSStatusWindowLevel;
+  InterpreteClearPromptChrome(native);
 }
 
 // Shows the call prompt in the top-right corner of the screen under the pointer, sliding in
 // from the right edge. Never takes keyboard focus from the call. Runs on the AppKit thread.
 void interprete_present_call_prompt(void *window) {
   NSWindow *native = (__bridge NSWindow *)window;
+  InterpreteClearPromptChrome(native);
   if (native.isVisible) {
     [native orderFrontRegardless];
+    InterpreteClearPromptChrome(native);
     return;
   }
   NSPoint pointer = NSEvent.mouseLocation;
@@ -165,11 +197,13 @@ void interprete_present_call_prompt(void *window) {
   }
   if (!screen) {
     [native orderFrontRegardless];
+    InterpreteClearPromptChrome(native);
     return;
   }
   NSRect area = screen.visibleFrame;
   NSSize size = native.frame.size;
-  NSRect target = NSMakeRect(NSMaxX(area) - size.width - 16, NSMaxY(area) - size.height - 16, size.width, size.height);
+  // The window matches the card, so this inset is the gap between the card and the screen corner.
+  NSRect target = NSMakeRect(NSMaxX(area) - size.width - 8, NSMaxY(area) - size.height - 8, size.width, size.height);
   NSRect start = target;
   BOOL reduceMotion = NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
   if (!reduceMotion) {
@@ -185,10 +219,14 @@ void interprete_present_call_prompt(void *window) {
   [native setFrame:start display:NO];
   native.alphaValue = 0;
   [native orderFrontRegardless];
+  InterpreteClearPromptChrome(native);
   [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
     context.duration = reduceMotion ? 0.2 : 0.38;
     context.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0.22 :1 :0.36 :1];
     [native.animator setFrame:target display:YES];
     native.animator.alphaValue = 1;
-  } completionHandler:nil];
+  } completionHandler:^{
+    // Resizing the window puts the rectangular shadow back.
+    InterpreteClearPromptChrome(native);
+  }];
 }
