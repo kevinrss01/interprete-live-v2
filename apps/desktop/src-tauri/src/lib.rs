@@ -81,6 +81,11 @@ pub fn run() {
             calls::start(app.handle().clone());
             Ok(())
         })
+        .on_page_load(|webview, payload| {
+            if webview.label() == "main" && payload.event() == tauri::webview::PageLoadEvent::Started {
+                webview.state::<system_audio::SystemAudio>().release_all();
+            }
+        })
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
                 window.app_handle().exit(0);
