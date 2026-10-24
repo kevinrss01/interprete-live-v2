@@ -186,6 +186,8 @@ Le serveur comprend un socle Hono + oRPC + Zod + Better Auth + Drizzle + Postgre
 
 Aucune méthode de connexion n’est encore activée. Le frontend, le stockage des jetons et la reprise des préférences locales restent à intégrer.
 
+Les discussions traduites sont enregistrées dans PostgreSQL, liées au compte. Le texte de chaque message y est conservé avec l’heure où il a été prononcé et l’heure de sa dernière mise à jour. L’audio de lecture n’est pas stocké. L’écran lit d’abord une copie locale (`interprete-discussions-v1`) puis la synchronise avec le compte.
+
 Le [guide backend](backend.md) décrit la structure des fichiers, les contrôles, les tables, les procédures, un exemple de client frontend, le démarrage local, les migrations, les tests et le déploiement.
 
 ## Déroulé d'un tour de parole
