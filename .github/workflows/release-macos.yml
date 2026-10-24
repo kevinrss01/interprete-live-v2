@@ -1,0 +1,78 @@
+name: Release macOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-macos
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      VITE_API_URL: ${{ vars.VITE_API_URL }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Require main
+        run: test "$GITHUB_REF" = "refs/heads/main"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Validate release configuration
+        id: config
+        run: node scripts/release-config.mjs --github-output
+      - name: Refuse an existing tag or release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.config.outputs.tag }}
+        shell: bash
+        run: |
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            echo "This version already has a tag. Increase the app version."
+            exit 1
+          fi
+          existing=$(gh api --paginate "repos/$GH_REPO/releases" --jq '.[] | .tag_name')
+          if printf '%s\n' "$existing" | grep -Fxq "$RELEASE_TAG"; then
+            echo "This version already has a release, including drafts."
+            exit 1
+          fi
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build:server
+      - run: pnpm --filter @interprete/desktop build
+      - run: pnpm --filter @interprete/landing build
+      - name: Install Apple Silicon Rust target
+        run: rustup target add aarch64-apple-darwin
+      - run: pnpm build:desktop:dmg
+      - name: Prepare download asset
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg)
+          test "${#files[@]}" -eq 1
+          mkdir -p release
+          cp "${files[0]}" release/Interprete-macOS-arm64.dmg
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.config.outputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" release/Interprete-macOS-arm64.dmg \
+            --target "$GITHUB_SHA" --title "Interprete $RELEASE_TAG" \
+            --draft --generate-notes
+          gh release edit "$RELEASE_TAG" --draft=false --latest

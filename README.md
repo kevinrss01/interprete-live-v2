@@ -117,6 +117,7 @@ pnpm lint
 pnpm test
 pnpm build:server
 pnpm build:desktop   # bundle .app / .dmg / .msi selon la plateforme
+pnpm build:desktop:dmg # sur macOS : DMG Apple Silicon, sans publication GitHub
 ```
 
 Les tests serveur couvrent aussi le routage oRPC et le refus des appels non authentifiés sans nécessiter de base. Le test d’intégration applique les migrations et crée/supprime ses propres utilisateurs ; il doit utiliser une base dédiée :
@@ -132,6 +133,28 @@ Les tests couvrent les signatures, la séparation des voix, le consentement, les
 Voir [les vérifications effectuées](docs/VALIDATION.md). Les latences de démonstration sont des observations sur quelques phrases, pas un benchmark représentatif de toutes les langues et conditions réseau.
 
 ## Déploiement
+
+### Release macOS manuelle
+
+Le workflow [Release macOS](.github/workflows/release-macos.yml) ne se déclenche que sur demande : aucun commit, push ou tag ne publie de release. Il construit uniquement la version de `main` présente sur GitHub au lancement, sans inclure les modifications locales.
+
+Configuration initiale : intégrer le workflow sur `main`, configurer la variable GitHub Actions du dépôt `VITE_API_URL` avec l'URL HTTPS du backend de production (sans identifiants), puis installer GitHub CLI et se connecter avec `gh auth login`. Les clés fournisseurs restent sur le serveur.
+
+Pour chaque release :
+
+1. Mettre à jour `version` dans `apps/desktop/src-tauri/tauri.conf.json` avec une nouvelle version stable `x.y.z`, puis intégrer les changements à publier sur `main`.
+2. Depuis la racine du dépôt, lancer **`pnpm release`**. La commande déclenche le workflow GitHub puis rend la main ; suivre sa progression dans **Actions → Release macOS**. On peut aussi utiliser **Run workflow**, en choisissant `main`.
+3. GitHub vérifie l'URL, refuse tout tag ou release existant pour cette version, lance les contrôles de `check.yml`, construit le DMG Apple Silicon et publie automatiquement la release avec `Interprete-macOS-arm64.dmg` et les notes générées. Aucun clic de publication supplémentaire n'est requis. Le backend n'est pas déployé par ce workflow.
+
+La release est préparée temporairement en brouillon pendant l'envoi du fichier, puis publiée et définie comme dernière version uniquement après le succès de l'envoi. Si l'envoi ou la publication échoue, le brouillon éventuel reste privé et la dernière version disponible ne change pas. Pour relancer cette même version, supprimer explicitement le brouillon précédent ; si le tag existe, utiliser une nouvelle version.
+
+Le lien permanent de la landing est `https://github.com/kevinrss01/interprete-live-v2/releases/latest/download/Interprete-macOS-arm64.dmg`. Chaque dernière release doit conserver ce nom de fichier. Les téléchargements publics nécessitent un dépôt public ; les brouillons ne rendent pas ce lien disponible.
+
+En local, `pnpm build:desktop:dmg` reconstruit le DMG avec les icônes et les réglages Tauri existants, sans créer de tag ou de release. Configurer `VITE_API_URL` dans `apps/desktop/.env.local` avant le build ; le terminal indique le chemin du fichier produit. Cible : macOS 14.2 minimum, Apple Silicon. La signature et la notarisation ne sont pas ajoutées par ce workflow, et la caméra virtuelle n'est pas encore implémentée.
+
+Le fond du DMG et les positions des icônes sont configurés dans `bundle.macOS.dmg`. Pour modifier le visuel, éditer `apps/desktop/src-tauri/dmg/background.swift`, puis exécuter `swift apps/desktop/src-tauri/dmg/background.swift` sur macOS pour régénérer le PNG avant de reconstruire le DMG. Aucun outil de dessin supplémentaire n'est nécessaire.
+
+### Hébergement
 
 - **Web (Vercel)** : [interprete-live.vercel.app](https://interprete-live.vercel.app) sert le build Vite de `apps/desktop` (`dist/`). La variable de build `VITE_API_URL=https://interprete-backend.vercel.app` relie les clients Hono et oRPC au backend commun. `apps/desktop/vercel.json` conserve le routage de l’app lors d’un rechargement. Le projet est relié au dépôt GitHub `kevinrss01/interprete-live-v2` : chaque push sur `main` déploie la production, les autres branches des prévisualisations. Vercel bloque un déploiement dont l’auteur du commit n’est pas membre de l’équipe VoiceCheap.
 - **API (Vercel)** : le projet `interprete-backend` utilise `apps/server`, la région Frankfurt et la base Neon `interprete-postgres`. `pnpm --filter @interprete/server build:vercel` génère `dist/app.mjs` ; `apps/server/app.mjs` l’expose au runtime Hono sans ouvrir de serveur autonome. Les clés fournisseurs et les secrets de session restent exclusivement dans les variables serveur. `BETTER_AUTH_URL` doit correspondre au domaine de l’API et `ALLOWED_ORIGINS` inclure les domaines web autorisés. Appliquer les migrations avec la connexion Neon avant d’ouvrir le parcours comptes.

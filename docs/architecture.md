@@ -196,6 +196,12 @@ flowchart LR
 - **API** : copier le repo et `apps/server/.env.local` sur le VPS, puis `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtient le certificat et relaie le SSE sans buffering (`flush_interval -1`).
 - **Desktop** : `VITE_API_URL` est intégré au moment du build ; le pointer vers le domaine du VPS avant `pnpm build:desktop`. Sur macOS, `Info.plist` déclare l'usage du micro et `Entitlements.plist` l'autorise sous hardened runtime. La signature et la notarisation ne sont pas encore configurées.
 
+### Note pour la page Download (2026-10-24)
+
+- Distribution initiale macOS uniquement, avec téléchargements hébergés sur GitHub Releases et liés depuis la landing. `pnpm release` déclenche manuellement le workflow sur `main` ; après les contrôles et le build, la release est publiée automatiquement et devient la dernière version.
+- Prérequis retenu pour la distribution : **macOS Sonoma 14.2 minimum**, afin d'inclure la détection automatique des appels (`apps/desktop/src-tauri/src/call_probe.m`). Le minimum du bundle est aligné sur 14.2. Ce choix ne constitue pas un test de compatibilité.
+- Le workflow de release prépare un DMG Apple Silicon (ARM64) ; aucun build Intel n'est prévu dans ce workflow. L'extension caméra est encore au stade de plan.
+
 ## Variables d'environnement
 
 | Où | Variable | Usage |
