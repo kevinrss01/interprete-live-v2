@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { confirm } from "@tauri-apps/plugin-dialog";
 import {
   ArrowLeftRight,
   CircleAlert,
@@ -10,7 +9,7 @@ import {
   X,
 } from "lucide-react";
 import type { InterpreterController } from "../lib/interpreter";
-import { SpeakerPanel, VoiceSettings } from "./speaker-panel";
+import { SpeakerPanel } from "./speaker-panel";
 import { CallPanel, type CallPanelHandle } from "./call-panel";
 import { TranslationPill } from "./translation-overlay";
 import {
@@ -19,7 +18,23 @@ import {
 } from "../lib/translation-overlay";
 import { desktopAvailable } from "../lib/calls";
 import { Conversation } from "./conversation";
+import { SettingsSheet } from "./settings-sheet";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+type PendingConfirm =
+  | { kind: "clear" }
+  | { kind: "remove"; id: SpeakerId };
 
 export function Interpreter({ controller }: { controller: InterpreterController }) {
   const state = useSyncExternalStore(
@@ -33,7 +48,7 @@ export function Interpreter({ controller }: { controller: InterpreterController 
   const [callBusy, setCallBusy] = useState(false);
   const [callMode, setCallMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [pending, setPending] = useState<PendingConfirm | null>(null);
   const overlay: OverlayUpdate | null =
     callOverlay ??
     (state.sessionId
@@ -51,11 +66,16 @@ export function Interpreter({ controller }: { controller: InterpreterController 
     else controller.cancelSession(sessionId);
   }
   useTranslationOverlay(overlay, stopTranslation, setOverlayError);
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (e.repeat || target.closest("dialog")) return;
+      if (
+        e.repeat ||
+        target.closest(
+          "dialog, [role='dialog'], [role='alertdialog'], [role='listbox']",
+        )
+      )
+        return;
       if (e.key === "Escape") {
         e.preventDefault();
         controller.cancel();
@@ -71,12 +91,6 @@ export function Interpreter({ controller }: { controller: InterpreterController 
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [controller, callMode]);
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (showSettings && !dialog.open) dialog.showModal();
-    if (!showSettings && dialog.open) dialog.close();
-  }, [showSettings]);
   const busy = state.phase !== "idle" || callBusy;
   const demo = state.input === "demo";
   const microphoneActive = state.phase === "listening" && state.input === "microphone";
@@ -112,14 +126,11 @@ export function Interpreter({ controller }: { controller: InterpreterController 
       void controller.setConsent(id, patch.consent);
     else controller.setProfile(id, patch);
   }
-  // WKWebView ignores window.confirm, so use the native Tauri dialog.
-  async function onRemove(id: SpeakerId) {
-    if (
-      await confirm(
-        "Supprimer définitivement cette voix du compte ElevenLabs ?",
-      )
-    )
-      void controller.removeVoice(id);
+  function confirmPending() {
+    if (!pending) return;
+    if (pending.kind === "clear") controller.clearConversation();
+    else void controller.removeVoice(pending.id);
+    setPending(null);
   }
   function swap() {
     const a = state.profiles.a.language;
@@ -161,8 +172,8 @@ export function Interpreter({ controller }: { controller: InterpreterController 
             )}
             <span className="status-text">{status}</span>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             className="icon-btn"
             onClick={() => setShowSettings(true)}
             aria-haspopup="dialog"
@@ -171,20 +182,20 @@ export function Interpreter({ controller }: { controller: InterpreterController 
             title="Réglages"
           >
             <SlidersHorizontal size={18} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
       </header>
       <nav className="frame mode-switch" aria-label="Mode de traduction">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className="btn btn-quiet"
           aria-pressed={!callMode}
           onClick={() => setCallMode(false)}
         >
           Conversation
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
           className="btn btn-quiet"
           aria-pressed={callMode}
           onClick={() => {
@@ -193,19 +204,19 @@ export function Interpreter({ controller }: { controller: InterpreterController 
           }}
         >
           Appels sur Mac
-        </button>
+        </Button>
       </nav>
       {overlayError && (
         <div className="frame alert" role="alert">
           <span>{overlayError}</span>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             className="icon-btn"
             aria-label="Fermer le message de la pastille"
             onClick={() => setOverlayError(null)}
           >
             <X size={16} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
       )}
       {!desktopAvailable() && overlay && (
@@ -238,14 +249,7 @@ export function Interpreter({ controller }: { controller: InterpreterController 
             profiles={state.profiles}
             onPlay={(id) => void controller.replay(id)}
             onDemo={() => void controller.start(state.active, true)}
-            onClear={async () => {
-              if (
-                await confirm(
-                  "Effacer le texte et l’audio de cette conversation sur cet appareil ?",
-                )
-              )
-                controller.clearConversation();
-            }}
+            onClear={() => setPending({ kind: "clear" })}
             busy={busy}
           />
         )}
@@ -256,14 +260,14 @@ export function Interpreter({ controller }: { controller: InterpreterController 
             <div className="alert" role="alert">
               <CircleAlert size={16} aria-hidden="true" />
               <span>{state.error || state.warning}</span>
-              <button
+              <Button
+                variant="ghost"
                 className="icon-btn"
                 onClick={controller.dismissError}
                 aria-label="Fermer le message"
-                type="button"
               >
                 <X size={16} aria-hidden="true" />
-              </button>
+              </Button>
             </div>
           )}
           <div className="live-controls">
@@ -305,9 +309,9 @@ export function Interpreter({ controller }: { controller: InterpreterController 
             {speaker("a")}
             <div className="dock-center">
               {busy ? (
-                <button
+                <Button
+                  variant="ghost"
                   className="icon-btn round"
-                  type="button"
                   onClick={() => controller.cancel()}
                   aria-label={
                     state.phase === "listening" || state.phase === "connecting"
@@ -317,102 +321,66 @@ export function Interpreter({ controller }: { controller: InterpreterController 
                   title="Arrêter (Échap)"
                 >
                   <X size={18} aria-hidden="true" />
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="ghost"
                   className="icon-btn round"
-                  type="button"
                   onClick={swap}
                   aria-label="Inverser les deux langues"
                   title="Inverser les langues"
                 >
                   <ArrowLeftRight size={16} aria-hidden="true" />
-                </button>
+                </Button>
               )}
             </div>
             {speaker("b")}
           </div>
         </div>
       </div>
-      <dialog
-        ref={dialogRef}
-        className="sheet"
-        aria-labelledby="settings-title"
-        onClose={() => setShowSettings(false)}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) setShowSettings(false);
+      <SettingsSheet
+        open={showSettings}
+        profiles={state.profiles}
+        busy={busy}
+        decisionAvailable={!state.services || state.services.decision}
+        volume={state.volume}
+        onOpenChange={setShowSettings}
+        onProfile={onProfile}
+        onClone={(id) => void controller.clone(id)}
+        onRemove={(id) => setPending({ kind: "remove", id })}
+        onVolume={(value) => controller.setVolume(value)}
+      />
+      <AlertDialog
+        open={pending !== null}
+        onOpenChange={(open) => {
+          if (!open) setPending(null);
         }}
       >
-        <div className="sheet-inner">
-          <div className="sheet-head">
-            <h2 id="settings-title">Réglages</h2>
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={() => setShowSettings(false)}
-              aria-label="Fermer les réglages"
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pending?.kind === "remove"
+                ? "Supprimer cette voix"
+                : "Effacer la conversation"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pending?.kind === "remove"
+                ? "Supprimer définitivement cette voix du compte ElevenLabs ?"
+                : "Effacer le texte et l’audio de cette conversation sur cet appareil ?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-11 px-4">Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className="h-11 px-4"
+              variant={pending?.kind === "remove" ? "destructive" : "default"}
+              onClick={confirmPending}
             >
-              <X size={18} aria-hidden="true" />
-            </button>
-          </div>
-          <div className="sheet-body">
-            {(["a", "b"] as const).map((id) => (
-              <VoiceSettings
-                key={id}
-                profile={state.profiles[id]}
-                busy={busy}
-                onProfile={(p) => onProfile(id, p)}
-                onClone={() => void controller.clone(id)}
-                onRemove={() => onRemove(id)}
-              />
-            ))}
-            <fieldset className="settings-group">
-              <legend>Session</legend>
-              <p className="note">
-                Le micro reste ouvert jusqu’à ce que vous appuyiez sur Couper le micro,
-                même pendant les pauses et la lecture des traductions.
-              </p>
-              <p className="note">
-                <kbd>A</kbd> <kbd>B</kbd> pour parler, <kbd>Échap</kbd> pour
-                arrêter. La traduction parle pendant votre prise de parole, avec
-                l’annulation d’écho du navigateur.
-              </p>
-            </fieldset>
-            <div className="settings-group">
-              <h3 className="settings-title">Services</h3>
-              <dl className="services">
-                <div>
-                  <dt>Transcription</dt>
-                  <dd>OpenAI · GPT Live Transcribe</dd>
-                </div>
-                <div>
-                  <dt>Traduction</dt>
-                  <dd>OpenAI · GPT-5.4 nano</dd>
-                </div>
-                <div>
-                  <dt>Validation</dt>
-                  <dd>
-                    Jev 1.14.0
-                    {state.services && !state.services.decision
-                      ? " · indisponible"
-                      : ""}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Voix et clonage</dt>
-                  <dd>ElevenLabs · Flash v2.5</dd>
-                </div>
-              </dl>
-              <p className="note">
-                Voix générées par IA. L’app ne conserve pas les conversations
-                sur son serveur. Les échantillons autorisés pour le clonage sont
-                transmis à ElevenLabs ; vous pouvez supprimer votre voix
-                ci-dessus.
-              </p>
-            </div>
-          </div>
-        </div>
-      </dialog>
+              {pending?.kind === "remove" ? "Supprimer" : "Effacer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

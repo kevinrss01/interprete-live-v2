@@ -1,16 +1,16 @@
-import {
-  Check,
-  ChevronDown,
-  LoaderCircle,
-  Mic,
-  Sparkles,
-  Square,
-  Trash2,
-  Volume2,
-} from "lucide-react";
+import { Check, LoaderCircle, Mic, Square, Volume2 } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { Phase, Profile } from "@interprete/shared/contracts";
 import { LANGUAGES, VOICE_PRESETS, languageNative } from "@interprete/shared/languages";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const METER = [0.5, 0.85, 1, 0.75, 0.55];
 const SAMPLE_TARGET = 30;
@@ -100,29 +100,41 @@ export function SpeakerPanel({
         </span>
       </div>
       <div className="language-field">
-        <label className="sr-only" htmlFor={`language-${profile.id}`}>
+        <Label className="sr-only" htmlFor={`language-${profile.id}`}>
           Langue de la personne {letter}
-        </label>
-        <select
-          id={`language-${profile.id}`}
-          name={`language-${profile.id}`}
+        </Label>
+        <Select
+          items={LANGUAGES.map((l) => ({ value: l.code, label: l.native }))}
           value={profile.language}
-          onChange={(e) =>
-            onProfile({ language: e.target.value as Profile["language"] })
-          }
           disabled={busy}
+          onValueChange={(value) => {
+            if (!value || !LANGUAGES.some((l) => l.code === value)) return;
+            onProfile({ language: value as Profile["language"] });
+          }}
         >
-          {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>
-              {l.native}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={16} aria-hidden="true" />
+          <SelectTrigger
+            id={`language-${profile.id}`}
+            aria-label={`Langue de la personne ${letter}`}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent
+            side="top"
+            align="start"
+            alignItemWithTrigger={false}
+            className="min-w-44"
+          >
+            {LANGUAGES.map((l) => (
+              <SelectItem key={l.code} value={l.code} className="pl-2.5">
+                {l.native}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-      <button
+      <Button
+        variant="outline"
         className="talk"
-        type="button"
         onClick={onTalk}
         disabled={!ready || (busy && !listening && !connecting)}
         style={{ "--level": listening ? level : 0 } as CSSProperties}
@@ -188,168 +200,7 @@ export function SpeakerPanel({
             </kbd>
           )
         )}
-      </button>
+      </Button>
     </section>
-  );
-}
-
-export function VoiceSettings({
-  profile,
-  busy,
-  onProfile,
-  onClone,
-  onRemove,
-}: {
-  profile: Profile;
-  busy: boolean;
-  onProfile: (patch: Partial<Profile>) => void;
-  onClone: () => void;
-  onRemove: () => void;
-}) {
-  const current = profile.cloneStatus;
-  const letter = profile.id.toUpperCase();
-  const canCreate =
-    profile.consent &&
-    current !== "ready" &&
-    current !== "verification" &&
-    profile.sampleSeconds >= 10 &&
-    current !== "creating";
-  const canRemove = current === "ready" || !!profile.cloneVoice;
-  return (
-    <fieldset className="settings-group">
-      <legend>
-        <span className={`mark mark-${profile.id}`} aria-hidden="true">
-          {letter}
-        </span>
-        Personne {letter}
-      </legend>
-      <div className="field">
-        <label htmlFor={`name-${profile.id}`}>Nom</label>
-        <input
-          id={`name-${profile.id}`}
-          name={`name-${profile.id}`}
-          autoComplete="off"
-          maxLength={32}
-          value={profile.name}
-          onChange={(e) => onProfile({ name: e.target.value })}
-          disabled={busy}
-        />
-      </div>
-      {current !== "ready" && (
-        <div className="field">
-          <label htmlFor={`voice-${profile.id}`}>Voix</label>
-          <div className="select-wrap">
-            <select
-              id={`voice-${profile.id}`}
-              value={profile.voice.includes(".") ? "sarah" : profile.voice}
-              disabled={busy}
-              onChange={(e) => onProfile({ voice: e.target.value })}
-            >
-              {VOICE_PRESETS.map((v) => (
-                <option key={v.key} value={v.key}>
-                  {v.name} · {v.description}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} aria-hidden="true" />
-          </div>
-        </div>
-      )}
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={profile.consent}
-          disabled={busy || current === "creating"}
-          onChange={(e) =>
-            onProfile({
-              consent: e.target.checked,
-              cloneStatus: e.target.checked
-                ? "collecting"
-                : current === "ready"
-                  ? "ready"
-                  : "off",
-            })
-          }
-        />
-        <span>
-          <strong>Utiliser ma propre voix</strong>
-          <small>
-            J’autorise la création et l’utilisation de ma voix pour cette
-            conversation.
-          </small>
-        </span>
-      </label>
-      {profile.consent && current !== "ready" && (
-        <div className="clone-progress">
-          <div className="clone-progress-head">
-            <span>
-              {current === "creating"
-                ? "Création de la voix…"
-                : current === "verification"
-                  ? "Vérification nécessaire"
-                  : current === "error"
-                    ? "Création à réessayer"
-                    : "Échantillon"}
-            </span>
-            <span className="tabular">
-              {Math.min(SAMPLE_TARGET, profile.sampleSeconds)} / {SAMPLE_TARGET}{" "}
-              s
-            </span>
-          </div>
-          <div
-            className="progress"
-            role="progressbar"
-            aria-label="Échantillon pour le clonage"
-            aria-valuemin={0}
-            aria-valuemax={SAMPLE_TARGET}
-            aria-valuenow={Math.min(SAMPLE_TARGET, profile.sampleSeconds)}
-          >
-            <span
-              style={{
-                transform: `scaleX(${Math.min(1, profile.sampleSeconds / SAMPLE_TARGET)})`,
-              }}
-            />
-          </div>
-          <p className="note">
-            La création démarre après 30 s de parole. Une minute améliore la
-            ressemblance.
-          </p>
-        </div>
-      )}
-      {current === "ready" && (
-        <p className="note">
-          <Check size={13} aria-hidden="true" /> Votre voix est prête. Elle est
-          conservée dans votre compte ElevenLabs.
-        </p>
-      )}
-      {profile.cloneError && (
-        <p className="note is-error" role="status">
-          {profile.cloneError}
-        </p>
-      )}
-      {(canCreate || canRemove) && (
-        <div className="settings-actions">
-          {canCreate && (
-            <button className="btn" type="button" onClick={onClone}>
-              <Sparkles size={15} aria-hidden="true" />
-              {current === "error"
-                ? "Réessayer la création"
-                : "Créer la voix maintenant"}
-            </button>
-          )}
-          {canRemove && (
-            <button
-              type="button"
-              className="btn btn-quiet"
-              disabled={busy || current === "creating"}
-              onClick={onRemove}
-            >
-              <Trash2 size={15} aria-hidden="true" />
-              Supprimer ma voix
-            </button>
-          )}
-        </div>
-      )}
-    </fieldset>
   );
 }

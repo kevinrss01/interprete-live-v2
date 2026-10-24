@@ -2,6 +2,7 @@ import { Component, StrictMode, useEffect, useState, type ReactNode } from "reac
 import ReactDOM from "react-dom/client";
 import "@fontsource-variable/inter";
 import "./globals.css";
+import { Button } from "@/components/ui/button";
 import { TranslationOverlay } from "./components/translation-overlay";
 import { CallToast } from "./components/call-toast";
 import { Interpreter } from "./components/interpreter";
@@ -21,7 +22,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }> {
       <main className="error-page">
         <h1>La conversation a été interrompue.</h1>
         <p>Rechargez l’interface pour reprendre.</p>
-        <button onClick={() => location.reload()}>Réessayer</button>
+        <Button onClick={() => location.reload()}>Réessayer</Button>
       </main>
     );
   }

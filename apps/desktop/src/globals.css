@@ -1,7 +1,51 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: var(--font-body);
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  /* shadcn "accent" is a hover fill. The app's --accent stays the recording red. */
+  --color-accent-foreground: var(--ink);
+  --color-accent: var(--fill);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 /* Tokens — see DESIGN.md */
@@ -21,6 +65,36 @@
   --radius: 10px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   color-scheme: light;
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--surface);
+  --secondary: var(--fill);
+  --secondary-foreground: var(--ink);
+  --muted: var(--fill);
+  --muted-foreground: var(--ink-3);
+  --accent-foreground: var(--ink);
+  --destructive: var(--accent);
+  --border: var(--line);
+  --input: var(--line-2);
+  --ring: var(--ink);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: var(--surface);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: var(--surface);
+  --sidebar-accent: var(--fill);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--ink);
 }
 
 /* Base */
@@ -71,6 +145,9 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+button:disabled[data-slot="select-trigger"] {
+  opacity: 1;
 }
 :focus-visible {
   outline: 2px solid var(--ink);
@@ -249,7 +326,10 @@ kbd {
   height: 56px;
 }
 .topbar .icon-btn {
-  margin-right: -10px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
 }
 .wordmark {
   display: inline-flex;
@@ -535,32 +615,28 @@ kbd {
   max-width: calc(100% + 10px);
   margin-left: -10px;
 }
-.language-field select {
-  appearance: none;
-  height: 44px;
+.language-field [data-slot="select-trigger"] {
+  height: 36px;
   max-width: 100%;
-  padding: 0 30px 0 10px;
+  padding: 0 10px;
   border: 0;
   border-radius: 8px;
   background: transparent;
+  box-shadow: none;
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.015em;
-  cursor: pointer;
-  text-overflow: ellipsis;
+  gap: 4px;
 }
-.language-field select:hover:not(:disabled) {
+.language-field [data-slot="select-trigger"]:hover:not(:disabled) {
   background: var(--fill);
 }
-.language-field select:disabled {
+.language-field [data-slot="select-trigger"]:disabled {
   cursor: not-allowed;
   color: var(--ink-2);
 }
-.language-field svg {
-  position: absolute;
-  right: 9px;
+.language-field [data-slot="select-trigger"] svg {
   color: var(--ink-3);
-  pointer-events: none;
 }
 
 /* Talk button */
@@ -728,8 +804,68 @@ kbd {
   border: 0;
   border-bottom: 1px solid var(--line);
 }
+/* Fieldset legends sit on the top edge, so the group's padding never
+   clears the hairline above. Space every group, including the first
+   one under the header. */
+.settings-group {
+  margin-top: 16px;
+}
 .settings-group:last-child {
   border-bottom: 0;
+}
+.volume {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  align-items: center;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+.volume input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.volume input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--ink) var(--volume),
+    var(--line-2) var(--volume)
+  );
+}
+.volume input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.volume input[type="range"]::-moz-range-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--line-2);
+}
+.volume input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ink);
+}
+.volume input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
 }
 .settings-group legend,
 .settings-title {
@@ -754,7 +890,7 @@ kbd {
 .field input,
 .field select {
   width: 100%;
-  height: 44px;
+  height: 36px;
   padding: 0 12px;
   border: 1px solid var(--line-2);
   border-radius: 8px;
@@ -766,10 +902,25 @@ kbd {
   border-color: var(--ink-3);
 }
 .field input:disabled,
-.field select:disabled {
+.field select:disabled,
+.field [data-slot="select-trigger"]:disabled {
   background: var(--fill);
   color: var(--ink-3);
   cursor: not-allowed;
+}
+.field [data-slot="select-trigger"] {
+  width: 100%;
+  height: 36px;
+  justify-content: space-between;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: none;
+  font-size: 14px;
+}
+.field [data-slot="select-trigger"]:hover:not(:disabled) {
+  border-color: var(--ink-3);
 }
 .select-wrap {
   position: relative;
@@ -941,7 +1092,7 @@ kbd {
   .voice-chip {
     font-size: 11px;
   }
-  .language-field select {
+  .language-field [data-slot="select-trigger"] {
     font-size: 16px;
   }
   .talk {
@@ -962,7 +1113,8 @@ kbd {
     display: none;
   }
   .field input,
-  .field select {
+  .field select,
+  .field [data-slot="select-trigger"] {
     font-size: 16px;
   }
   .sheet {
@@ -1000,6 +1152,41 @@ kbd {
   .talk-kbd {
     display: none;
   }
+}
+[data-slot="select-content"],
+[data-slot="sheet-content"] {
+  box-shadow: none;
+}
+[data-slot="select-content"] {
+  max-height: min(16rem, var(--available-height, 16rem));
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+[data-slot="sheet-content"][data-side="right"] {
+  width: min(420px, 100vw);
+  max-width: min(420px, 100vw);
+}
+[data-slot="sheet-content"][data-side="bottom"] {
+  max-height: 90dvh;
+  border-radius: 14px 14px 0 0;
+}
+[data-slot="button"]:focus-visible,
+[data-slot="checkbox"]:focus-visible {
+  --tw-ring-shadow: 0 0 #0000;
+  box-shadow: none;
+}
+/* Settings fields keep a 1px ink border. The offset outline plus the
+   component ring stacked into a heavy frame. */
+.field [data-slot="input"]:focus:not(:disabled),
+.field [data-slot="input"]:focus-visible:not(:disabled),
+.field [data-slot="select-trigger"]:focus:not(:disabled),
+.field [data-slot="select-trigger"]:focus-visible:not(:disabled) {
+  outline: none;
+  outline-offset: 0;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  box-shadow: none;
+  border-color: var(--ink);
 }
 @media (forced-colors: active) {
   .talk,
@@ -1352,4 +1539,51 @@ kbd {
   right: 16px;
   top: 50%;
   transform: translateY(-50%);
+}
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
 }

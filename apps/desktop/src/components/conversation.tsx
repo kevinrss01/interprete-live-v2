@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { LoaderCircle, Play, Trash2 } from "lucide-react";
 import type { Profile, SpeakerId, Turn } from "@interprete/shared/contracts";
 import { languageName } from "@interprete/shared/languages";
+import { Button } from "@/components/ui/button";
 
 export function Conversation({
   turns,
@@ -49,37 +50,32 @@ export function Conversation({
             La traduction s’affiche ici et se lit à voix haute. Gardez le son
             activé.
           </p>
-          <button
-            className="btn"
-            type="button"
-            onClick={onDemo}
-            disabled={busy}
-          >
+          <Button className="btn" onClick={onDemo} disabled={busy}>
             <Play size={13} fill="currentColor" aria-hidden="true" />
             Essayer un exemple audio
-          </button>
+          </Button>
         </div>
       ) : (
         <>
           <div className="conversation-tools">
-            <button
+            <Button
+              variant="ghost"
               className="btn btn-quiet"
-              type="button"
               disabled={busy}
               onClick={onDemo}
             >
               Exemple audio
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               className="icon-btn"
               onClick={onClear}
-              type="button"
               aria-label="Effacer la conversation"
               title="Effacer la conversation"
               disabled={busy}
             >
               <Trash2 size={16} aria-hidden="true" />
-            </button>
+            </Button>
           </div>
           <ol
             className="turns"
@@ -138,19 +134,21 @@ export function Conversation({
                   )}
                   {turn.status === "done" && (
                     <div className="turn-actions">
-                      {turn.audioUrl && <button
-                        className="btn btn-quiet btn-inline"
-                        type="button"
-                        disabled={busy}
-                        onClick={() => onPlay(turn.id)}
-                      >
-                        <Play
-                          size={12}
-                          fill="currentColor"
-                          aria-hidden="true"
-                        />
-                        Réécouter
-                      </button>}
+                      {turn.audioUrl && (
+                        <Button
+                          variant="ghost"
+                          className="btn btn-quiet btn-inline"
+                          disabled={busy}
+                          onClick={() => onPlay(turn.id)}
+                        >
+                          <Play
+                            size={12}
+                            fill="currentColor"
+                            aria-hidden="true"
+                          />
+                          Réécouter
+                        </Button>
+                      )}
                       {(turn.metrics.firstAudioMs !== undefined ||
                         turn.metrics.playbackMs !== undefined) && (
                         <span className="tabular">
