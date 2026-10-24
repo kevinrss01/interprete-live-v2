@@ -1,6 +1,6 @@
 # Traduire votre microphone dans un appel sur Mac
 
-Le mode **Appels sur Mac** complète le mode conversation existant. Votre microphone est traduit ; l’app n’intercepte pas la sortie audio de l’appel. Portez un casque pour éviter que les voix des autres participants ne rentrent acoustiquement dans votre micro.
+Le mode **Réunion en ligne** complète le mode conversation existant. Votre microphone est traduit ; l’app n’intercepte pas la sortie audio de l’appel. Portez un casque pour éviter que les voix des autres participants ne rentrent acoustiquement dans votre micro.
 
 ## Démarrer et tester sans appel
 
@@ -8,11 +8,11 @@ Le mode **Appels sur Mac** complète le mode conversation existant. Votre microp
 pnpm dev
 ```
 
-1. Ouvrez **Appels sur Mac**.
+1. Sur l’accueil, choisissez **Réunion en ligne**.
 2. Choisissez votre langue et celle que votre interlocuteur doit entendre.
-3. Sélectionnez **Écoute locale · tester au casque** et portez un casque.
-4. Cliquez sur **Traduire l’exemple audio**. Le fichier synthétique français ou anglais traverse les vrais services de transcription, traduction et synthèse. Aucune capture du micro n’est nécessaire pour cet exemple. Les clés serveur doivent être configurées et ces appels utilisent les fournisseurs payants existants.
-5. Pour tester votre propre voix, cliquez sur **Autoriser le micro**, choisissez votre microphone physique, puis **Tester mon micro au casque**. Les transcriptions et traductions s’affichent pendant la parole. **Arrêter la traduction** ou Échap ferme le micro et arrête le son.
+3. Dans **Son**, sélectionnez **Tester au casque** et portez un casque.
+4. Ouvrez **Essayer sans appel**, puis cliquez sur **Traduire l’exemple audio**. Le fichier synthétique français ou anglais traverse les vrais services de transcription, traduction et synthèse. Aucune capture du micro n’est nécessaire pour cet exemple. Les clés serveur doivent être configurées et ces appels utilisent les fournisseurs payants existants.
+5. Pour tester votre propre voix, cliquez sur **Autoriser le micro**, choisissez votre microphone physique, puis **Démarrer le test au casque**. Les transcriptions et traductions s’affichent pendant la parole. **Arrêter la traduction** ou Échap ferme le micro et arrête le son.
 6. **Simuler un appel** affiche le vrai toast en haut à droite de l’écran dans l’app Tauri. **Ignorer** ne capture aucun son. **Traduire l’appel** ouvre le mode appel. Avec des périphériques valides déjà sélectionnés, la traduction vers le micro virtuel commence ; sinon, les réglages permettent de terminer la configuration. **Terminer la simulation** ferme le test et arrête la traduction associée.
 
 Une petite pastille ovale apparaît à droite de l’écran pendant la connexion, l’écoute et la restitution de la traduction, en mode appel comme en conversation. Elle affiche l’état et les langues ; le bouton carré arrête la session active, ferme le microphone et interrompt la sortie audio. La pastille reste séparée de la fenêtre principale dans l’app macOS. Elle disparaît à l’arrêt ou à la fin de la traduction.
@@ -33,8 +33,8 @@ L’installation du pilote peut demander les droits administrateur et un redéma
 
 Dans Interprète :
 
-- **Microphone physique** : votre micro intégré, USB ou votre casque. Les alias système sont exclus. CoreAudio fournit la liste des entrées physiques : les transports virtuels et agrégés sont exclus, même lorsque leur nom a été personnalisé.
-- **Sortie de la traduction** : **Micro virtuel · envoyer dans l’appel**.
+- **Microphone** : votre micro intégré, USB ou votre casque. Les alias système sont exclus. CoreAudio fournit la liste des entrées physiques : les transports virtuels et agrégés sont exclus, même lorsque leur nom a été personnalisé.
+- **Son** : **Envoyer dans l’appel**.
 - **Sortie vers l’appel** : **BlackHole 2ch**.
 
 Dans Meet / Zoom / Teams :
