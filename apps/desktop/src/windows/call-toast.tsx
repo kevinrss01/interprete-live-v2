@@ -11,7 +11,7 @@ import {
   type CallOptions,
   type CallSnapshot,
 } from "../lib/calls";
-import { CallOptionChecks } from "./call-options";
+import { CallOptionChecks } from "../components/call-options";
 
 export function CallToast() {
   const [status, setStatus] = useState<CallSnapshot | null>(null);

@@ -51,8 +51,8 @@ import {
   type CaptionLine,
   type CaptionsUpdate,
 } from "../lib/call-captions";
-import { CallOptionChecks } from "./call-options";
-import { CaptionsView } from "./call-captions";
+import { CallOptionChecks } from "../components/call-options";
+import { CaptionsView } from "../windows/call-captions";
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
