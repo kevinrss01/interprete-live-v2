@@ -4,5 +4,7 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>Interprète écoute la personne qui parle pour traduire sa voix en direct.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Interprète écoute le son de votre appel pour afficher ou lire la traduction de vos interlocuteurs.</string>
 </dict>
 </plist>

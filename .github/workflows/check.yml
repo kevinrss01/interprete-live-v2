@@ -24,3 +24,4 @@ jobs:
       - run: pnpm test
       - run: pnpm build:server
       - run: pnpm --filter @interprete/desktop build
+      - run: pnpm --filter @interprete/landing build

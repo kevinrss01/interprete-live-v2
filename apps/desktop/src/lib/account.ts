@@ -10,6 +10,10 @@ const TOKEN_KEY = "interprete-auth-token";
 // ponytail: webview localStorage; move to the macOS keychain with a Tauri plugin later.
 export const readAuthToken = () => globalThis.localStorage?.getItem(TOKEN_KEY) ?? null;
 
+export function signOut() {
+  globalThis.localStorage?.removeItem(TOKEN_KEY);
+}
+
 // Typed oRPC client: account.me, preferences.get, preferences.update.
 export const rpc: ApiClient = createORPCClient(
   new RPCLink({

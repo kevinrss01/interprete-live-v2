@@ -25,7 +25,7 @@
         "title": "Appel détecté",
         "url": "index.html#call-toast",
         "width": 384,
-        "height": 250,
+        "height": 372,
         "resizable": false,
         "decorations": false,
         "alwaysOnTop": true,
@@ -51,6 +51,23 @@
         "backgroundThrottling": "disabled",
         "focusable": false,
         "acceptFirstMouse": true
+      },
+      {
+        "label": "call-captions",
+        "title": "Sous-titres de l’appel",
+        "url": "index.html#call-captions",
+        "width": 980,
+        "height": 220,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "shadow": false,
+        "backgroundThrottling": "disabled",
+        "focusable": false
       }
     ],
     "security": {

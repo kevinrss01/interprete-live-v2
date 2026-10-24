@@ -45,6 +45,18 @@ export type HistoryItem = {
   targetLanguage: string;
   continuation?: boolean;
 };
+// Coarse measurements of a call participant's voice, computed on the device.
+export type VoiceFeatures = {
+  medianPitchHz: number;
+  pitchRangeSemitones: number;
+  brightness: number;
+  voicedSeconds: number;
+};
+export type VoiceMatch = {
+  voice: string;
+  name: string;
+  source: "jev" | "pitch";
+};
 export type InterpretationEvent =
   | { type: "text"; delta: string }
   | {

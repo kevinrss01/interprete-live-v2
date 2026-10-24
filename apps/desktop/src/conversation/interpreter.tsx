@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ArrowLeftRight,
+  ChevronLeft,
   CircleAlert,
   LoaderCircle,
   Mic,
@@ -8,19 +9,23 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import { signOut } from "../lib/account";
 import type { InterpreterController } from "../lib/interpreter";
+import { clearOnboardingAccount } from "../onboarding/onboarding-account";
 import { SpeakerPanel } from "./speaker-panel";
 import { CallPanel, type CallPanelHandle } from "./call-panel";
-import { TranslationPill } from "./translation-overlay";
+import { TranslationPill } from "../windows/translation-overlay";
 import {
   useTranslationOverlay,
   type OverlayUpdate,
 } from "../lib/translation-overlay";
 import { desktopAvailable } from "../lib/calls";
 import { Conversation } from "./conversation";
+import { Home, type HomeChoice } from "./home";
 import { SettingsSheet } from "./settings-sheet";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
-import { Button } from "@/components/ui/button";
+import { Button } from "@interprete/ui/components/button";
+import logo from "@interprete/ui/assets/logo.png";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,14 +35,24 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@interprete/ui/components/alert-dialog";
 
-type PendingConfirm = { kind: "clear" } | { kind: "remove"; id: SpeakerId };
+type View = "home" | HomeChoice;
+const VIEW_TITLES: Record<HomeChoice, string> = {
+  conversation: "Conversation",
+  call: "Réunion en ligne",
+};
+
+type PendingConfirm =
+  | { kind: "clear" }
+  | { kind: "remove"; id: SpeakerId };
 
 export function Interpreter({
   controller,
+  onLeave,
 }: {
   controller: InterpreterController;
+  onLeave: () => void;
 }) {
   const state = useSyncExternalStore(
     controller.subscribe,
@@ -48,21 +63,17 @@ export function Interpreter({
   const [callOverlay, setCallOverlay] = useState<OverlayUpdate | null>(null);
   const [overlayError, setOverlayError] = useState<string | null>(null);
   const [callBusy, setCallBusy] = useState(false);
-  const [callMode, setCallMode] = useState(() => {
-    try {
-      return localStorage.getItem("interprete-mode") === "calls";
-    } catch {
-      return false;
-    }
-  });
+  // Every launch starts on the two-choice home screen.
+  const [view, setView] = useState<View>("home");
+  const callMode = view === "call";
+  const mainRef = useRef<HTMLElement>(null);
+  const shownView = useRef(view);
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        "interprete-mode",
-        callMode ? "calls" : "conversation",
-      );
-    } catch {}
-  }, [callMode]);
+    // The button that changed the view unmounts; give keyboard and screen-reader users a destination.
+    if (shownView.current === view) return;
+    shownView.current = view;
+    mainRef.current?.focus({ preventScroll: true });
+  }, [view]);
   const [showSettings, setShowSettings] = useState(false);
   const [pending, setPending] = useState<PendingConfirm | null>(null);
   const overlay: OverlayUpdate | null =
@@ -97,7 +108,10 @@ export function Interpreter({
         controller.cancel();
         return;
       }
-      if (callMode || target.closest("input,select,textarea,button,summary,a"))
+      if (
+        view !== "conversation" ||
+        target.closest("input,select,textarea,button,summary,a")
+      )
         return;
       if ((e.key === "a" || e.key === "b") && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
@@ -106,14 +120,12 @@ export function Interpreter({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [controller, callMode]);
+  }, [controller, view]);
   const busy = state.phase !== "idle" || callBusy;
   const demo = state.input === "demo";
-  const microphoneActive =
-    state.phase === "listening" && state.input === "microphone";
-  const status = callBusy
-    ? "Traduction de l’appel…"
-    : demo && state.phase === "listening" && state.connection === "reconnecting"
+  const microphoneActive = state.phase === "listening" && state.input === "microphone";
+  const status = callBusy ? "Traduction de l’appel…" :
+    demo && state.phase === "listening" && state.connection === "reconnecting"
       ? "Reconnexion · exemple audio"
       : demo && (state.phase === "connecting" || state.phase === "listening")
         ? "Exemple audio en cours…"
@@ -150,6 +162,19 @@ export function Interpreter({
     else void controller.removeVoice(pending.id);
     setPending(null);
   }
+  function leave() {
+    if (callOverlay?.sessionId) callPanelRef.current?.stop(callOverlay.sessionId);
+    controller.cancel();
+    signOut();
+    clearOnboardingAccount();
+    onLeave();
+  }
+  function openView(next: View) {
+    // Leaving the conversation ends any turn in progress; the call panel stops itself when hidden.
+    if (view === "conversation" || next === "call") controller.cancel();
+    setView(next);
+    window.scrollTo({ top: 0 });
+  }
   function swap() {
     const a = state.profiles.a.language;
     controller.setProfile("a", { language: state.profiles.b.language });
@@ -170,18 +195,35 @@ export function Interpreter({
   return (
     <div className="app">
       <a className="skip-link" href="#main">
-        Aller à la conversation
+        Aller au contenu
       </a>
       <header className="topbar">
         <div className="frame topbar-inner">
-          <a className="wordmark" href="#main" aria-label="Interprète, accueil">
-            Interprète
-          </a>
+          {view === "home" ? (
+            <span className="wordmark">
+              <img src={logo} alt="Interprète" />
+            </span>
+          ) : (
+            <div className="topbar-title">
+              <Button
+                variant="ghost"
+                className="icon-btn topbar-back"
+                onClick={() => openView("home")}
+                aria-label="Retour à l’accueil"
+                title="Accueil"
+              >
+                <ChevronLeft size={18} aria-hidden="true" />
+              </Button>
+              <span>{VIEW_TITLES[view]}</span>
+            </div>
+          )}
           <div
             className="status"
             data-phase={callBusy ? "listening" : state.phase}
             data-ready={state.ready}
             role="status"
+            // The call panel shows its own session status; this one tracks the conversation.
+            hidden={view === "home" || (view === "call" && !callBusy)}
           >
             {busy && state.phase !== "listening" ? (
               <LoaderCircle size={13} className="spin" aria-hidden="true" />
@@ -192,7 +234,7 @@ export function Interpreter({
           </div>
           <Button
             variant="ghost"
-            className="icon-btn"
+            className="icon-btn topbar-settings"
             onClick={() => setShowSettings(true)}
             aria-haspopup="dialog"
             aria-expanded={showSettings}
@@ -203,27 +245,6 @@ export function Interpreter({
           </Button>
         </div>
       </header>
-      <nav className="frame mode-switch" aria-label="Mode de traduction">
-        <Button
-          variant="ghost"
-          className="btn btn-quiet"
-          aria-pressed={!callMode}
-          onClick={() => setCallMode(false)}
-        >
-          Conversation
-        </Button>
-        <Button
-          variant="ghost"
-          className="btn btn-quiet"
-          aria-pressed={callMode}
-          onClick={() => {
-            controller.cancel();
-            setCallMode(true);
-          }}
-        >
-          Appels sur Mac
-        </Button>
-      </nav>
       {overlayError && (
         <div className="frame alert" role="alert">
           <span>{overlayError}</span>
@@ -247,21 +268,25 @@ export function Interpreter({
           />
         </div>
       )}
-      <main id="main" className="frame main">
+      <main
+        id="main"
+        ref={mainRef}
+        tabIndex={-1}
+        className="frame main"
+        data-view={view}
+      >
+        {view === "home" && <Home profiles={state.profiles} onChoose={openView} />}
         <CallPanel
           ref={callPanelRef}
           onOverlayChange={setCallOverlay}
           onBusy={setCallBusy}
           visible={callMode}
-          onOpen={() => {
-            controller.cancel();
-            setCallMode(true);
-          }}
+          onOpen={() => openView("call")}
           beforeStart={() => controller.cancel()}
           profiles={state.profiles}
           onLanguage={(id, language) => controller.setProfile(id, { language })}
         />
-        {!callMode && (
+        {view === "conversation" && (
           <Conversation
             turns={state.turns}
             profiles={state.profiles}
@@ -272,7 +297,7 @@ export function Interpreter({
           />
         )}
       </main>
-      <div className="dock" hidden={callMode}>
+      <div className="dock" hidden={view !== "conversation"}>
         <div className="frame">
           {(state.error || state.warning) && (
             <div className="alert" role="alert">
@@ -288,42 +313,38 @@ export function Interpreter({
               </Button>
             </div>
           )}
-          <div className="live-controls">
-            <div className="live-controls-heading">
-              <h2>Traduction en direct</h2>
-              <span
-                className="microphone-status"
-                data-active={microphoneActive}
-              >
-                {microphoneActive ? (
-                  <Mic size={14} aria-hidden="true" />
-                ) : (
-                  <MicOff size={14} aria-hidden="true" />
-                )}
-                {microphoneActive
-                  ? "Micro actif"
-                  : !demo && state.phase === "connecting"
-                    ? "Activation du micro…"
-                    : state.input === "microphone" &&
-                        state.phase === "finishing"
-                      ? "Arrêt du micro…"
-                      : "Micro désactivé"}
-              </span>
-            </div>
-            <p id="microphone-help" className="live-controls-help">
+          <p className="live-controls">
+            <span
+              className="microphone-status"
+              data-active={microphoneActive}
+            >
+              {microphoneActive ? (
+                <Mic size={14} aria-hidden="true" />
+              ) : (
+                <MicOff size={14} aria-hidden="true" />
+              )}
+              {microphoneActive
+                ? "Micro actif"
+                : !demo && state.phase === "connecting"
+                  ? "Activation du micro…"
+                  : state.input === "microphone" && state.phase === "finishing"
+                    ? "Arrêt du micro…"
+                    : "Micro désactivé"}
+            </span>
+            <span id="microphone-help" className="live-controls-help">
               {demo
-                ? "L’exemple utilise un enregistrement. Votre micro reste désactivé."
+                ? "L’exemple utilise un enregistrement, sans votre micro."
                 : microphoneActive
-                  ? "La traduction est lue au fil de votre voix. Coupez le micro pour terminer."
+                  ? "La traduction suit votre voix. Coupez le micro pour terminer."
                   : state.phase === "idle"
-                    ? "Activez le micro de la personne qui parle pour traduire sa voix en direct."
+                    ? "Activez le micro de la personne qui parle."
                     : state.phase === "connecting"
-                      ? "Autorisez l’accès au micro si votre appareil vous le demande."
+                      ? "Autorisez l’accès au micro si demandé."
                       : state.phase === "playing"
-                        ? "Écoutez la traduction. Vous pourrez ensuite réactiver le micro."
-                        : "La traduction se termine. Vous pourrez ensuite réactiver le micro."}
-            </p>
-          </div>
+                        ? "Lecture de la traduction…"
+                        : "Fin de la traduction…"}
+            </span>
+          </p>
           <div className="dock-grid">
             {speaker("a")}
             <div className="dock-center">
@@ -368,6 +389,7 @@ export function Interpreter({
         onClone={(id) => void controller.clone(id)}
         onRemove={(id) => setPending({ kind: "remove", id })}
         onVolume={(value) => controller.setVolume(value)}
+        onLeave={import.meta.env.DEV ? leave : undefined}
       />
       <AlertDialog
         open={pending !== null}

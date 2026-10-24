@@ -13,7 +13,7 @@ Follow [AGENTS.md](../../../AGENTS.md), [PRODUCT.md](../../../PRODUCT.md), and
   Do not introduce HeroUI, a new primitive system, or an animation library merely
   because another project's skill recommends one.
 - Keep the two speaker actions obvious, translations prominent, and voice/consent
-  details in secondary settings. French copy should explain the user's next action.
+  details in secondary settings. English copy should explain the user's next action.
 - Use semantic buttons and inputs, associated labels, accessible names for icon
   controls, visible keyboard focus, and usable hit targets. Preserve A/B/Escape
   handling without hijacking typing in editable controls.

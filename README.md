@@ -2,14 +2,18 @@
 
 Traduction vocale en conversation ou pendant un appel sur Mac.
 
-Le mode **Appels sur Mac** détecte les applications qui utilisent le microphone, propose un toast de confirmation et envoie la traduction vers le microphone virtuel **Interprete**, construit au-dessus de BlackHole 2ch. **Activer la traduction** retrouve vos réglages et peut basculer le micro système automatiquement ; l’arrêt remet le micro précédent. Dans l’application d’appel, utilisez le microphone **Système / Par défaut** pour suivre ces changements. Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
+À l’ouverture, l’accueil propose deux choix : **Conversation** (deux personnes, un appareil) ou **Réunion en ligne**. Le mode **Réunion en ligne** détecte les applications qui utilisent le microphone et propose un toast de confirmation : sous-titres en direct de vos interlocuteurs en bas de l’écran (cochés par défaut), lecture de leur traduction avec une voix proche choisie par Jev, et traduction de votre micro vers le microphone virtuel **Interprete** (via BlackHole 2ch). Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
+
+**Activer la traduction** retrouve vos réglages et peut basculer le micro système automatiquement ; l’arrêt rétablit le micro précédent. Dans l’application d’appel, choisissez **Système / Par défaut** pour suivre ces changements.
 
 Le mode conversation permet la traduction vocale pour deux personnes qui parlent à tour de rôle sur **un seul appareil**. App desktop [Tauri 2](https://v2.tauri.app) (React, TypeScript, Vite, Tailwind CSS) et API [Hono](https://hono.dev) hébergée sur un VPS.
 
 ```
 apps/desktop     App Tauri : front React (export statique) + coque Rust (src-tauri)
 apps/server      API Hono (Node) : clés OpenAI / ElevenLabs, sessions signées, déployée en Docker
+apps/landing     Landing page statique (Vite), déployée sur Vercel
 packages/shared  Types, langues et segmentation communs aux deux
+packages/ui      Design system : composants shadcn, tokens CSS, logos
 scripts/         Benchmark et vérifications hors app
 ```
 
@@ -26,9 +30,9 @@ pnpm dev          # PostgreSQL + migrations + API + Studio + app macOS Tauri
 
 Après la première configuration, `pnpm dev` suffit à tout lancer depuis la racine du dépôt. Le backend est accessible sur `http://localhost:3035`, Vite sur `http://localhost:1420` et Studio sur https://local.drizzle.studio. `Ctrl+C` arrête les processus de développement et le conteneur PostgreSQL, en conservant son volume et les données. Les commandes `pnpm dev:server` et `pnpm dev:desktop` restent disponibles pour démarrer chaque partie séparément ; `pnpm --filter @interprete/desktop dev:web` lance uniquement Vite.
 
-Choisir les deux langues, puis appuyer sur **Activer le micro** pour la personne qui parle, dans la zone **Traduction en direct**. L’état du micro reste visible au-dessus des commandes. La traduction commence pendant sa prise de parole, par petits segments, sans attendre l’arrêt du micro. Le micro reste ouvert pendant les pauses et la lecture ; **Couper le micro** clôt son tour. Les touches **A**, **B** et **Échap** permettent aussi de piloter la session.
+Choisir les deux langues, puis appuyer sur **Activer le micro** pour la personne qui parle, depuis **Conversation**. L’état du micro reste visible au-dessus des commandes. La traduction commence pendant sa prise de parole, par petits segments, sans attendre l’arrêt du micro. Le micro reste ouvert pendant les pauses et la lecture ; **Couper le micro** clôt son tour. Les touches **A**, **B** et **Échap** permettent aussi de piloter la session.
 
-Le bouton d’exemple utilise un enregistrement synthétique pour tester toute la chaîne sans microphone. Il ne sert jamais au clonage. Une pastille ovale à droite de l’écran indique la session en cours et permet de l’arrêter depuis n’importe quelle application. **Appels sur Mac → Tester la pastille** affiche son aperçu sans ouvrir le micro.
+Le bouton d’exemple utilise un enregistrement synthétique pour tester toute la chaîne sans microphone. Il ne sert jamais au clonage. Une pastille ovale à droite de l’écran indique la session en cours et permet de l’arrêter depuis n’importe quelle application. **Réunion en ligne → Essayer sans appel → Tester la pastille** affiche son aperçu sans ouvrir le micro.
 
 Si la création de compte échoue en local, vérifiez `DATABASE_URL`, `BETTER_AUTH_URL` et `BETTER_AUTH_SECRET` dans `apps/server/.env.local` (y compris dans chaque nouveau worktree). Le secret doit faire au moins 32 caractères ; générez-le une seule fois avec `openssl rand -base64 32`. `pnpm dev` et `pnpm dev:server` vérifient cette configuration avant de démarrer les services. Après une modification du fichier, relancez le serveur pour qu’il recharge les variables.
 
@@ -129,8 +133,12 @@ Voir [les vérifications effectuées](docs/VALIDATION.md). Les latences de démo
 
 ## Déploiement
 
+- **Web (Vercel)** : [interprete-live.vercel.app](https://interprete-live.vercel.app) sert le build Vite de `apps/desktop` (`dist/`). La variable de build `VITE_API_URL=https://interprete-backend.vercel.app` relie les clients Hono et oRPC au backend commun. `apps/desktop/vercel.json` conserve le routage de l’app lors d’un rechargement.
+- **API (Vercel)** : le projet `interprete-backend` utilise `apps/server`, la région Frankfurt et la base Neon `interprete-postgres`. `pnpm --filter @interprete/server build:vercel` génère `dist/app.mjs` ; `apps/server/app.mjs` l’expose au runtime Hono sans ouvrir de serveur autonome. Les clés fournisseurs et les secrets de session restent exclusivement dans les variables serveur. `BETTER_AUTH_URL` doit correspondre au domaine de l’API et `ALLOWED_ORIGINS` inclure les domaines web autorisés. Appliquer les migrations avec la connexion Neon avant d’ouvrir le parcours comptes.
 - **API (VPS)** : copier le repo et `apps/server/.env.local` sur le serveur, puis `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtient le certificat HTTPS et relaie le SSE sans buffering ; l’image contient les bundles ESM `dist/server.mjs`, `dist/db/migrate.mjs` et les migrations SQL. Pour le socle comptes, configurer PostgreSQL et suivre les [étapes de déploiement](docs/backend.md#déployer). Une seule instance : les limites de requêtes sont en mémoire.
 - **Desktop** : `pnpm build:desktop`. Sur macOS, `Info.plist` déclare l’usage du micro et `Entitlements.plist` l’autorise sous hardened runtime ; la signature et la notarisation se configurent à part.
+
+La conversation vocale fonctionne dans le navigateur avec l’autorisation microphone. La détection des appels sur Mac, les fenêtres flottantes hors navigateur et le microphone virtuel nécessitent l’app Tauri. Les limites de requêtes restent en mémoire par instance ; le déploiement Vercel ne les transforme pas en quotas distribués.
 
 Le clonage d’une voix réelle nécessite l’accord de cette personne et un échantillon propre. Les deux personnes prennent toujours la parole à tour de rôle ; seule la traduction synthétique chevauche la parole. L’identification automatique des personnes et la séparation de deux voix humaines simultanées ne sont pas prises en charge.
 

@@ -150,9 +150,9 @@ At widths of (640px) or less, gutters become (16px), header height (52px), dock 
 
 ## Elevation & Depth
 
-The interface uses tonal separation and hairlines, with no drop shadows for depth. The modal backdrop dims the canvas at (24%) charcoal. The live speaking control has a red ring that grows with input level; it is audio feedback, not a surface shadow. The disconnected status dot uses an inset outline.
+The interface uses tonal separation and hairlines, with no drop shadows for depth. The modal backdrop dims the canvas at (24%) charcoal. The live speaking control has a red ring that grows with input level; it is audio feedback, not a surface shadow. The ready status dot is a plain (8px) green circle (`#2fbe4f`). Listening and a live call use the same circle in signal red. The disconnected status dot uses an inset outline.
 
-State transitions use `--ease`: controls change over (150ms), press feedback over (120ms), and the sheet enters over (200ms). Audio feedback responds over (80ms); cloning progress uses (300ms). Spinners and the listening status pulse signal ongoing work. Reduced-motion preference removes transitions and CSS animations.
+State transitions use `--ease`: controls change over (150ms), press feedback over (120ms), and the sheet enters over (200ms). Audio feedback responds over (80ms); cloning progress uses (300ms). Leaving onboarding runs for (460ms). The onboarding fades and eases back over (180ms); the app fades in over (420ms) while a fixed soft focus clears. The blur radius does not animate. Spinners and the listening status pulse signal ongoing work. Reduced-motion preference removes transitions and CSS animations, including that handoff.
 
 ## Shapes
 
@@ -172,9 +172,17 @@ Idle is white; next, connecting, working and playback are charcoal. Live recordi
 
 Native text fields and selects use (44px) height and neutral borders. Settings fields become (16px) text on compact screens. Consent uses a native checkbox within a (44px) minimum label row. Settings groups are divided by hairlines; the native dialog handles the secondary sheet.
 
+### Home
+
+Every launch opens on a single question, “Que voulez-vous traduire ?”, and two full-width rows divided by hairlines: Conversation (with the current language pair) and Réunion en ligne. Rows use a (20px) semibold title, a short supporting line and a trailing arrow; hover fills the row and nudges the arrow. The column is (560px) wide and vertically centred. The `a`/`b` speaking shortcuts only work inside the conversation.
+
+### Meeting setup
+
+The meeting view is a settings-style form: labelled sections (Langues, Son, Détection) in a (120px) label column, divided by hairlines, then the start control. The output route is a segmented control built on native radios. Test tools sit in a collapsed “Essayer sans appel” disclosure.
+
 ### Header, transcript and tags
 
-The compact header contains the wordmark, live status and settings control. Transcript turns pair a small identity mark with metadata, quieter source text and stronger translation. The small outlined “Exemple” tag identifies demo content without creating a competing accent.
+The compact header contains the wordmark on the home screen, or a back control and the view title elsewhere, plus live status and the settings control. Transcript turns pair a small identity mark with metadata, quieter source text and stronger translation. The small outlined “Exemple” tag identifies demo content without creating a competing accent.
 
 ## Do's and Don'ts
 
@@ -182,7 +190,7 @@ The compact header contains the wordmark, live status and settings control. Tran
 - **Do** keep the two speaking actions prominent and settings secondary.
 - **Do** preserve the charcoal/white state hierarchy and functional red accent.
 - **Do** use Inter, quiet dividers, visible keyboard focus and brief motion.
-- **Do** retain concise French copy and compact-screen field text of (16px).
+- **Do** retain concise English copy and compact-screen field text of (16px).
 
 ### Don't:
 - **Don't** add gradients, glass, decorative shadows, illustrations, emojis or slogans to this neutral instrument.

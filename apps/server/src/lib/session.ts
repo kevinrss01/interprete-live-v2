@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { credential } from "./config";
 import { AppError } from "./errors";
-import { VOICE_PRESETS } from "@interprete/shared/languages";
+import { MATCH_VOICES, VOICE_PRESETS } from "@interprete/shared/languages";
 // ponytail: Tauri origins (macOS/Linux, Windows) + Vite dev; override with ALLOWED_ORIGINS on the VPS.
 export const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ||
@@ -107,7 +107,9 @@ export function voiceOwnerKey(id: string, speaker: string, consentId: string) {
     .slice(0, 24);
 }
 export function resolveVoice(value: string, id: string, speaker: string) {
-  const preset = VOICE_PRESETS.find((v) => v.key === value);
+  const preset =
+    VOICE_PRESETS.find((v) => v.key === value) ??
+    MATCH_VOICES.find((v) => v.key === value);
   if (preset) return preset.id;
   const c = verify(value);
   if (

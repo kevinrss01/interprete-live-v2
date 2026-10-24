@@ -1,41 +1,54 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowRight, LoaderCircle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import type { Language } from "@interprete/shared/languages";
+import { Button } from "@interprete/ui/components/button";
 import { rpc, signUp } from "../lib/account";
 import type { InterpreterController } from "../lib/interpreter";
 import { loadOnboardingAccount, saveOnboardingAccount, type OnboardingAccount } from "./onboarding-account";
 import { onboardingReadCount, onboardingWords } from "./onboarding-alignment";
-import { OnboardingHeader, OnboardingStepper, type OnboardingStep } from "./onboarding-header";
+import { DevButton, OnboardingPage, OnboardingStepper, type OnboardingStep } from "./onboarding-header";
+import { Auth, type AuthScreen } from "./auth";
 import { OnboardingPreview } from "./onboarding-preview";
-import { OnboardingProfile, type OnboardingProfileValues } from "./onboarding-profile";
+import {
+  OnboardingError,
+  OnboardingProfile,
+  systemLanguage,
+  type OnboardingProfileValues,
+} from "./onboarding-profile";
 import { OnboardingReading } from "./onboarding-reading";
 import { OnboardingRecorder } from "./onboarding-recorder";
+import { OnboardingStart } from "./onboarding-start";
 import { useOnboardingRecording } from "./onboarding-recording";
 import { ONBOARDING_TEXTS } from "./onboarding-texts";
-import "./onboarding.css";
 
+const STATUS = "flex items-center justify-center gap-2 text-base text-(--ink-2)";
+const LINK = "text-[15px] text-(--ink-2) underline underline-offset-3";
+const QUIET = "text-[15px] text-(--ink-2)";
+const ACTION = "h-14 px-7 text-[17px] font-semibold";
 const MIN_SECONDS = 10; // ElevenLabs instant cloning minimum, also enforced by the server.
 
-// Profile → consent built into the reading → progressive reading → listening.
+// Intro → reading (consent built in) → hearing the voice → account. The voice and the
+// preview only need the device session, so the account comes last, after the wow.
 // Only speaker A is onboarded; speaker B stays in Settings.
 export function Onboarding({
   controller,
   onDone,
-  onLogin,
 }: {
   controller: InterpreterController;
   onDone: () => void;
-  onLogin: () => void;
 }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const profile = state.profiles.a;
-  const [account, setAccount] = useState<OnboardingAccount | null>(loadOnboardingAccount);
-  const [step, setStep] = useState<OnboardingStep>(account ? "voice" : "profile");
-  const language = account?.language ?? profile.language;
+  const language = profile.language;
+  const target = state.profiles.b.language;
+  // An account created by the previous flow (account first) skips the account step.
+  const [account] = useState<OnboardingAccount | null>(loadOnboardingAccount);
+  const [step, setStep] = useState<OnboardingStep>("intro");
+  // Log in stays inside this screen, so the page and its logo are not remounted.
+  const [auth, setAuth] = useState<AuthScreen | null>(null);
   const recording = useOnboardingRecording(language);
   const [offset, setOffset] = useState(0);
   const [again, setAgain] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [sample, setSample] = useState<Blob | null>(null);
   const finishing = useRef(false);
 
   const script = useMemo(() => onboardingWords(ONBOARDING_TEXTS[language], language), [language]);
@@ -53,27 +66,38 @@ export function Onboarding({
     }
   }, [recordingNow, read, recording.seconds]);
 
-  // Creates the Better Auth account (email is unique), then saves the language.
+  // The two speakers need different languages: the preview speaks the other one.
+  function setLanguage(next: Language) {
+    controller.setProfile("a", { language: next });
+    if (controller.getSnapshot().profiles.b.language === next)
+      controller.setProfile("b", { language: next === "en" ? "fr" : "en" });
+  }
+
+  function start() {
+    const p = controller.getSnapshot().profiles.a;
+    // Back after closing the app: a voice already exists, go straight to hearing it.
+    if (p.cloneVoice && (p.cloneStatus === "ready" || p.cloneStatus === "verification")) setStep("preview");
+    else {
+      setLanguage(systemLanguage());
+      setStep("voice");
+    }
+  }
+
+  // Creates the Better Auth account (email is unique), then saves both languages.
   async function createAccount({ password, ...values }: OnboardingProfileValues) {
     try {
       await signUp({ name: values.firstName, email: values.email, password });
     } catch (e) {
       return e instanceof Error ? e.message : "Your account could not be created. Try again.";
     }
-    const target = state.profiles.b.language === values.language
-      ? values.language === "en" ? "fr" : "en"
-      : state.profiles.b.language;
     // ponytail: the account already exists here, so a failed save must not block the flow;
-    // the language is also kept on the device and can be saved again later.
+    // the languages are also kept on the device and can be saved again later.
     await rpc.preferences
-      .update({ sourceLanguage: values.language, targetLanguage: target })
+      .update({ sourceLanguage: language, targetLanguage: target })
       .catch((e) => console.warn("Preferences not saved", e));
-    const next = { ...values, complete: false };
-    saveOnboardingAccount(next);
-    setAccount(next);
-    controller.setProfile("a", { name: values.firstName, language: values.language });
-    controller.setProfile("b", { language: target });
-    setStep("voice");
+    saveOnboardingAccount({ ...values, language, complete: true });
+    controller.setProfile("a", { name: values.firstName });
+    onDone();
     return null;
   }
 
@@ -95,25 +119,24 @@ export function Onboarding({
         recording.setError("We need about 10 seconds of speech. Start over and read the whole text.");
         return;
       }
-      setSaving(true);
-      setSample(samples[0].blob);
+      // The listening screen covers the wait: the voice is created behind it.
+      setStep("preview");
       for (const s of samples) await controller.collect("a", s.blob, s.seconds);
       await controller.clone("a");
-      const status = controller.getSnapshot().profiles.a.cloneStatus;
-      if (status === "ready" || status === "verification") setStep("preview");
     } finally {
-      setSaving(false);
       finishing.current = false;
     }
   }
 
   function skipForDev() {
-    saveOnboardingAccount({ firstName: "Dev", email: "dev@localhost", language: profile.language, complete: true });
+    saveOnboardingAccount({ firstName: "Dev", email: "dev@localhost", language, complete: true });
     onDone();
   }
 
-  function complete() {
-    if (account) saveOnboardingAccount({ ...account, complete: true });
+  // After the voice (or without one): the account, unless it already exists.
+  function next() {
+    if (!account) return setStep("account");
+    saveOnboardingAccount({ ...account, language, complete: true });
     onDone();
   }
 
@@ -121,114 +144,112 @@ export function Onboarding({
     recording.reset();
     // Withdrawing consent also deletes a voice that may already exist.
     if (controller.getSnapshot().profiles.a.consent) await controller.setConsent("a", false);
-    complete();
+    next();
   }
 
   async function recordAgain() {
     await controller.removeVoice("a");
-    setSample(null);
     setStep("voice");
     await startRecording();
   }
 
-  const error =
-    recording.error ??
-    (profile.cloneStatus === "error"
-      ? "Your voice could not be created. Try again or use a standard voice."
-      : null);
+  const error = recording.error;
 
   let bottom;
   if (recording.status !== "idle")
     bottom = (
-      <div className="onboarding-live">
-        <p className="onboarding-status" role="status">
+      <div className="flex h-full flex-col items-center justify-center gap-3">
+        <p className={STATUS} role="status">
           {recording.status === "starting"
             ? "Starting the microphone…"
             : again
-              ? "Almost there. Read it once more."
-              : "Recording"}
+              ? "Almost there. Read it once more from the top."
+              : "Recording. Follow the highlighted word."}
         </p>
         {recordingNow && (
           <OnboardingRecorder levels={recording.levels} startedAt={recording.startedAt} onStop={() => void finish()} />
         )}
-        {recording.warning && <p className="onboarding-hint">{recording.warning}</p>}
-        <button type="button" className="onboarding-link" onClick={() => void startRecording()}>
+        {recording.warning && <p className="text-sm text-muted-foreground">{recording.warning}</p>}
+        <Button type="button" variant="link" className={LINK} onClick={() => void startRecording()}>
           Start over
-        </button>
+        </Button>
       </div>
-    );
-  else if (saving)
-    bottom = (
-      <p className="onboarding-status" role="status">
-        <LoaderCircle size={16} className="spin" aria-hidden="true" />
-        Creating your voice…
-      </p>
     );
   else
     bottom = (
-      <div className="onboarding-consent">
-        {error && (
-          <p className="onboarding-error" role="alert">
-            {error}
-          </p>
-        )}
-        <p>
-          I allow this recording to be sent to ElevenLabs to create my voice
-          <br />
-          and use it in my translations.
-        </p>
-        <div className="onboarding-actions">
-          <button type="button" className="onboarding-primary" onClick={() => void startRecording()}>
+      <div className="flex h-full flex-col justify-center gap-3">
+        <OnboardingError error={error} />
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <Button type="button" variant="brand" className={`${ACTION} gap-6`} onClick={() => void startRecording()}>
             Accept and start
-            <ArrowRight size={18} aria-hidden="true" />
-          </button>
-          <button type="button" className="onboarding-secondary" onClick={() => void useStandardVoice()}>
-            Use a standard voice
-          </button>
+            <ArrowRight aria-hidden="true" />
+          </Button>
+          {/* Not a second option of equal weight: a quiet way out, the voice can be added later. */}
+          <Button type="button" variant="link" className={LINK} onClick={() => void useStandardVoice()}>
+            I don’t want to use my voice right now
+          </Button>
         </div>
+        {/* The consent the button accepts, right under it. */}
+        <p className="text-sm text-muted-foreground">
+          By starting, you allow this recording to be sent to ElevenLabs to create your voice for your translations.
+        </p>
       </div>
     );
 
   return (
-    <div className="onboarding">
-      <OnboardingHeader
-        action={
-          step === "profile" && import.meta.env.DEV ? (
-            // Dev only: open the app without creating an account each time.
-            <button type="button" className="onboarding-dev" onClick={skipForDev}>
-              Dev: skip onboarding
-            </button>
-          ) : step !== "voice" || saving ? null : recording.status !== "idle" ? (
-            <button type="button" className="onboarding-quiet" onClick={recording.reset}>
-              Cancel
-            </button>
-          ) : (
-            <button type="button" className="onboarding-quiet" onClick={() => void useStandardVoice()}>
-              Skip
-            </button>
-          )
-        }
-      />
-      <main className="onboarding-main">
-        {step === "profile" && <OnboardingProfile onSubmit={createAccount} onLogin={onLogin} />}
-        {step === "voice" && (
-          <OnboardingReading language={language} read={read} live={recordingNow}>
-            {bottom}
-          </OnboardingReading>
-        )}
-        {step === "preview" && sample && (
-          <OnboardingPreview
-            voice={profile.cloneVoice}
-            sample={sample}
-            language={language}
-            verification={profile.cloneStatus === "verification"}
-            onStart={complete}
-            onRecordAgain={() => void recordAgain()}
-          />
-        )}
-      </main>
-      {/* Hidden while recording: one thing to focus on. */}
-      {recording.status === "idle" && !saving && <OnboardingStepper step={step} />}
-    </div>
+    <OnboardingPage
+      action={
+        !auth && step === "intro" && import.meta.env.DEV ? (
+          // Dev only: open the app without creating an account each time.
+          <DevButton onClick={skipForDev}>dev: skip onboarding</DevButton>
+        ) : step === "voice" && recording.status !== "idle" ? (
+          <Button type="button" variant="ghost" className={QUIET} onClick={recording.reset}>
+            Cancel
+          </Button>
+        ) : null
+      }
+      footer={
+        // Hidden on the intro and while recording: one thing to focus on.
+        !auth && step !== "intro" && recording.status === "idle" && <OnboardingStepper step={step} />
+      }
+    >
+      {auth && (
+        <Auth
+          screen={auth}
+          controller={controller}
+          onNavigate={setAuth}
+          onSignUp={() => setAuth(null)}
+          onSignedIn={onDone}
+        />
+      )}
+      {!auth && step === "intro" && <OnboardingStart onStart={start} onLogin={() => setAuth("login")} />}
+      {!auth && step === "voice" && (
+        <OnboardingReading
+          language={language}
+          read={read}
+          live={recordingNow}
+          onLanguage={recording.status === "idle" ? setLanguage : undefined}
+        >
+          {bottom}
+        </OnboardingReading>
+      )}
+      {!auth && step === "preview" && (
+        <OnboardingPreview
+          voice={profile.cloneVoice}
+          status={profile.cloneStatus}
+          language={language}
+          onContinue={next}
+          onRecordAgain={() => void recordAgain()}
+          onStandardVoice={() => void useStandardVoice()}
+        />
+      )}
+      {!auth && step === "account" && (
+        <OnboardingProfile
+          hasVoice={profile.consent && (profile.cloneStatus === "ready" || profile.cloneStatus === "verification")}
+          onSubmit={createAccount}
+          onLogin={() => setAuth("login")}
+        />
+      )}
+    </OnboardingPage>
   );
 }

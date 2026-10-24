@@ -2,23 +2,23 @@ import { useSyncExternalStore, type CSSProperties } from "react";
 import { Check, Sparkles, Trash2, X } from "lucide-react";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 import { VOICE_PRESETS } from "@interprete/shared/languages";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@interprete/ui/components/button";
+import { Checkbox } from "@interprete/ui/components/checkbox";
+import { Input } from "@interprete/ui/components/input";
+import { Label } from "@interprete/ui/components/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@interprete/ui/components/select";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "@interprete/ui/components/sheet";
 
 const SAMPLE_TARGET = 30;
 
@@ -213,6 +213,7 @@ export function SettingsSheet({
   onClone,
   onRemove,
   onVolume,
+  onLeave,
 }: {
   open: boolean;
   profiles: Record<SpeakerId, Profile>;
@@ -224,6 +225,7 @@ export function SettingsSheet({
   onClone: (id: SpeakerId) => void;
   onRemove: (id: SpeakerId) => void;
   onVolume: (volume: number) => void;
+  onLeave?: () => void;
 }) {
   const compact = useCompact();
   return (
@@ -315,6 +317,11 @@ export function SettingsSheet({
                 ci-dessus.
               </p>
             </div>
+            {onLeave && (
+              <button type="button" className="settings-dev-leave" onClick={onLeave}>
+                dev : se déconnecter
+              </button>
+            )}
           </div>
         </div>
       </SheetContent>

@@ -6,9 +6,10 @@ import { speechSocket } from "./eleven";
 import { AppError } from "./errors";
 import type { interpretSchema } from "./validation";
 // Streams translation text and synthesized audio as SSE while the speaker is still talking.
+// A null voice streams text only, for captions.
 export function interpretResponse(
   data: z.infer<typeof interpretSchema>,
-  voiceId: string,
+  voiceId: string | null,
   requestSignal: AbortSignal,
 ) {
   const abort = new AbortController();
@@ -55,25 +56,23 @@ export function interpretResponse(
       // Final turns don't await this derived promise; cancellation must still be handled.
       void permission.catch(() => {});
       // Establish the idle TTS socket while the LLM and readiness check run.
-      const socketPromise = speechSocket(
-        voiceId,
-        data.targetLanguage,
-        signal,
-        (audio) => {
-          firstAudio ??= performance.now() - start;
-          emit({ type: "audio", audio, sampleRate: 24000 });
-        },
-      ).then((socket) => {
-        voice.current = socket;
-        return socket;
-      });
+      const socketPromise =
+        voiceId === null
+          ? Promise.resolve(null)
+          : speechSocket(voiceId, data.targetLanguage, signal, (audio) => {
+              firstAudio ??= performance.now() - start;
+              emit({ type: "audio", audio, sampleRate: 24000 });
+            }).then((socket) => {
+              voice.current = socket;
+              return socket;
+            });
       void socketPromise.catch(() => {});
       const speechPromise = (
         data.isFinal ? Promise.resolve(true) : permission
       ).then(async (ready) => {
         const socket = await socketPromise;
         if (!ready) {
-          socket.close();
+          socket?.close();
           return null;
         }
         return socket;

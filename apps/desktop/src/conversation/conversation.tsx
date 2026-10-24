@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { LoaderCircle, Play, Trash2 } from "lucide-react";
 import type { Profile, SpeakerId, Turn } from "@interprete/shared/contracts";
 import { languageName } from "@interprete/shared/languages";
-import { Button } from "@/components/ui/button";
+import { Button } from "@interprete/ui/components/button";
 
 export function Conversation({
   turns,

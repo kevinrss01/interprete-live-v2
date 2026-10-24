@@ -1,12 +1,28 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, LoaderCircle } from "lucide-react";
+import { ArrowLeft, LoaderCircle } from "lucide-react";
 import { LANGUAGES, type Language } from "@interprete/shared/languages";
+import { Button } from "@interprete/ui/components/button";
+import { Input } from "@interprete/ui/components/input";
+import { Label } from "@interprete/ui/components/label";
 import { rpc, signIn } from "../lib/account";
 import type { InterpreterController } from "../lib/interpreter";
-import { saveOnboardingAccount } from "../onboarding/onboarding-account";
-import { OnboardingHeader } from "../onboarding/onboarding-header";
-import { Field, PasswordInput } from "../onboarding/onboarding-profile";
-import "../onboarding/onboarding.css";
+import { saveOnboardingAccount } from "./onboarding-account";
+import { DevButton } from "./onboarding-header";
+import {
+  ArrowEnd,
+  BACK,
+  FIELD,
+  Field,
+  INLINE_LINK,
+  OnboardingColumns,
+  OnboardingError,
+  OnboardingForm,
+  OnboardingIntro,
+  OnboardingPanel,
+  OnboardingTitle,
+  PasswordInput,
+  WIDE,
+} from "./onboarding-profile";
 
 export type AuthScreen = "login" | "forgot" | "reset";
 
@@ -25,53 +41,46 @@ export function Auth({
   onSignedIn: () => void;
 }) {
   return (
-    <div className="onboarding">
-      <OnboardingHeader />
-      <main className="onboarding-main">
-        {screen === "login" && (
-          <Login controller={controller} onForgot={() => onNavigate("forgot")} onSignUp={onSignUp} onSignedIn={onSignedIn} />
-        )}
-        {screen === "forgot" && <Forgot onBack={() => onNavigate("login")} onReset={() => onNavigate("reset")} />}
-        {screen === "reset" && <Reset onDone={() => onNavigate("login")} />}
-      </main>
-    </div>
+    <>
+      {screen === "login" && (
+        <Login controller={controller} onForgot={() => onNavigate("forgot")} onSignUp={onSignUp} onSignedIn={onSignedIn} />
+      )}
+      {screen === "forgot" && <Forgot onBack={() => onNavigate("login")} onReset={() => onNavigate("reset")} />}
+      {screen === "reset" && <Reset onDone={() => onNavigate("login")} />}
+    </>
   );
 }
 
-function Layout({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+function Layout({
+  title,
+  subtitle,
+  lead,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  lead: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="onboarding-profile">
-      <section className="onboarding-intro">
-        <h1>
-          {title}
-          <br />
-          <em>{subtitle}</em>
-        </h1>
-      </section>
+    <OnboardingColumns>
+      <OnboardingIntro title={title} subtitle={subtitle}>
+        <p className="mt-5 text-2xl text-(--ink-2)">{lead}</p>
+      </OnboardingIntro>
       {children}
-    </div>
+    </OnboardingColumns>
   );
 }
 
 function Submit({ pending, label, pendingLabel }: { pending: boolean; label: string; pendingLabel: string }) {
   return (
-    <button className="onboarding-primary onboarding-wide" type="submit" disabled={pending}>
+    <Button variant="brand" className={WIDE} type="submit" disabled={pending}>
       {pending ? pendingLabel : label}
-      {pending ? (
-        <LoaderCircle size={18} className="spin" aria-hidden="true" />
-      ) : (
-        <ArrowRight size={18} aria-hidden="true" />
-      )}
-    </button>
+      {pending ? <LoaderCircle className="spin absolute right-6" aria-hidden="true" /> : <ArrowEnd />}
+    </Button>
   );
 }
 
-const ErrorLine = ({ error }: { error: string | null }) =>
-  error && (
-    <p className="onboarding-error" role="alert">
-      {error}
-    </p>
-  );
 
 function Login({
   controller,
@@ -117,11 +126,12 @@ function Login({
   }
 
   return (
-    <Layout title="Welcome back." subtitle="Your voice is waiting.">
-      <form className="onboarding-form" onSubmit={submit}>
-        <h2>Log in</h2>
+    <Layout title="Welcome back." subtitle="Your voice is waiting." lead="Use your email and password.">
+      <OnboardingForm onSubmit={submit}>
+        <OnboardingTitle>Log in</OnboardingTitle>
         <Field label="Email">
-          <input
+          <Input
+            className={FIELD}
             required
             autoFocus
             type="email"
@@ -132,21 +142,27 @@ function Login({
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
-        <Field label="Password">
-          <PasswordInput login value={password} onChange={setPassword} placeholder="Your password" />
-        </Field>
-        <button type="button" className="onboarding-quiet onboarding-inline-link" onClick={onForgot}>
-          Forgot password?
-        </button>
-        <ErrorLine error={error} />
+        {/* Not a <Field>: a button inside the <label> would take its labeling. */}
+        <div className="flex flex-col gap-2.5">
+          <span className="flex items-center justify-between">
+            <Label htmlFor="login-password" className="text-base font-semibold">
+              Password
+            </Label>
+            <Button type="button" variant="link" className={`${INLINE_LINK} text-sm text-(--ink-2)`} onClick={onForgot}>
+              Forgot password?
+            </Button>
+          </span>
+          <PasswordInput id="login-password" login value={password} onChange={setPassword} placeholder="Your password" />
+        </div>
+        <OnboardingError error={error} />
         <Submit pending={pending} label="Log in" pendingLabel="Logging in…" />
-        <p className="onboarding-switch">
+        <p className="text-center text-[15px] text-muted-foreground">
           New here?{" "}
-          <button type="button" className="onboarding-quiet onboarding-inline-link" onClick={onSignUp}>
+          <Button type="button" variant="link" className={INLINE_LINK} onClick={onSignUp}>
             Create an account
-          </button>
+          </Button>
         </p>
-      </form>
+      </OnboardingForm>
     </Layout>
   );
 }
@@ -157,39 +173,39 @@ function Forgot({ onBack, onReset }: { onBack: () => void; onReset: () => void }
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   return (
-    <Layout title="It happens." subtitle="Let’s get you back in.">
+    <Layout title="It happens." subtitle="Let’s get you back in." lead="We’ll send a link to your email.">
       {sent ? (
-        <div className="onboarding-form">
-          <h2>Check your email</h2>
-          <p className="onboarding-lead">
+        <OnboardingPanel>
+          <OnboardingTitle>Check your email</OnboardingTitle>
+          <p className="-mt-2 text-base text-(--ink-2)">
             If an account exists for <b>{email}</b>, you’ll get a link to choose a new password.
           </p>
-          <button type="button" className="onboarding-primary onboarding-wide" onClick={onBack}>
+          <Button type="button" variant="brand" className={WIDE} onClick={onBack}>
             Back to log in
-            <ArrowRight size={18} aria-hidden="true" />
-          </button>
+            <ArrowEnd />
+          </Button>
           {import.meta.env.DEV && (
-            <button type="button" className="onboarding-dev" onClick={onReset}>
-              Dev: open the reset page
-            </button>
+            <DevButton onClick={onReset}>Dev: open the reset page</DevButton>
           )}
-        </div>
+        </OnboardingPanel>
       ) : (
-        <form
-          className="onboarding-form"
+        <OnboardingForm
           onSubmit={(e) => {
             e.preventDefault();
             setSent(true);
           }}
+          back={
+            <Button type="button" variant="ghost" className={BACK} onClick={onBack}>
+              <ArrowLeft aria-hidden="true" />
+              Back
+            </Button>
+          }
         >
-          <button type="button" className="onboarding-quiet onboarding-back" onClick={onBack}>
-            <ArrowLeft size={16} aria-hidden="true" />
-            Back
-          </button>
-          <h2>Forgot password</h2>
-          <p className="onboarding-lead">Enter your email. We’ll send you a link to reset your password.</p>
+          <OnboardingTitle>Forgot password</OnboardingTitle>
+          <p className="-mt-2 text-base text-(--ink-2)">Enter your email. We’ll send you a link to reset your password.</p>
           <Field label="Email">
-            <input
+            <Input
+              className={FIELD}
               required
               autoFocus
               type="email"
@@ -201,7 +217,7 @@ function Forgot({ onBack, onReset }: { onBack: () => void; onReset: () => void }
             />
           </Field>
           <Submit pending={false} label="Send reset link" pendingLabel="" />
-        </form>
+        </OnboardingForm>
       )}
     </Layout>
   );
@@ -211,40 +227,31 @@ function Forgot({ onBack, onReset }: { onBack: () => void; onReset: () => void }
 // the link's token to Better Auth (/reset-password). For now nothing is saved.
 function Reset({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [done, setDone] = useState(false);
-  const mismatch = confirm.length > 0 && confirm !== password;
   return (
-    <Layout title="Almost there." subtitle="Pick a new password.">
+    <Layout title="Almost there." subtitle="Pick a new password." lead="Choose something you haven’t used here.">
       {done ? (
-        <div className="onboarding-form">
-          <h2>Password updated</h2>
-          <p className="onboarding-lead">You can now log in with your new password.</p>
-          <button type="button" className="onboarding-primary onboarding-wide" onClick={onDone}>
+        <OnboardingPanel>
+          <OnboardingTitle>Password updated</OnboardingTitle>
+          <p className="-mt-2 text-base text-(--ink-2)">You can now log in with your new password.</p>
+          <Button type="button" variant="brand" className={WIDE} onClick={onDone}>
             Log in
-            <ArrowRight size={18} aria-hidden="true" />
-          </button>
-        </div>
+            <ArrowEnd />
+          </Button>
+        </OnboardingPanel>
       ) : (
-        <form
-          className="onboarding-form"
+        <OnboardingForm
           onSubmit={(e) => {
             e.preventDefault();
             setDone(true);
           }}
         >
-          <h2>Reset password</h2>
+          <OnboardingTitle>Reset password</OnboardingTitle>
           <Field label="New password">
             <PasswordInput value={password} onChange={setPassword} placeholder="At least 8 characters" />
           </Field>
-          <Field
-            label="Confirm password"
-            hint={mismatch && <span className="onboarding-invalid">The passwords don’t match.</span>}
-          >
-            <PasswordInput value={confirm} onChange={setConfirm} mismatch={mismatch} placeholder="Type it again" />
-          </Field>
           <Submit pending={false} label="Update password" pendingLabel="" />
-        </form>
+        </OnboardingForm>
       )}
     </Layout>
   );

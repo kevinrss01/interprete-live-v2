@@ -1,5 +1,7 @@
 mod audio_route;
+mod call_captions;
 mod calls;
+mod system_audio;
 mod system_microphone;
 mod translation_overlay;
 mod virtual_microphone;
@@ -9,6 +11,9 @@ use tauri::Manager;
 pub fn run() {
     let exit_started = std::sync::atomic::AtomicBool::new(false);
     let restore_finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    // Keeps the embedded desktop icon in sync with icons/. See build.rs.
+    let _ = env!("INTERPRETE_ICON_STAMP");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(calls::CallState(std::sync::Mutex::new(
@@ -16,10 +21,16 @@ pub fn run() {
         )))
         .manage(audio_route::AudioRoute::default())
         .manage(translation_overlay::State::default())
+        .manage(call_captions::State::default())
+        .manage(system_audio::SystemAudio::default())
         .invoke_handler(tauri::generate_handler![
             translation_overlay::set_translation_overlay,
             translation_overlay::translation_overlay_snapshot,
             translation_overlay::stop_translation_overlay,
+            call_captions::set_call_captions,
+            call_captions::call_captions_snapshot,
+            system_audio::system_audio_start,
+            system_audio::system_audio_stop,
             calls::call_snapshot,
             calls::call_monitor_enabled,
             calls::simulate_call,
@@ -40,7 +51,7 @@ pub fn run() {
                 ctrlc::set_handler(move || handle.exit(0))?;
             }
             #[cfg(target_os = "macos")]
-            for label in ["call-toast", "translation-overlay"] {
+            for label in ["call-toast", "translation-overlay", "call-captions"] {
                 if let Some(toast) = app.get_webview_window(label)
                     && let Ok(window) = toast.ns_window()
                 {
@@ -52,6 +63,9 @@ pub fn run() {
                         interprete_configure_toast(window);
                     }
                 }
+            }
+            if let Some(captions) = app.get_webview_window("call-captions") {
+                let _ = captions.set_ignore_cursor_events(true);
             }
             calls::start(app.handle().clone());
             Ok(())

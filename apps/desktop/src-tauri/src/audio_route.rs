@@ -23,6 +23,7 @@ pub struct RouteStatus {
     pub pending_seconds: f64,
     pub failed: bool,
 }
+pub const SYSTEM_OUTPUT: &str = "@system-output";
 fn devices(create: bool) -> Result<Vec<OutputDevice>, String> {
     virtual_microphone::outputs(create)
 }
@@ -83,6 +84,7 @@ impl Resampler {
 }
 struct Route {
     id: String,
+    name: String,
     _stream: cpal::Stream,
     producer: HeapProd<f32>,
     rate: u32,
@@ -93,35 +95,40 @@ struct Route {
 }
 impl Route {
     fn new(id: String, name: &str) -> Result<Self, String> {
-        let available = devices(false)?;
-        let approved = available
-            .iter()
-            .find(|device| device.name == name)
-            .ok_or("Choisissez le microphone virtuel de l’app comme sortie.")?;
-        // The aggregate is the public microphone identity. Feed its sole loopback
-        // subdevice directly, without reconfiguring an aggregate used by a call app.
-        let playback_name = if approved.app_mic {
-            &available
-                .iter()
-                .find(|device| device.uid == "BlackHole2ch_UID")
-                .ok_or("Le pilote du micro virtuel n’est plus disponible.")?
-                .name
+        let (device, device_uid, app_mic) = if name == SYSTEM_OUTPUT {
+            (
+                cpal::default_host()
+                    .default_output_device()
+                    .ok_or("Aucune sortie audio n’est disponible sur ce Mac.")?,
+                String::new(),
+                false,
+            )
         } else {
-            &approved.name
+            let available = devices(false)?;
+            let approved = available
+                .iter()
+                .find(|device| device.name == name)
+                .ok_or("Choisissez le microphone virtuel de l’app comme sortie.")?;
+            // Publish the aggregate as the microphone, but feed its sole loopback driver directly.
+            let playback = if approved.app_mic {
+                available
+                    .iter()
+                    .find(|device| device.uid == "BlackHole2ch_UID")
+                    .ok_or("Le pilote du micro virtuel n’est plus disponible.")?
+            } else {
+                approved
+            };
+            let device = cpal::default_host()
+                .devices()
+                .map_err(|e| e.to_string())?
+                .find(|device| device.name().is_ok_and(|n| n == playback.name))
+                .ok_or("Le micro virtuel est absent. Actualisez les périphériques.")?;
+            (device, approved.uid.clone(), approved.app_mic)
         };
-        let device = cpal::default_host()
-            .devices()
-            .map_err(|e| e.to_string())?
-            .find(|d| d.name().is_ok_and(|n| n == *playback_name))
-            .ok_or(
-                "Le micro virtuel est absent. Actualisez les périphériques après l’installation de BlackHole.",
-            )?;
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
         let mut config = supported.config();
         // Ask for a small native callback where supported. CoreAudio chooses its hardware period.
-        if !approved.app_mic
-            && let cpal::SupportedBufferSize::Range { min, max } = supported.buffer_size()
-        {
+        if !app_mic && let cpal::SupportedBufferSize::Range { min, max } = supported.buffer_size() {
             config.buffer_size = cpal::BufferSize::Fixed(128_u32.clamp(*min, *max));
         }
         let rate = config.sample_rate.0;
@@ -155,18 +162,19 @@ impl Route {
                 error,
                 None,
             ),
-            _ => return Err("Format du micro virtuel non pris en charge.".into()),
+            _ => return Err("Format de sortie audio non pris en charge.".into()),
         }
         .map_err(|e| e.to_string())?;
         stream.play().map_err(|e| e.to_string())?;
         Ok(Self {
             id,
+            name: name.into(),
             _stream: stream,
             producer,
             rate,
             failed,
             resampler: Resampler::default(),
-            device_uid: approved.uid.clone(),
+            device_uid,
             input_lease: None,
         })
     }
@@ -189,10 +197,12 @@ impl Route {
     }
     fn push(&mut self, bytes: &[u8]) -> Result<(), String> {
         if self.failed.load(Ordering::Relaxed) {
-            return Err(
+            return Err(if self.name == SYSTEM_OUTPUT {
+                "La sortie audio du Mac a été déconnectée. Relancez la traduction.".into()
+            } else {
                 "La sortie virtuelle a été déconnectée. Actualisez puis relancez la traduction."
-                    .into(),
-            );
+                    .into()
+            });
         }
         let samples = self.resampler.convert(bytes, self.rate);
         if samples.len() > self.producer.vacant_len() {
@@ -201,6 +211,22 @@ impl Route {
         self.producer.push_slice(&samples);
         Ok(())
     }
+}
+// Close every matching route even when one restoration fails; preserve the first error.
+fn close_routes(routes: &mut Vec<Route>, matches: impl Fn(&Route) -> bool) -> Result<(), String> {
+    let mut result = Ok(());
+    let mut index = 0;
+    while index < routes.len() {
+        if matches(&routes[index]) {
+            let closed = routes.remove(index).close();
+            if result.is_ok() {
+                result = closed;
+            }
+        } else {
+            index += 1;
+        }
+    }
+    result
 }
 enum Command {
     Configure(PathBuf),
@@ -237,8 +263,9 @@ impl Default for AudioRoute {
     fn default() -> Self {
         let (sender, receiver) = mpsc::sync_channel(32);
         // CPAL streams stay on their owner thread. The audio callback only accesses a lock-free ring.
+        // One route per device: the user's microphone into BlackHole and the call's translation on the Mac.
         std::thread::spawn(move || {
-            let mut route: Option<Route> = None;
+            let mut routes: Vec<Route> = Vec::new();
             let mut journal: Option<PathBuf> = None;
             for command in receiver {
                 match command {
@@ -251,9 +278,9 @@ impl Default for AudioRoute {
                         journal = Some(path);
                     }
                     Command::Activate { id, reply } => {
-                        let result = route
-                            .as_mut()
-                            .filter(|r| r.id == id)
+                        let result = routes
+                            .iter_mut()
+                            .find(|r| r.id == id)
                             .ok_or("La traduction est arrêtée.".into())
                             .and_then(|r| {
                                 r.activate_input(
@@ -265,38 +292,36 @@ impl Default for AudioRoute {
                         let _ = reply.send(result);
                     }
                     Command::Shutdown { reply } => {
-                        let result = route.take().map_or(Ok(()), Route::close);
+                        let result = close_routes(&mut routes, |_| true);
                         let _ = reply.send(result);
                         break;
                     }
                     Command::Open { id, name, reply } => {
-                        let result = route
-                            .take()
-                            .map_or(Ok(()), Route::close)
-                            .and_then(|()| Route::new(id, &name))
-                            .map(|r| route = Some(r));
+                        let result = close_routes(&mut routes, |r| r.id == id || r.name == name)
+                            .and_then(|()| {
+                                if routes.len() >= 2 {
+                                    return Err("Trop de sorties audio sont ouvertes.".into());
+                                }
+                                Route::new(id, &name).map(|route| routes.push(route))
+                            });
                         let _ = reply.send(result);
                     }
                     Command::Push { id, bytes, reply } => {
-                        let result = route
-                            .as_mut()
-                            .filter(|r| r.id == id)
+                        let result = routes
+                            .iter_mut()
+                            .find(|r| r.id == id)
                             .ok_or("La sortie audio est arrêtée.".into())
                             .and_then(|r| r.push(&bytes));
                         let _ = reply.send(result);
                     }
                     Command::Close { id, reply } => {
-                        let result = if route.as_ref().is_some_and(|r| r.id == id) {
-                            route.take().map_or(Ok(()), Route::close)
-                        } else {
-                            Ok(())
-                        };
+                        let result = close_routes(&mut routes, |r| r.id == id);
                         let _ = reply.send(result);
                     }
                     Command::Status { id, reply } => {
-                        let result = route
-                            .as_ref()
-                            .filter(|r| r.id == id)
+                        let result = routes
+                            .iter()
+                            .find(|r| r.id == id)
                             .map(|r| RouteStatus {
                                 pending_seconds: r.producer.occupied_len() as f64 / r.rate as f64,
                                 failed: r.failed.load(Ordering::Relaxed),
