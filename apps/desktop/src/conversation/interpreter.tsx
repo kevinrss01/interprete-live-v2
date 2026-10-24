@@ -24,7 +24,7 @@ import {
 } from "../lib/translation-overlay";
 import { desktopAvailable } from "../lib/calls";
 import { Conversation } from "./conversation";
-import { SettingsSheet } from "./settings-sheet";
+import { SettingsPage } from "./settings";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 import { Button } from "@interprete/ui/components/button";
 import logo from "@interprete/ui/assets/logo.png";
@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@interprete/ui/components/alert-dialog";
 
-type View = "conversation" | "call" | "history" | "voices";
+type View = "conversation" | "call" | "history" | "voices" | "settings";
 
 const NAV: { view: View; label: string; icon: typeof Phone }[] = [
   { view: "conversation", label: "Conversation", icon: MessagesSquare },
@@ -78,7 +78,6 @@ export function Interpreter({
     shownView.current = view;
     mainRef.current?.focus({ preventScroll: true });
   }, [view]);
-  const [showSettings, setShowSettings] = useState(false);
   const [pending, setPending] = useState<PendingConfirm | null>(null);
   const overlay: OverlayUpdate | null =
     callOverlay ??
@@ -219,9 +218,8 @@ export function Interpreter({
         <div className="sidebar-foot">
           <button
             className="sidebar-item"
-            onClick={() => setShowSettings(true)}
-            aria-haspopup="dialog"
-            aria-expanded={showSettings}
+            aria-current={view === "settings" ? "page" : undefined}
+            onClick={() => openView("settings")}
           >
             <SlidersHorizontal size={16} aria-hidden="true" />
             Settings
@@ -231,7 +229,7 @@ export function Interpreter({
       <div className="app panel">
         <header
           className="topbar"
-          hidden={view === "history" || view === "voices" || (view === "call" && !callBusy)}
+          hidden={view === "history" || view === "voices" || view === "settings" || (view === "call" && !callBusy)}
         >
           <div className="frame topbar-inner">
             <div
@@ -297,6 +295,19 @@ export function Interpreter({
             onDemo={() => void controller.start(state.active, true)}
             onClear={() => setPending({ kind: "clear" })}
             busy={busy}
+          />
+        )}
+        {view === "settings" && (
+          <SettingsPage
+            profiles={state.profiles}
+            busy={busy}
+            decisionAvailable={!state.services || state.services.decision}
+            volume={state.volume}
+            onProfile={onProfile}
+            onClone={(id) => void controller.clone(id)}
+            onRemove={(id) => setPending({ kind: "remove", id })}
+            onVolume={(value) => controller.setVolume(value)}
+            onSignOut={leave}
           />
         )}
         {(view === "history" || view === "voices") && (
@@ -390,19 +401,6 @@ export function Interpreter({
         </div>
       </div>
       </div>
-      <SettingsSheet
-        open={showSettings}
-        profiles={state.profiles}
-        busy={busy}
-        decisionAvailable={!state.services || state.services.decision}
-        volume={state.volume}
-        onOpenChange={setShowSettings}
-        onProfile={onProfile}
-        onClone={(id) => void controller.clone(id)}
-        onRemove={(id) => setPending({ kind: "remove", id })}
-        onVolume={(value) => controller.setVolume(value)}
-        onLeave={import.meta.env.DEV ? leave : undefined}
-      />
       <AlertDialog
         open={pending !== null}
         onOpenChange={(open) => {

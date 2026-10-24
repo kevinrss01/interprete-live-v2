@@ -1,5 +1,5 @@
-import { useSyncExternalStore, type CSSProperties } from "react";
-import { Check, Sparkles, Trash2, X } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { Check, LogOut, Sparkles, Trash2 } from "lucide-react";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 import { VOICE_PRESETS } from "@interprete/shared/languages";
 import { Button } from "@interprete/ui/components/button";
@@ -13,26 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@interprete/ui/components/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetTitle,
-} from "@interprete/ui/components/sheet";
+import { loadOnboardingAccount } from "../onboarding/onboarding-account";
 
 const SAMPLE_TARGET = 30;
-
-function useCompact() {
-  return useSyncExternalStore(
-    (onChange) => {
-      const query = window.matchMedia("(max-width: 640px)");
-      query.addEventListener("change", onChange);
-      return () => query.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia("(max-width: 640px)").matches,
-    () => false,
-  );
-}
 
 function VoiceSettings({
   profile,
@@ -202,65 +185,98 @@ function VoiceSettings({
   );
 }
 
-export function SettingsSheet({
-  open,
+const TABS = [
+  { id: "general", label: "General" },
+  { id: "voices", label: "Voices" },
+  { id: "account", label: "Account" },
+  { id: "permissions", label: "Permissions" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+// Minimal tab bar: the underline slides to the selected tab.
+function TabBar({ value, onChange }: { value: TabId; onChange: (id: TabId) => void }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const measure = () => {
+      const tab = listRef.current?.querySelector<HTMLElement>(`[data-tab="${value}"]`);
+      if (tab) setIndicator({ left: tab.offsetLeft, width: tab.offsetWidth });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [value]);
+  function onKeyDown(e: KeyboardEvent) {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const index = TABS.findIndex((t) => t.id === value);
+    const next = TABS[(index + step + TABS.length) % TABS.length].id;
+    onChange(next);
+    listRef.current?.querySelector<HTMLElement>(`[data-tab="${next}"]`)?.focus();
+  }
+  return (
+    <div className="tabs" role="tablist" aria-label="Settings sections" ref={listRef} onKeyDown={onKeyDown}>
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          id={`settings-tab-${tab.id}`}
+          data-tab={tab.id}
+          aria-selected={value === tab.id}
+          aria-controls="settings-panel"
+          tabIndex={value === tab.id ? 0 : -1}
+          className="tab"
+          onClick={() => onChange(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+      <span
+        className="tabs-indicator"
+        aria-hidden="true"
+        style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
+      />
+    </div>
+  );
+}
+
+export function SettingsPage({
   profiles,
   busy,
   decisionAvailable,
   volume,
-  onOpenChange,
   onProfile,
   onClone,
   onRemove,
   onVolume,
-  onLeave,
+  onSignOut,
 }: {
-  open: boolean;
   profiles: Record<SpeakerId, Profile>;
   busy: boolean;
   decisionAvailable: boolean;
   volume: number;
-  onOpenChange: (open: boolean) => void;
   onProfile: (id: SpeakerId, patch: Partial<Profile>) => void;
   onClone: (id: SpeakerId) => void;
   onRemove: (id: SpeakerId) => void;
   onVolume: (volume: number) => void;
-  onLeave?: () => void;
+  onSignOut: () => void;
 }) {
-  const compact = useCompact();
+  const [tab, setTab] = useState<TabId>("general");
+  const account = loadOnboardingAccount();
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side={compact ? "bottom" : "right"}
-        showCloseButton={false}
-        className="gap-0 p-0"
+    <section className="settings-page" aria-labelledby="settings-title">
+      <h1 id="settings-title">Settings</h1>
+      <TabBar value={tab} onChange={setTab} />
+      <div
+        id="settings-panel"
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${tab}`}
+        className="settings-panel"
       >
-        <div className="sheet-inner">
-          <div className="sheet-head">
-            <SheetTitle id="settings-title">Settings</SheetTitle>
-            <SheetDescription className="sr-only">
-              Languages, voices, and session.
-            </SheetDescription>
-            <Button
-              variant="ghost"
-              className="icon-btn"
-              onClick={() => onOpenChange(false)}
-              aria-label="Close settings"
-            >
-              <X size={18} aria-hidden="true" />
-            </Button>
-          </div>
-          <div className="sheet-body">
-            {(["a", "b"] as const).map((id) => (
-              <VoiceSettings
-                key={id}
-                profile={profiles[id]}
-                busy={busy}
-                onProfile={(patch) => onProfile(id, patch)}
-                onClone={() => onClone(id)}
-                onRemove={() => onRemove(id)}
-              />
-            ))}
+        {tab === "general" && (
+          <>
             <fieldset className="settings-group">
               <legend>Session</legend>
               <label className="volume">
@@ -314,17 +330,44 @@ export function SettingsSheet({
                 AI-generated voices. The app does not store conversations
                 on its server. Samples authorized for cloning are
                 sent to ElevenLabs; you can delete your voice
-                above.
+                in Voices.
               </p>
             </div>
-            {onLeave && (
-              <button type="button" className="settings-dev-leave" onClick={onLeave}>
-                dev: sign out
-              </button>
-            )}
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+          </>
+        )}
+        {tab === "voices" &&
+          (["a", "b"] as const).map((id) => (
+            <VoiceSettings
+              key={id}
+              profile={profiles[id]}
+              busy={busy}
+              onProfile={(patch) => onProfile(id, patch)}
+              onClone={() => onClone(id)}
+              onRemove={() => onRemove(id)}
+            />
+          ))}
+        {tab === "account" && (
+          <>
+            <dl className="settings-card">
+              <div>
+                <dt>First name</dt>
+                <dd>{account?.firstName || "—"}</dd>
+              </div>
+              <div>
+                <dt>Email</dt>
+                <dd>{account?.email || "—"}</dd>
+              </div>
+            </dl>
+            <div className="settings-actions">
+              <Button variant="outline" className="btn" onClick={onSignOut}>
+                <LogOut size={15} aria-hidden="true" />
+                Sign out
+              </Button>
+            </div>
+          </>
+        )}
+        {tab === "permissions" && <p className="note">Coming soon.</p>}
+      </div>
+    </section>
   );
 }

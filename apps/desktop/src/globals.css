@@ -752,56 +752,6 @@ kbd {
   background: rgb(255 255 255 / 0.2);
 }
 
-/* Settings sheet */
-.sheet {
-  width: min(420px, 100vw);
-  max-width: 100vw;
-  height: 100dvh;
-  max-height: 100dvh;
-  margin: 0 0 0 auto;
-  padding: 0;
-  border: 0;
-  border-left: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-}
-.sheet::backdrop {
-  background: rgb(27 27 26 / 0.24);
-}
-.sheet[open] {
-  animation: sheet-in 0.2s var(--ease);
-}
-@keyframes sheet-in {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
-}
-.sheet-inner {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  max-height: inherit;
-}
-.sheet-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 56px;
-  padding: 0 12px 0 24px;
-  border-bottom: 1px solid var(--line);
-}
-.sheet-head h2 {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.sheet-body {
-  flex: 1;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 0 24px calc(24px + env(safe-area-inset-bottom));
-}
 .settings-group {
   display: grid;
   gap: 14px;
@@ -813,7 +763,7 @@ kbd {
 }
 /* Fieldset legends sit on the top edge, so the group's padding never
    clears the hairline above. Space every group, including the first
-   one under the header. */
+   one under the tab bar. */
 .settings-group {
   margin-top: 16px;
 }
@@ -1039,21 +989,6 @@ kbd {
   margin: 0;
   text-align: right;
 }
-.settings-dev-leave {
-  justify-self: start;
-  margin: 18px 0 4px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink-3);
-  font-size: 11px;
-  line-height: 1.3;
-  cursor: pointer;
-}
-.settings-dev-leave:hover {
-  color: var(--ink-2);
-}
-
 /* Error page */
 .error-page {
   max-width: 560px;
@@ -1145,31 +1080,6 @@ kbd {
   .field [data-slot="select-trigger"] {
     font-size: 16px;
   }
-  .sheet {
-    width: 100%;
-    height: auto;
-    max-height: 90dvh;
-    margin: auto 0 0;
-    border-left: 0;
-    border-top: 1px solid var(--line);
-    border-radius: 14px 14px 0 0;
-  }
-  .sheet[open] {
-    animation-name: sheet-up;
-  }
-  .sheet-head {
-    padding-left: 16px;
-  }
-  .sheet-body {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-}
-@keyframes sheet-up {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
 }
 @media (max-width: 360px) {
   .voice-chip {
@@ -1181,22 +1091,13 @@ kbd {
     display: none;
   }
 }
-[data-slot="select-content"],
-[data-slot="sheet-content"] {
+[data-slot="select-content"] {
   box-shadow: none;
 }
 [data-slot="select-content"] {
   max-height: min(16rem, var(--available-height, 16rem));
   border: 1px solid var(--line);
   background: var(--surface);
-}
-[data-slot="sheet-content"][data-side="right"] {
-  width: min(420px, 100vw);
-  max-width: min(420px, 100vw);
-}
-[data-slot="sheet-content"][data-side="bottom"] {
-  max-height: 90dvh;
-  border-radius: 14px 14px 0 0;
 }
 [data-slot="button"]:focus-visible,
 [data-slot="checkbox"]:focus-visible {
@@ -1903,4 +1804,87 @@ p.call-notice {
     border: 0;
     border-radius: 0;
   }
+}
+
+/* Settings page: title, minimal tab bar with a sliding underline, content. */
+.settings-page {
+  width: 100%;
+  max-width: 640px;
+  padding: 40px 0 48px;
+}
+.settings-page h1 {
+  margin: 0 0 20px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.tabs {
+  position: relative;
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.tab {
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s var(--ease);
+}
+.tab:hover,
+.tab[aria-selected="true"] {
+  color: var(--ink);
+}
+.tab:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.tabs-indicator {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--ink);
+  transition:
+    transform 0.25s var(--ease),
+    width 0.25s var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tabs-indicator {
+    transition: none;
+  }
+}
+.settings-panel > .settings-actions {
+  margin-top: 16px;
+}
+.settings-card {
+  margin: 24px 0 0;
+  padding: 4px 16px;
+  border-radius: 12px;
+  background: var(--fill);
+}
+.settings-card div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.settings-card div:first-child {
+  border-top: 0;
+}
+.settings-card dt {
+  font-weight: 500;
+}
+.settings-card dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+.settings-panel > .note {
+  margin-top: 24px;
 }
