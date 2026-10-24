@@ -11,7 +11,8 @@ Follow [AGENTS.md](../../../AGENTS.md). Read root and workspace manifests,
 - Respect the requested packages and version scope. For a request for latest
   versions, resolve current stable releases and read official migration guidance
   for breaking changes; do not assume remembered versions are current.
-- Manifests are in the root, `apps/desktop`, `apps/server`, and `packages/shared`.
+- Manifests are in the root, `apps/desktop`, `apps/landing`, `apps/server`,
+  `packages/shared`, and `packages/ui`.
   Preserve `workspace:*` links, ESM behavior, and the typed Hono server/client
   contract. Keep compatible React/types, Tailwind/Vite, and Tauri packages aligned.
 - Do not upgrade Rust crates or the pnpm toolchain unless in scope or required

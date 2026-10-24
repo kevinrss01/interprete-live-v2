@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env.local src/server.ts",
     "build": "esbuild src/server.ts src/db/migrate.ts --bundle --platform=node --target=node22 --format=esm --outdir=dist --outbase=src --out-extension:.js=.mjs --external:bufferutil --external:utf-8-validate --external:pg-native --banner:js='import { createRequire } from \"node:module\"; const require = createRequire(import.meta.url);'",
+    "build:vercel": "esbuild src/app.ts --bundle --platform=node --target=node24 --format=esm --outfile=dist/app.mjs --external:bufferutil --external:utf-8-validate --external:pg-native --banner:js='import { createRequire } from \"node:module\"; const require = createRequire(import.meta.url);'",
     "start": "node --env-file-if-exists=.env.local dist/server.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

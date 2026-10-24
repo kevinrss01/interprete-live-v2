@@ -2,15 +2,15 @@ import { Check, LoaderCircle, Mic, Square, Volume2 } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { Phase, Profile } from "@interprete/shared/contracts";
 import { LANGUAGES, VOICE_PRESETS, languageNative } from "@interprete/shared/languages";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Button } from "@interprete/ui/components/button";
+import { Label } from "@interprete/ui/components/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@interprete/ui/components/select";
 
 const METER = [0.5, 0.85, 1, 0.75, 0.55];
 const SAMPLE_TARGET = 30;

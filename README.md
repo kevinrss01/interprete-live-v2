@@ -9,7 +9,9 @@ Le mode conversation permet la traduction vocale pour deux personnes qui parlent
 ```
 apps/desktop     App Tauri : front React (export statique) + coque Rust (src-tauri)
 apps/server      API Hono (Node) : clés OpenAI / ElevenLabs, sessions signées, déployée en Docker
+apps/landing     Landing page statique (Vite), déployée sur Vercel
 packages/shared  Types, langues et segmentation communs aux deux
+packages/ui      Design system : composants shadcn, tokens CSS, logos
 scripts/         Benchmark et vérifications hors app
 ```
 
@@ -129,8 +131,12 @@ Voir [les vérifications effectuées](docs/VALIDATION.md). Les latences de démo
 
 ## Déploiement
 
+- **Web (Vercel)** : [interprete-live.vercel.app](https://interprete-live.vercel.app) sert le build Vite de `apps/desktop` (`dist/`). La variable de build `VITE_API_URL=https://interprete-backend.vercel.app` relie les clients Hono et oRPC au backend commun. `apps/desktop/vercel.json` conserve le routage de l’app lors d’un rechargement.
+- **API (Vercel)** : le projet `interprete-backend` utilise `apps/server`, la région Frankfurt et la base Neon `interprete-postgres`. `pnpm --filter @interprete/server build:vercel` génère `dist/app.mjs` ; `apps/server/app.mjs` l’expose au runtime Hono sans ouvrir de serveur autonome. Les clés fournisseurs et les secrets de session restent exclusivement dans les variables serveur. `BETTER_AUTH_URL` doit correspondre au domaine de l’API et `ALLOWED_ORIGINS` inclure les domaines web autorisés. Appliquer les migrations avec la connexion Neon avant d’ouvrir le parcours comptes.
 - **API (VPS)** : copier le repo et `apps/server/.env.local` sur le serveur, puis `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtient le certificat HTTPS et relaie le SSE sans buffering ; l’image contient les bundles ESM `dist/server.mjs`, `dist/db/migrate.mjs` et les migrations SQL. Pour le socle comptes, configurer PostgreSQL et suivre les [étapes de déploiement](docs/backend.md#déployer). Une seule instance : les limites de requêtes sont en mémoire.
 - **Desktop** : `pnpm build:desktop`. Sur macOS, `Info.plist` déclare l’usage du micro et `Entitlements.plist` l’autorise sous hardened runtime ; la signature et la notarisation se configurent à part.
+
+La conversation vocale fonctionne dans le navigateur avec l’autorisation microphone. La détection des appels sur Mac, les fenêtres flottantes hors navigateur et le microphone virtuel nécessitent l’app Tauri. Les limites de requêtes restent en mémoire par instance ; le déploiement Vercel ne les transforme pas en quotas distribués.
 
 Le clonage d’une voix réelle nécessite l’accord de cette personne et un échantillon propre. Les deux personnes prennent toujours la parole à tour de rôle ; seule la traduction synthétique chevauche la parole. L’identification automatique des personnes et la séparation de deux voix humaines simultanées ne sont pas prises en charge.
 

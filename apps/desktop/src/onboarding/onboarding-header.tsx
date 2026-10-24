@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Check } from "lucide-react";
+import logo from "@interprete/ui/assets/logo.png";
 
 export type OnboardingStep = "profile" | "voice" | "preview";
 const STEPS: [OnboardingStep, string][] = [
@@ -11,7 +12,7 @@ const STEPS: [OnboardingStep, string][] = [
 export function OnboardingHeader({ action }: { action?: ReactNode }) {
   return (
     <header className="onboarding-header">
-      <img className="onboarding-logo" src="/logo.png" alt="Interprète" />
+      <img className="onboarding-logo" src={logo} alt="Interprète" />
       <div className="onboarding-header-action">{action}</div>
     </header>
   );

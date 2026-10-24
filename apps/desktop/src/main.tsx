@@ -1,6 +1,5 @@
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
-import "@fontsource-variable/inter";
 import "./globals.css";
 import { App } from "./components/app";
 import { CallToast } from "./windows/call-toast";

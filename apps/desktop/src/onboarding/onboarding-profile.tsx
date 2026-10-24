@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { LANGUAGES, type Language } from "@interprete/shared/languages";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "@interprete/ui/components/input";
+import { Label } from "@interprete/ui/components/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@interprete/ui/components/select";
 
 export type OnboardingProfileValues = {
   language: Language;

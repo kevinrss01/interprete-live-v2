@@ -1,5 +1,13 @@
 # Vérifications de l’app — 24 octobre 2026
 
+## Web et backend sur Vercel — 24 octobre
+
+- `interprete-live.vercel.app` sert le build Vite et utilise `interprete-backend.vercel.app`. Les domaines de production ont été vérifiés par HTTP et l’onboarding/écran de connexion dans Chrome. Les deux inspections du navigateur intégré ont échoué par timeout avant ce contrôle Chrome.
+- L’entrée Hono Vercel est un bundle ESM ; le premier essai TypeScript non bundlé échouait à résoudre `src/auth`. Le bundle est vérifié localement par une requête `/api/status`, puis les endpoints publics `/api/status` et `/api/auth/ok` répondent 200 en production avec l’origine web autorisée.
+- Création puis connexion d’un compte entièrement synthétique via Better Auth, lecture de `account.me`, écriture et relecture des préférences via oRPC/PostgreSQL réussies. Le compte temporaire et ses données liées ont été supprimés après le test. La vérification des migrations Neon est passée.
+- Un jeton éphémère de transcription a été obtenu et une courte phrase synthétique a renvoyé du texte et des paquets audio en SSE jusqu’à l’événement de fin, sans erreur. Aucun micro physique ni haut-parleur n’a été utilisé. Les clés fournisseurs n’ont pas été retrouvées dans le bundle web servi.
+- TypeScript, lint serveur, 10 tests de configuration/cycle de vie, 13 tests serveur et 36 tests desktop réussis ; build Vite et bundle Hono Vercel réussis. Les fonctions de détection système, fenêtre flottante native et micro virtuel restent propres à Tauri ; aucun build natif n’a été nécessaire pour ce déploiement web.
+
 ## Intégration avec les comptes et l’onboarding — 24 octobre
 
 - L’intégration conserve les écrans de connexion/onboarding et leur contrôleur partagé, avec des routes indépendantes pour les fenêtres `#call-toast` et `#translation-overlay`.

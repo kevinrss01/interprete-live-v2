@@ -1,6 +1,8 @@
 # Architecture
 
-Interprète est une app desktop [Tauri 2](https://v2.tauri.app) qui traduit à voix haute deux personnes parlant à tour de rôle sur un même appareil. Toute l'application (interface, micro, transcription, lecture) tourne dans Tauri ; le VPS héberge l’API et ses clés fournisseurs. Le socle comptes/préférences utilise PostgreSQL, configurable séparément.
+Interprète traduit à voix haute deux personnes parlant à tour de rôle sur un même appareil. Son interface React/Vite fonctionne dans l’app [Tauri 2](https://v2.tauri.app) ou dans un navigateur HTTPS. L’API commune Hono conserve les clés fournisseurs côté serveur. Le socle comptes/préférences utilise PostgreSQL.
+
+Le déploiement web utilise deux projets du workspace Vercel VoiceCheap : `interprete-live` (racine `apps/desktop`, sortie `dist`) et `interprete-backend` (racine `apps/server`, Hono en région Frankfurt), avec Neon pour PostgreSQL. `VITE_API_URL` est intégré au build web ; `ALLOWED_ORIGINS` et les origines de confiance Better Auth autorisent ce domaine sur l’API. L’entrée Vercel charge le bundle ESM `dist/app.mjs` pour éviter les imports TypeScript sans extension à l’exécution. Le serveur autonome et le déploiement VPS ci-dessous restent disponibles.
 
 ## Vue d'ensemble
 
@@ -36,7 +38,7 @@ flowchart LR
   API -- "jeton éphémère" --> RT
 ```
 
-- Les **clés permanentes** (OpenAI, ElevenLabs, AI Gateway, secret de session) ne quittent jamais le VPS.
+- Les **clés permanentes** (OpenAI, ElevenLabs, AI Gateway, secret de session) restent sur le backend ; elles ne sont pas incluses dans le bundle web ou desktop.
 - La **transcription** est la seule connexion directe app → fournisseur : l'API délivre un jeton OpenAI éphémère, puis la webview envoie le PCM du micro directement à OpenAI Realtime, sans passer par le VPS.
 - La **traduction et la voix** passent par l'API, qui renvoie le texte et l'audio en SSE.
 
@@ -50,9 +52,13 @@ flowchart TB
   Desktop["apps/desktop<br/>@interprete/desktop<br/>React + Vite + Tauri"]
   Server["apps/server<br/>@interprete/server<br/>Hono sur Node"]
   Shared["packages/shared<br/>@interprete/shared<br/>types, langues, segmentation"]
+  Landing["apps/landing<br/>@interprete/landing<br/>page statique Vite"]
+  UI["packages/ui<br/>@interprete/ui<br/>composants, tokens, logos"]
   Scripts["scripts/<br/>benchmark hors app"]
 
-  Root --> Desktop & Server & Shared & Scripts
+  Root --> Desktop & Server & Shared & Landing & UI & Scripts
+  Desktop -- "import" --> UI
+  Landing -- "import" --> UI
   Desktop -- "import" --> Shared
   Server -- "import" --> Shared
   Desktop -. "import type AppType<br/>(types seulement)" .-> Server
@@ -63,6 +69,8 @@ flowchart TB
 | `apps/desktop` | Toute l'app. Le front est un export statique (`dist/`) embarqué par Tauri. | `src/lib/interpreter.ts` (orchestration d'un tour), `transcription.ts` (OpenAI Realtime), `audio.ts` (capture et lecture), `api.ts` (client RPC), `src-tauri/` (Rust, config, permissions) |
 | `apps/server` | API HTTP du VPS. Bundles ESM `dist/server.mjs` et `dist/db/migrate.mjs`. | `src/app.ts` (assemblage, CORS), `src/routes/*.ts` (un endpoint audio par fichier), `src/rpc/` (comptes/préférences), `src/auth.ts`, `src/db/`, `src/server.ts` (démarrage), `src/lib/*` (fournisseurs, sessions, validation) |
 | `packages/shared` | Code utilisé des deux côtés, publié en TypeScript source. | `contracts.ts`, `languages.ts`, `live-segments.ts`, `text.ts` |
+| `packages/ui` | Design system partagé par le desktop et la landing, publié en source (TSX/CSS, sans build). | `src/components/*` (primitives shadcn), `src/styles.css` (Tailwind, tokens, police), `src/assets/` (logos), `components.json` |
+| `apps/landing` | Landing page statique. Vercel la construit avec Root Directory `apps/landing`. | `index.html`, `src/main.css` (importe `@interprete/ui/styles.css`) |
 
 Le desktop importe **uniquement le type** `AppType` du serveur : le client `hc<AppType>` connaît les routes, leurs entrées et leurs réponses. Modifier une route casse la compilation du desktop, pas l'app en production. Aucun code serveur n'est embarqué dans le bundle desktop.
 
