@@ -55,3 +55,38 @@ export const userPreferences = pgTable("user_preferences", {
 }, (table) => [
   check("different_languages", sql`${table.sourceLanguage} <> ${table.targetLanguage}`),
 ]);
+
+// A discussion belongs to one account. Text only: playback audio is never stored.
+export const discussion = pgTable("discussion", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  callId: text("call_id"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+}, (table) => [
+  index("discussion_user_updated_idx").on(table.userId, table.updatedAt),
+  check("discussion_kind", sql`${table.kind} in ('conversation', 'call')`),
+]);
+
+export const discussionMessage = pgTable("discussion_message", {
+  id: text("id").primaryKey(),
+  discussionId: text("discussion_id").notNull().references(() => discussion.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  name: text("name").notNull(),
+  source: text("source").notNull(),
+  translation: text("translation").notNull(),
+  sourceLanguage: text("source_language").notNull(),
+  targetLanguage: text("target_language").notNull(),
+  status: text("status").notNull(),
+  error: text("error"),
+  demo: boolean("demo").notNull().default(false),
+  spokenAt: timestamp("spoken_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("discussion_message_discussion_spoken_idx").on(table.discussionId, table.spokenAt),
+  check("discussion_message_role", sql`${table.role} in ('you', 'them')`),
+  check("discussion_message_status", sql`${table.status} in ('draft', 'working', 'done', 'error')`),
+]);

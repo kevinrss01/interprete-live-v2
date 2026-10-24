@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins/bearer";
 import { z } from "zod";
 import { getDb } from "./db";
-import * as schema from "./db/schema";
+import { account, session, user, verification } from "./db/schema";
 import { AppError } from "./lib/errors";
 import { allowedOrigins } from "./lib/session";
 
@@ -19,7 +19,10 @@ function createAuth() {
 
   return betterAuth({
     appName: "Interprète",
-    database: drizzleAdapter(getDb(), { provider: "pg", schema }),
+    database: drizzleAdapter(getDb(), {
+      provider: "pg",
+      schema: { user, session, account, verification },
+    }),
     trustedOrigins: allowedOrigins,
     plugins: [bearer()],
     // Email + password for now; the email is the unique key. No verification yet.
