@@ -1,5 +1,11 @@
 @import "@interprete/ui/styles.css";
 
+/* Onboarding animations: `animate-level` (waveforms) and `animate-rise` (intro lines). */
+@theme inline {
+  --animate-level: level 900ms ease-in-out infinite alternate;
+  --animate-rise: rise 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
 /* Base */
 * {
   box-sizing: border-box;
@@ -16,12 +22,6 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-}
-button,
-input,
-select {
-  font: inherit;
-  color: inherit;
 }
 button,
 a,
@@ -52,10 +52,6 @@ button:disabled {
 button:disabled[data-slot="select-trigger"] {
   opacity: 1;
 }
-:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
 ::selection {
   background: #e4e2dc;
   color: var(--ink);
@@ -63,12 +59,6 @@ button:disabled[data-slot="select-trigger"] {
 a {
   color: inherit;
   text-decoration: none;
-}
-p,
-h1,
-h2,
-h3 {
-  margin: 0;
 }
 svg {
   flex-shrink: 0;
@@ -105,6 +95,37 @@ kbd {
 }
 .spin {
   animation: spin 1s linear infinite;
+}
+@keyframes level {
+  to {
+    transform: scaleY(0.4);
+  }
+}
+/* "Thinking" text: a light sweeps across it while the voice is being created.
+   Gradient text, no filter: it stays sharp in WebKit. */
+@utility text-shimmer {
+  background: linear-gradient(90deg, var(--ink-3) 35%, var(--ink) 50%, var(--ink-3) 65%) 0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2.4s linear infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+/* Onboarding intro: each line fades and rises into place. No `filter: blur()`:
+   WebKit (the Tauri webview) draws filtered text in a softer layer, then redraws it
+   sharp when the animation ends, so every glyph visibly snapped. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
 }
 @keyframes spin {
   to {
@@ -1881,4 +1902,23 @@ p.call-notice {
   right: 16px;
   top: 50%;
   transform: translateY(-50%);
+}
+@layer base {
+  /* In the base layer: shadcn fields opt out with outline-none and only darken their border. */
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+  p,
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+    color: inherit;
+  }
 }

@@ -190,7 +190,7 @@ The compact header contains the wordmark on the home screen, or a back control a
 - **Do** keep the two speaking actions prominent and settings secondary.
 - **Do** preserve the charcoal/white state hierarchy and functional red accent.
 - **Do** use Inter, quiet dividers, visible keyboard focus and brief motion.
-- **Do** retain concise French copy and compact-screen field text of (16px).
+- **Do** retain concise English copy and compact-screen field text of (16px).
 
 ### Don't:
 - **Don't** add gradients, glass, decorative shadows, illustrations, emojis or slogans to this neutral instrument.

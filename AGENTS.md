@@ -11,7 +11,7 @@
 
 Interprète translates speech between two people taking turns on one shared device.
 
-- `apps/desktop/`: Tauri 2 shell, React 19, TypeScript, Vite, Tailwind CSS v4. French interface; existing components use kebab-case filenames.
+- `apps/desktop/`: Tauri 2 shell, React 19, TypeScript, Vite, Tailwind CSS v4. English-only interface; existing components use kebab-case filenames.
 - `apps/desktop/src/lib/`: capture/playback, transcription connections, interpreter controller, and typed API client.
 - `apps/desktop/src-tauri/`: Rust shell, native permissions, packaging, and microphone entitlements.
 - `apps/server/`: Hono API on Node, provider credentials, signed sessions, voice authorization, SSE translation/audio. Entry points: `src/app.ts` and `src/server.ts`.
@@ -34,7 +34,7 @@ Read [README.md](README.md) and [docs/architecture.md](docs/architecture.md) for
 
 ## Code conventions
 
-- Use descriptive names, typed contracts, focused functions, and object parameters for several related arguments. Match nearby formatting; comments are in English and UI copy is in French.
+- Use descriptive names, typed contracts, focused functions, and object parameters for several related arguments. Match nearby formatting; comments and all UI copy are in English, including server error messages shown to users. Other languages appear only in speech content: the onboarding reading texts, voice previews, transcripts, and translations.
 - Reuse the typed Hono client and shared contracts instead of duplicating route types or hardcoding API URLs. Add endpoints only when the requested task calls for them.
 - Inspect installed versions and relevant official documentation before assuming framework/provider APIs. Keep model configuration in `apps/server/src/lib/config.ts` and secrets in environment variables.
 - Keep the minimal interface and existing Tailwind/Lucide patterns. Surface errors and preserve keyboard controls, accessibility, and responsive layouts.
