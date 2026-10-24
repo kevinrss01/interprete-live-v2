@@ -37,6 +37,12 @@ import {
   type DetectedCall,
   type OutputDevice,
 } from "../lib/calls";
+import {
+  APP_MICROPHONE_NAME,
+  preferredOutput,
+  displayedOutputs,
+  savedRoute,
+} from "../lib/call-preferences";
 import type { OverlayUpdate } from "../lib/translation-overlay";
 
 const errorMessage = (error: unknown) =>
@@ -84,9 +90,21 @@ export function CallPanel({
   const [outputs, setOutputs] = useState<OutputDevice[]>([]);
   const [input, setInput] = useState(() => preference("interprete-call-input"));
   const [output, setOutput] = useState(
-    () => preference("interprete-call-output") || "BlackHole 2ch",
+    () => preference("interprete-call-output") || APP_MICROPHONE_NAME,
   );
-  const [route, setRoute] = useState<"virtual" | "local">("virtual");
+  const [route, setRoute] = useState<"virtual" | "local">(() =>
+    savedRoute(preference("interprete-call-route")),
+  );
+  const [autoSystemMicrophone, setAutoSystemMicrophone] = useState(
+    () => preference("interprete-system-microphone") !== "off",
+  );
+  const outputRef = useRef(output);
+  useEffect(() => save("interprete-call-route", route), [route]);
+  useEffect(
+    () =>
+      save("interprete-system-microphone", autoSystemMicrophone ? "on" : "off"),
+    [autoSystemMicrophone],
+  );
   const [error, setError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [overlayPreview, setOverlayPreview] = useState(false);
@@ -135,7 +153,6 @@ export function CallPanel({
   const busyRef = useRef(false);
   const startGeneration = useRef(0);
   const handleAccept = useRef<(call: DetectedCall) => void>(() => {});
-  inputRef.current = input;
 
   async function refresh(permission = false) {
     setError(null);
@@ -147,22 +164,43 @@ export function CallPanel({
         });
         stream.getTracks().forEach((track) => track.stop());
       }
-      const [devices, destinations, physicalNames] = await Promise.all([
-        navigator.mediaDevices.enumerateDevices(),
-        native ? outputDevices() : Promise.resolve([]),
-        native ? physicalInputNames() : Promise.resolve(undefined),
-      ]);
-      const microphones = physicalMicrophones(devices, physicalNames);
+      const [deviceResult, outputResult, namesResult] =
+        await Promise.allSettled([
+          navigator.mediaDevices.enumerateDevices(),
+          native ? outputDevices() : Promise.resolve([]),
+          native ? physicalInputNames() : Promise.resolve(undefined),
+        ]);
+      if (deviceResult.status === "rejected") throw deviceResult.reason;
+      if (namesResult.status === "rejected") throw namesResult.reason;
+      const microphones = physicalMicrophones(
+        deviceResult.value,
+        namesResult.value,
+      );
       setInputs(microphones);
-      setOutputs(destinations.filter((d) => d.virtualMic));
       if (
         microphones.length &&
-        !microphones.some((d) => d.deviceId === inputRef.current)
+        !microphones.some((device) => device.deviceId === inputRef.current)
       ) {
-        setInput(microphones[0].deviceId);
-        save("interprete-call-input", microphones[0].deviceId);
-        save("interprete-call-input-label", microphones[0].label);
+        const alias = deviceResult.value.find(
+          (device) =>
+            device.kind === "audioinput" && device.deviceId === "default",
+        );
+        const selected =
+          microphones.find((device) => device.label === alias?.label) ??
+          microphones[0];
+        inputRef.current = selected.deviceId;
+        setInput(selected.deviceId);
+        save("interprete-call-input", selected.deviceId);
+        save("interprete-call-input-label", selected.label);
       }
+      if (outputResult.status === "fulfilled") {
+        const destinations = displayedOutputs(outputResult.value);
+        setOutputs(destinations);
+        const selected = preferredOutput(destinations, outputRef.current);
+        outputRef.current = selected;
+        setOutput(selected);
+        save("interprete-call-output", selected);
+      } else setError(errorMessage(outputResult.reason));
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -229,22 +267,62 @@ export function CallPanel({
         if (!current.accepted || current.call?.id !== call.id)
           throw new Error("Cet appel n’est plus actif ou autorisé.");
       }
-      if (
-        route === "virtual" &&
-        (!native || !outputs.some((d) => d.name === output))
-      )
-        throw new Error(
-          "Installez BlackHole 2ch puis actualisez, ou choisissez Écoute locale pour tester.",
-        );
-      if (!demo)
-        requirePhysicalMicrophone(
-          await navigator.mediaDevices.enumerateDevices(),
-          input,
-          native ? await physicalInputNames() : undefined,
-        );
+      let destination: string | null = null;
+      if (route === "virtual") {
+        if (!native)
+          throw new Error(
+            "Ouvrez l’app macOS pour utiliser le micro virtuel, ou choisissez le mode test au casque.",
+          );
+        const destinations = displayedOutputs(await outputDevices());
+        if (generation !== startGeneration.current) return;
+        if (!destinations.length)
+          throw new Error(
+            "Installez BlackHole 2ch, puis redémarrez le Mac et actualisez pour préparer le micro de l’app.",
+          );
+        destination = preferredOutput(destinations, outputRef.current);
+        outputRef.current = destination;
+        setOutputs(destinations);
+        setOutput(destination);
+        save("interprete-call-output", destination);
+      }
+      if (!demo) {
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        if (generation !== startGeneration.current) return;
+        const physicalNames = native ? await physicalInputNames() : undefined;
+        if (generation !== startGeneration.current) return;
+        let microphones = physicalMicrophones(devices, physicalNames);
+        if (
+          !microphones.some((device) => device.deviceId === inputRef.current)
+        ) {
+          const permission = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          });
+          const actual = permission.getAudioTracks()[0]?.getSettings().deviceId;
+          permission.getTracks().forEach((track) => track.stop());
+          if (generation !== startGeneration.current) return;
+          devices = await navigator.mediaDevices.enumerateDevices();
+          if (generation !== startGeneration.current) return;
+          microphones = physicalMicrophones(devices, physicalNames);
+          const selected =
+            microphones.find(
+              (device) =>
+                device.deviceId === inputRef.current ||
+                device.deviceId === actual,
+            ) ?? microphones[0];
+          if (selected) {
+            inputRef.current = selected.deviceId;
+            setInput(selected.deviceId);
+            save("interprete-call-input", selected.deviceId);
+            save("interprete-call-input-label", selected.label);
+          }
+        }
+        setInputs(microphones);
+        requirePhysicalMicrophone(devices, inputRef.current, physicalNames);
+      }
       if (generation !== startGeneration.current) return;
       beforeStart();
-      audio.configure(route === "virtual" ? output : null);
+      audio.configure(destination);
       await controller.init();
       if (generation !== startGeneration.current) return;
       for (const id of ["a", "b"] as const)
@@ -254,11 +332,18 @@ export function CallPanel({
       await controller.start("a", demo);
       // Cancellation already stopped this attempt; a newer attempt may now own the controller.
       if (generation !== startGeneration.current) return;
+      if (
+        !demo &&
+        route === "virtual" &&
+        autoSystemMicrophone &&
+        controller.getSnapshot().phase === "listening"
+      ) {
+        await audio.activateSystemMicrophone();
+      }
     } catch (e) {
       if (generation === startGeneration.current) {
+        stop();
         setError(errorMessage(e));
-        setSession(null);
-        activeCallRef.current = null;
       }
     } finally {
       if (generation === startGeneration.current) {
@@ -355,11 +440,15 @@ export function CallPanel({
     [controller],
   );
   useEffect(() => {
-    if (state.phase === "idle" && !preparing) {
+    if (state.phase === "idle" && !preparing && !overlayPreview) {
+      if (overlayId.current) {
+        overlayId.current = null;
+        audio.stop();
+      }
       setSession(null);
       activeCallRef.current = null;
     }
-  }, [state.phase, preparing]);
+  }, [state.phase, preparing, overlayPreview, audio]);
   async function toggle(enabled: boolean) {
     setEnabled(enabled);
     save("interprete-call-detection", enabled ? "on" : "off");
@@ -480,126 +569,6 @@ export function CallPanel({
           </label>
         ))}
       </div>
-      <fieldset className="call-routing" disabled={busy}>
-        <legend>Sortie de la traduction</legend>
-        <label>
-          <input
-            type="radio"
-            name="call-route"
-            value="virtual"
-            checked={route === "virtual"}
-            onChange={() => setRoute("virtual")}
-          />{" "}
-          Micro virtuel · envoyer dans l’appel
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="call-route"
-            value="local"
-            checked={route === "local"}
-            onChange={() => setRoute("local")}
-          />{" "}
-          Écoute locale · tester au casque
-        </label>
-      </fieldset>
-      <div className="call-devices">
-        <label>
-          Microphone physique
-          <select
-            value={input}
-            disabled={busy}
-            onChange={(e) => {
-              setInput(e.target.value);
-              save("interprete-call-input", e.target.value);
-              save(
-                "interprete-call-input-label",
-                inputs.find((device) => device.deviceId === e.target.value)
-                  ?.label || "",
-              );
-            }}
-          >
-            <option value="">Choisir le microphone…</option>
-            {inputs.map((d) => (
-              <option key={d.deviceId} value={d.deviceId}>
-                {d.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {route === "virtual" ? "Sortie vers l’appel" : "Sortie du test"}
-          <select
-            value={route === "virtual" ? output : "local"}
-            disabled={busy || route === "local"}
-            onChange={(e) => {
-              setOutput(e.target.value);
-              save("interprete-call-output", e.target.value);
-            }}
-          >
-            {route === "local" ? (
-              <option value="local">Casque / sortie macOS actuelle</option>
-            ) : (
-              <>
-                <option value="">Choisir BlackHole…</option>
-                {!outputs.some((d) => d.name === output) && output && (
-                  <option value={output}>{output} · non installé</option>
-                )}
-                {outputs.map((d) => (
-                  <option key={d.name} value={d.name}>
-                    {d.name}
-                  </option>
-                ))}
-              </>
-            )}
-          </select>
-        </label>
-      </div>
-      <div className="call-device-actions">
-        <button
-          type="button"
-          className="btn btn-quiet"
-          disabled={busy}
-          onClick={() => void refresh(true)}
-        >
-          <Mic size={15} aria-hidden="true" />
-          Autoriser le micro
-        </button>
-        <button
-          type="button"
-          className="btn btn-quiet"
-          disabled={busy}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw size={14} aria-hidden="true" />
-          Actualiser
-        </button>
-      </div>
-      <p className="note call-route-help">
-        {route === "virtual" ? (
-          <>
-            Dans Meet / Zoom, choisissez{" "}
-            <strong>{output || "BlackHole 2ch"}</strong> comme microphone et
-            votre casque comme haut-parleur. Gardez le microphone physique
-            sélectionné ici. La sortie système du Mac reste inchangée.
-          </>
-        ) : (
-          "Portez un casque : la traduction sera audible sur la sortie actuelle du Mac. Ce mode ne transmet rien à un appel."
-        )}
-      </p>
-      {route === "virtual" && !outputs.length && (
-        <div className="call-setup">
-          <p>
-            Le pilote BlackHole 2ch est nécessaire pour présenter la traduction
-            comme microphone.
-          </p>
-          <code>brew install blackhole-2ch</code>
-          <p className="note">
-            Après installation, redémarrez l’app et Meet / Zoom, puis
-            actualisez. L’écoute locale fonctionne sans pilote.
-          </p>
-        </div>
-      )}
       <div className="call-session" data-active={busy} aria-live="polite">
         <div className="call-session-status">
           <span className="status-dot" data-live={busy} aria-hidden="true" />
@@ -624,7 +593,7 @@ export function CallPanel({
         {busy ? (
           <button type="button" className="btn call-stop" onClick={stop}>
             <Square size={14} fill="currentColor" aria-hidden="true" />
-            Arrêter la traduction
+            Désactiver la traduction
           </button>
         ) : (
           <button
@@ -634,11 +603,164 @@ export function CallPanel({
           >
             <Mic size={16} aria-hidden="true" />
             {route === "virtual"
-              ? "Traduire mon micro dans l’appel"
+              ? "Activer la traduction"
               : "Tester mon micro au casque"}
           </button>
         )}
       </div>
+      {route === "virtual" && native && (
+        <label className="call-auto-mic">
+          <input
+            type="checkbox"
+            checked={autoSystemMicrophone}
+            disabled={busy}
+            onChange={(event) => setAutoSystemMicrophone(event.target.checked)}
+          />
+          Utiliser le micro de l’app comme micro système, puis restaurer le
+          précédent à l’arrêt
+        </label>
+      )}
+      <p className="note">
+        Vos langues, votre micro et vos réglages sont conservés pour le prochain
+        appel. La capture démarre uniquement après votre activation.
+      </p>
+      <details className="call-advanced">
+        <summary>Réglages du micro et mode test</summary>
+        <fieldset className="call-routing" disabled={busy}>
+          <legend>Sortie de la traduction</legend>
+          <label>
+            <input
+              type="radio"
+              name="call-route"
+              value="virtual"
+              checked={route === "virtual"}
+              onChange={() => setRoute("virtual")}
+            />{" "}
+            Micro virtuel · envoyer dans l’appel
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="call-route"
+              value="local"
+              checked={route === "local"}
+              onChange={() => setRoute("local")}
+            />{" "}
+            Écoute locale · tester au casque
+          </label>
+        </fieldset>
+        <div className="call-devices">
+          <label>
+            Microphone physique
+            <select
+              value={input}
+              disabled={busy}
+              onChange={(e) => {
+                inputRef.current = e.target.value;
+                setInput(e.target.value);
+                save("interprete-call-input", e.target.value);
+                save(
+                  "interprete-call-input-label",
+                  inputs.find((device) => device.deviceId === e.target.value)
+                    ?.label || "",
+                );
+              }}
+            >
+              <option value="">Choisir le microphone…</option>
+              {inputs.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {route === "virtual" ? "Sortie vers l’appel" : "Sortie du test"}
+            <select
+              value={route === "virtual" ? output : "local"}
+              disabled={busy || route === "local"}
+              onChange={(e) => {
+                outputRef.current = e.target.value;
+                setOutput(e.target.value);
+                save("interprete-call-output", e.target.value);
+              }}
+            >
+              {route === "local" ? (
+                <option value="local">Casque / sortie macOS actuelle</option>
+              ) : (
+                <>
+                  <option value="">Choisir le micro virtuel…</option>
+                  {!outputs.some((d) => d.name === output) && output && (
+                    <option value={output}>{output} · non détecté</option>
+                  )}
+                  {outputs.map((d) => (
+                    <option key={d.name} value={d.name}>
+                      {d.name}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+          </label>
+        </div>
+        <div className="call-device-actions">
+          <button
+            type="button"
+            className="btn btn-quiet"
+            disabled={busy}
+            onClick={() => void refresh(true)}
+          >
+            <Mic size={15} aria-hidden="true" />
+            Autoriser le micro
+          </button>
+          <button
+            type="button"
+            className="btn btn-quiet"
+            disabled={busy}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw size={14} aria-hidden="true" />
+            Actualiser
+          </button>
+        </div>
+        <p className="note call-route-help">
+          {route === "virtual" ? (
+            <>
+              {autoSystemMicrophone ? (
+                <>
+                  Dans Meet / Zoom, choisissez le microphone « Système / Par
+                  défaut » pour suivre la bascule vers{" "}
+                  <strong>{output || APP_MICROPHONE_NAME}</strong> et le retour
+                  à votre micro normal.
+                </>
+              ) : (
+                <>
+                  Dans Meet / Zoom, choisissez{" "}
+                  <strong>{output || APP_MICROPHONE_NAME}</strong> comme
+                  microphone.
+                </>
+              )}{" "}
+              Gardez votre casque comme haut-parleur. Votre sortie audio reste
+              inchangée.
+            </>
+          ) : (
+            "Portez un casque : la traduction sera audible sur la sortie actuelle du Mac. Ce mode ne transmet rien à un appel."
+          )}
+        </p>
+        {route === "virtual" && !outputs.length && (
+          <div className="call-setup">
+            <p>
+              Le pilote BlackHole 2ch est nécessaire pour présenter la
+              traduction comme microphone.
+            </p>
+            <code>brew install blackhole-2ch</code>
+            <p className="note">
+              Après installation, redémarrez le Mac, puis ouvrez l’app et
+              actualisez. L’écoute locale fonctionne sans pilote.
+            </p>
+          </div>
+        )}
+      </details>
       {(error || state.error || state.warning) && (
         <p className="call-error" role="alert">
           {error || state.error || state.warning}

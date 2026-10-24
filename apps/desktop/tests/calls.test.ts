@@ -209,3 +209,25 @@ test("native activity reports transitions once, including the idle timer", async
   player.dispose();
   assert.deepEqual(changes, [true, false]);
 });
+
+test("system microphone switching requires a live output session and uses its exact id", async () => {
+  const calls: { command: string; id: unknown }[] = [];
+  const player = new NativePcmPlayer(
+    "Interprete",
+    () => {},
+    async <T>(command: string, args: Record<string, unknown>) => {
+      calls.push({ command, id: args.id });
+      return undefined as T;
+    },
+  );
+  await assert.rejects(player.activateSystemMicrophone(), /arrêtée/);
+  await player.unlock();
+  await player.activateSystemMicrophone();
+  assert.equal(calls[0].command, "audio_route_open");
+  assert.deepEqual(calls[1], {
+    command: "audio_route_activate",
+    id: calls[0].id,
+  });
+  player.stop();
+  await assert.rejects(player.activateSystemMicrophone(), /arrêtée/);
+});

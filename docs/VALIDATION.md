@@ -1,5 +1,15 @@
 # Vérifications de l’app — 24 octobre 2026
 
+## Micro au nom de l’app et activation simplifiée — 24 octobre
+
+Le microphone public **Interprete** utilise le nom configuré de l’app, un UID propre et un agrégat limité au pilote BlackHole 2ch. Un test natif a confirmé sa présence avec deux canaux d’entrée et deux de sortie à 48 kHz. Le chemin de lecture injecte directement le pilote sous-jacent, sans imposer la période de l’agrégat : cela corrige un blocage observé lors d’une répétition d’ouverture concurrente entrée/sortie.
+
+- Plusieurs ouvertures natives répétées ont réussi avec silence numérique uniquement ; les callbacks d’entrée livrent des trames. Le micro système est resté inchangé pendant ces tests. Le test de bascule/restauration utilise des adaptateurs simulés, sans enregistrer le micro physique ni modifier l’entrée système de l’utilisateur.
+- Les tests de préférences couvrent la migration des anciens choix BlackHole vers Interprete, le mode test mémorisé et l’exclusion du micro virtuel comme source physique.
+- Les tests de propriété du micro couvrent arrêt/fermeture, choix manuel prioritaire, activation en échec, micro précédent débranché, reprise après crash, propriétaire encore vivant, PID réutilisé et ancien propriétaire ne pouvant écraser un nouveau.
+- La capture démarre après activation explicite ; l’entrée système ne bascule qu’après la capture et la transcription prêtes. Les exemples synthétiques ne basculent pas l’entrée système. La fermeture native et les signaux d’arrêt attendent la restauration, y compris en cas de demandes d’arrêt répétées.
+- L’écran a été contrôlé visuellement sur le composant isolé rendu avec les styles compilés. La page authentifiée du navigateur se trouvait dans l’onboarding ; aucun compte ni consentement de voix n’a été modifié. Ce contrôle isolé ne prouve pas une session native complète ; les tests natifs de bascule réelle pendant un appel, de plein écran et d’acoustique restent non effectués.
+
 ## Intégration avec les comptes et l’onboarding — 24 octobre
 
 - L’intégration conserve les écrans de connexion/onboarding et leur contrôleur partagé, avec des routes indépendantes pour les fenêtres `#call-toast` et `#translation-overlay`.

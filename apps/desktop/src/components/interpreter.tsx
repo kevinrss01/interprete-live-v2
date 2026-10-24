@@ -32,11 +32,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type PendingConfirm =
-  | { kind: "clear" }
-  | { kind: "remove"; id: SpeakerId };
+type PendingConfirm = { kind: "clear" } | { kind: "remove"; id: SpeakerId };
 
-export function Interpreter({ controller }: { controller: InterpreterController }) {
+export function Interpreter({
+  controller,
+}: {
+  controller: InterpreterController;
+}) {
   const state = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
@@ -46,7 +48,21 @@ export function Interpreter({ controller }: { controller: InterpreterController 
   const [callOverlay, setCallOverlay] = useState<OverlayUpdate | null>(null);
   const [overlayError, setOverlayError] = useState<string | null>(null);
   const [callBusy, setCallBusy] = useState(false);
-  const [callMode, setCallMode] = useState(false);
+  const [callMode, setCallMode] = useState(() => {
+    try {
+      return localStorage.getItem("interprete-mode") === "calls";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "interprete-mode",
+        callMode ? "calls" : "conversation",
+      );
+    } catch {}
+  }, [callMode]);
   const [showSettings, setShowSettings] = useState(false);
   const [pending, setPending] = useState<PendingConfirm | null>(null);
   const overlay: OverlayUpdate | null =
@@ -93,9 +109,11 @@ export function Interpreter({ controller }: { controller: InterpreterController 
   }, [controller, callMode]);
   const busy = state.phase !== "idle" || callBusy;
   const demo = state.input === "demo";
-  const microphoneActive = state.phase === "listening" && state.input === "microphone";
-  const status = callBusy ? "Traduction de l’appel…" :
-    demo && state.phase === "listening" && state.connection === "reconnecting"
+  const microphoneActive =
+    state.phase === "listening" && state.input === "microphone";
+  const status = callBusy
+    ? "Traduction de l’appel…"
+    : demo && state.phase === "listening" && state.connection === "reconnecting"
       ? "Reconnexion · exemple audio"
       : demo && (state.phase === "connecting" || state.phase === "listening")
         ? "Exemple audio en cours…"
@@ -286,7 +304,8 @@ export function Interpreter({ controller }: { controller: InterpreterController 
                   ? "Micro actif"
                   : !demo && state.phase === "connecting"
                     ? "Activation du micro…"
-                    : state.input === "microphone" && state.phase === "finishing"
+                    : state.input === "microphone" &&
+                        state.phase === "finishing"
                       ? "Arrêt du micro…"
                       : "Micro désactivé"}
               </span>

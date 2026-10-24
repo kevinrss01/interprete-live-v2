@@ -2,49 +2,44 @@
 
 Le mode **Appels sur Mac** complète le mode conversation existant. Votre microphone est traduit ; l’app n’intercepte pas la sortie audio de l’appel. Portez un casque pour éviter que les voix des autres participants ne rentrent acoustiquement dans votre micro.
 
-## Démarrer et tester sans appel
+## Activer en un clic
 
 ```sh
 pnpm dev
 ```
 
-1. Ouvrez **Appels sur Mac**.
-2. Choisissez votre langue et celle que votre interlocuteur doit entendre.
-3. Sélectionnez **Écoute locale · tester au casque** et portez un casque.
-4. Cliquez sur **Traduire l’exemple audio**. Le fichier synthétique français ou anglais traverse les vrais services de transcription, traduction et synthèse. Aucune capture du micro n’est nécessaire pour cet exemple. Les clés serveur doivent être configurées et ces appels utilisent les fournisseurs payants existants.
-5. Pour tester votre propre voix, cliquez sur **Autoriser le micro**, choisissez votre microphone physique, puis **Tester mon micro au casque**. Les transcriptions et traductions s’affichent pendant la parole. **Arrêter la traduction** ou Échap ferme le micro et arrête le son.
-6. **Simuler un appel** affiche le vrai toast en haut à droite de l’écran dans l’app Tauri. **Ignorer** ne capture aucun son. **Traduire l’appel** ouvre le mode appel. Avec des périphériques valides déjà sélectionnés, la traduction vers le micro virtuel commence ; sinon, les réglages permettent de terminer la configuration. **Terminer la simulation** ferme le test et arrête la traduction associée.
+Ouvrez **Appels sur Mac**, choisissez les deux langues puis **Activer la traduction**. L’app demande l’autorisation du micro si nécessaire, retrouve le microphone physique enregistré (ou détecte une entrée physique disponible) et prépare le micro virtuel **Interprete**. Aucun audio n’est capturé au simple lancement de l’app.
 
-Une petite pastille ovale apparaît à droite de l’écran pendant la connexion, l’écoute et la restitution de la traduction, en mode appel comme en conversation. Elle affiche l’état et les langues ; le bouton carré arrête la session active, ferme le microphone et interrompt la sortie audio. La pastille reste séparée de la fenêtre principale dans l’app macOS. Elle disparaît à l’arrêt ou à la fin de la traduction.
+Les langues, le microphone physique, le mode appel/conversation, la sortie virtuelle, le mode test et l’option de bascule système sont mémorisés sur ce Mac. Les réglages supplémentaires restent dans **Réglages du micro et mode test**.
 
-**Tester la pastille** affiche un aperçu, sans microphone ni appel aux fournisseurs. Cliquez sur le carré pour le fermer. Dans le navigateur, l’aperçu reste dans la page ; utilisez l’app Tauri pour l’affichage au-dessus des autres applications.
+**Utiliser le micro de l’app comme micro système** est activé par défaut. La bascule a lieu seulement après le démarrage réussi de la capture et de la transcription. Dans Meet / Zoom, choisissez une fois **Système / Par défaut** comme microphone pour suivre cette bascule ; une entrée choisie explicitement dans l’application d’appel reste indépendante. Gardez votre casque comme haut-parleur.
 
-Dans un navigateur, l’écoute locale et l’aperçu de simulation restent disponibles. La détection système, le toast hors fenêtre et la sortie virtuelle nécessitent l’app macOS.
+**Désactiver la traduction**, le carré de la pastille, la fin de l’appel ou la fermeture normale de l’app arrêtent la sortie et rétablissent le micro précédent. Un choix manuel différent effectué dans macOS pendant la session est conservé. Si le micro précédent a été débranché, l’app tente une entrée physique disponible, en privilégiant le micro intégré. Si la restauration échoue, son état est conservé pour être réessayé au prochain lancement. Après un arrêt forcé ou un crash, cette récupération a lieu au prochain lancement, pas pendant que l’app est fermée. Le journal local ne contient que les identifiants de périphériques et de session nécessaires à la restauration, jamais de son.
 
-## Utiliser la traduction dans Meet / Zoom / Teams
+Pour conserver manuellement le choix du micro système, désactivez l’option de bascule. Vous pouvez alors sélectionner **Interprete** directement dans Meet / Zoom.
 
-Installez le pilote audio virtuel gratuit [BlackHole 2ch](https://github.com/ExistentialAudio/BlackHole), si nécessaire :
+## Micro au nom de l’app
+
+Le nom vient de `productName` dans la configuration Tauri : **Interprete**. L’app crée un périphérique agrégé public persistant, identifié par son propre UID et contenant uniquement BlackHole 2ch. Le flux synthétique est injecté directement dans le pilote de boucle ; l’entrée agrégée l’expose au système et aux applications sous le nom de l’app. Aucun microphone physique ni son du système n’est mélangé dans ce périphérique.
+
+Le pilote gratuit [BlackHole 2ch](https://github.com/ExistentialAudio/BlackHole) reste nécessaire :
 
 ```sh
 brew install blackhole-2ch
 ```
 
-L’installation du pilote peut demander les droits administrateur et un redémarrage. Redémarrez Interprète et l’application d’appel après installation. Le programme n’installe pas de pilote et ne redémarre jamais CoreAudio automatiquement.
+Après installation du pilote, redémarrez macOS si demandé puis ouvrez Interprète. L’app ne réinstalle pas de pilote, ne redémarre pas CoreAudio et ne modifie ni la sortie audio du système ni son volume. La détection et la sélection du périphérique utilisent son UID ; un homonyme ou une composition contenant des sources inattendues est refusé.
 
-Dans Interprète :
+## Tester sans perturber un appel
 
-- **Microphone physique** : votre micro intégré, USB ou votre casque. Les alias système sont exclus. CoreAudio fournit la liste des entrées physiques : les transports virtuels et agrégés sont exclus, même lorsque leur nom a été personnalisé.
-- **Sortie de la traduction** : **Micro virtuel · envoyer dans l’appel**.
-- **Sortie vers l’appel** : **BlackHole 2ch**.
+- **Tester la pastille** affiche un aperçu de l’overlay sans ouvrir de micro ni contacter un fournisseur. Le carré ferme l’aperçu.
+- Dans **Réglages du micro et mode test**, **Écoute locale · tester au casque** permet de tester votre voix avec le bouton principal. Portez un casque.
+- **Traduire l’exemple audio** utilise un fichier synthétique français ou anglais avec les vrais fournisseurs. Il ne contribue pas au clonage et ne bascule jamais le micro système.
+- **Simuler un appel** teste la détection et le toast. Avec une configuration déjà valide, l’accord peut démarrer une vraie capture ; **Terminer la simulation** arrête la session associée.
 
-Dans Meet / Zoom / Teams :
+Le bouton **Activer** ou l’accord dans le toast ouvre la capture ; la détection seule ne le fait pas. Les sessions appel ne collectent pas d’échantillons de clonage.
 
-- **Microphone** : **BlackHole 2ch**.
-- **Haut-parleur** : votre casque habituel.
-
-La sortie système du Mac reste sur le casque ou les haut-parleurs habituels. Interprète écrit uniquement la parole synthétique dans BlackHole ; il ne mélange pas le microphone original avec la traduction. Choisir le micro physique dans l’application d’appel contournerait la traduction. Aucun programme ne peut modifier de façon fiable le périphérique choisi dans toutes les applications : cette sélection initiale est manuelle.
-
-Vous pouvez lancer la traduction manuellement, même si la détection automatique ne reconnaît pas votre application ou si le microphone de l’appel est coupé.
+Une pastille ovale séparée de la fenêtre principale affiche l’état et les langues pendant la traduction. Son carré arrête la session active. Dans un navigateur, la pastille reste dans la page ; la création du micro, sa bascule et l’overlay au-dessus des autres applications nécessitent l’app macOS.
 
 ## Détection et accord
 
@@ -58,7 +53,7 @@ Les sessions appel n’ajoutent pas d’échantillons de clonage. Les voix déj�
 
 ## Latence
 
-La capture conserve les trames PCM mono de 20 ms à 24 kHz de l’architecture existante. La transcription et la capture démarrent en parallèle. Les traductions validées sont synthétisées et les paquets PCM écrits immédiatement dans une file native CoreAudio. Le rééchantillonnage est continu, et la sortie ne dépend pas de `AudioContext.setSinkId`, absent de certaines WebViews. Les callbacks audio utilisent une file sans verrou. Le tampon demandé au périphérique est de 128 trames lorsque le pilote le permet.
+La capture conserve les trames PCM mono de 20 ms à 24 kHz de l’architecture existante. La transcription et la capture démarrent en parallèle. Les traductions validées sont synthétisées et les paquets PCM écrits immédiatement dans une file native CoreAudio. Le rééchantillonnage est continu, et la sortie ne dépend pas de `AudioContext.setSinkId`, absent de certaines WebViews. Les callbacks audio utilisent une file sans verrou. Pour le micro de l’app, le flux utilise directement le pilote sous-jacent et conserve sa période matérielle : imposer une nouvelle période à un agrégat déjà utilisé peut bloquer CoreAudio.
 
 La transcription, la validation linguistique, le réseau et la synthèse restent les principales sources de délai. Le système ne peut pas promettre une traduction sans délai ; il ne doit pas prononcer une traduction spéculative incorrecte. La lecture applique une contre-pression à l’intérieur des longs segments : les paquets attendent que la file matérielle redescende sous environ 5,5 secondes, afin de préparer le segment suivant pendant la lecture du précédent. La capacité native de 8 secondes reste un garde-fou, pas une coupure systématique des phrases longues. Une panne de sortie arrête explicitement la session. Les métriques Web Audio de première lecture ne sont pas présentées comme une mesure du périphérique natif.
 
@@ -84,6 +79,6 @@ Le script utilise une session Bearer et une origine locale autorisée (`http://l
 
 Le 24 octobre 2026, un échantillon synthétique français de 4,23 s a renvoyé son premier texte à 1,72 s et son premier signal vocal planifié à 2,75 s (3,85 s lors d’une seconde exécution), pendant que l’entrée était encore ouverte. Cette observation ne mesure pas la latence acoustique de BlackHole et ne constitue pas un benchmark représentatif.
 
-Les tests unitaires vérifient la temporisation/déduplication de détection, l’exclusion de l’app elle-même, le rééchantillonnage indépendant des paquets, les octets PCM impairs, les annulations concurrentes, la fin de file native et les erreurs de périphérique. Le test matériel `pnpm test:virtual-mic`, ignoré dans la suite unitaire normale, a été validé sur le Mac avec BlackHole 2ch 0.7.1. Il écrit un signal synthétique de 997 Hz dans la sortie native et vérifie sa présence sur l’entrée BlackHole ; il échoue explicitement si le pilote est absent. Il n’utilise ni les fournisseurs réseau, ni votre micro physique, ni les haut-parleurs.
+Les tests unitaires vérifient la temporisation/déduplication de détection, l’exclusion de l’app elle-même, le rééchantillonnage indépendant des paquets, les octets PCM impairs, les annulations concurrentes, la fin de file native et les erreurs de périphérique. Le test matériel `pnpm test:virtual-mic`, ignoré dans la suite unitaire normale, a été validé historiquement avec BlackHole 2ch 0.7.1 et cible maintenant le micro nommé comme l’app. Exécutez ce test de signal hors réunion : une application recevant ce micro peut entendre son signal synthétique. Il écrit un signal synthétique de 997 Hz dans la sortie native et vérifie sa présence sur l’entrée BlackHole ; il échoue explicitement si le pilote est absent. Il n’utilise ni les fournisseurs réseau, ni votre micro physique, ni les haut-parleurs.
 
 Une validation complète du micro virtuel demande BlackHole installé et une application réceptrice sélectionnant son entrée. Une traduction affichée à l’écran ne prouve pas que Meet / Zoom utilise le bon microphone.

@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AudioPlayer, bytesToBase64 } from "./audio";
+import { APP_MICROPHONE_NAME } from "./call-preferences";
 
 export type DetectedCall = { id: string; app: string; simulated: boolean };
 export type CallSnapshot = {
@@ -11,7 +12,12 @@ export type CallSnapshot = {
   dismissed: boolean;
   error: string | null;
 };
-export type OutputDevice = { name: string; virtualMic: boolean };
+export type OutputDevice = {
+  name: string;
+  virtualMic: boolean;
+  appMic?: boolean;
+  uid?: string;
+};
 export const desktopAvailable = () => isTauri();
 export const callSnapshot = () => invoke<CallSnapshot>("call_snapshot");
 export const enableCallMonitor = (enabled: boolean) =>
@@ -37,6 +43,7 @@ export function physicalMicrophones(
       d.deviceId !== "default" &&
       d.deviceId !== "communications" &&
       d.label &&
+      d.label !== APP_MICROPHONE_NAME &&
       (!nativeNames || nativeNames.includes(d.label)) &&
       !/blackhole|loopback|virtual|aggregate|parrot|motiv mix|microsoft teams audio/i.test(
         d.label,
@@ -189,8 +196,13 @@ export class NativePcmPlayer {
     }
     if (this.failure) throw this.failure;
   }
+  async activateSystemMicrophone() {
+    const id = this.id;
+    if (!id) throw new Error("La sortie de traduction est arrêtée.");
+    await this.call("audio_route_activate", { id });
+  }
   stop() {
-    ++this.generation;
+    const generation = ++this.generation;
     const id = this.id;
     this.id = null;
     this.endAt = 0;
@@ -203,7 +215,10 @@ export class NativePcmPlayer {
         .then(() => this.call("audio_route_close", { id }))
         .then(
           () => {},
-          () => {},
+          (error: unknown) => {
+            if (this.generation === generation && !this.id)
+              this.failed(String(error));
+          },
         );
   }
   dispose() {
@@ -241,6 +256,10 @@ export class CallAudioPlayer {
   }
   idle(signal?: AbortSignal) {
     return this.player.idle(signal);
+  }
+  async activateSystemMicrophone() {
+    if (this.player instanceof NativePcmPlayer)
+      await this.player.activateSystemMicrophone();
   }
   stop() {
     this.player.stop();

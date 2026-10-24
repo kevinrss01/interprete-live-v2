@@ -1,3 +1,7 @@
+use crate::{
+    system_microphone::{InputLease, NativeInput},
+    virtual_microphone::{self, OutputDevice},
+};
 use base64::Engine;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::{
@@ -5,6 +9,7 @@ use ringbuf::{
     traits::{Consumer, Observer, Producer, Split},
 };
 use serde::Serialize;
+use std::path::PathBuf;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -12,35 +17,14 @@ use std::sync::{
 };
 use std::time::Duration;
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OutputDevice {
-    pub name: String,
-    pub virtual_mic: bool,
-}
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RouteStatus {
     pub pending_seconds: f64,
     pub failed: bool,
 }
-fn is_virtual(name: &str) -> bool {
-    name.to_lowercase().contains("blackhole")
-}
-fn devices() -> Result<Vec<OutputDevice>, String> {
-    cpal::default_host()
-        .devices()
-        .map_err(|e| e.to_string())?
-        .map(|d| {
-            d.name()
-                .map(|name| OutputDevice {
-                    virtual_mic: is_virtual(&name),
-                    name,
-                })
-                .map_err(|e| e.to_string())
-        })
-        .filter(|result| result.as_ref().is_ok_and(|device| device.virtual_mic))
-        .collect()
+fn devices(create: bool) -> Result<Vec<OutputDevice>, String> {
+    virtual_microphone::outputs(create)
 }
 fn physical_inputs() -> Result<Vec<String>, String> {
     #[cfg(target_os = "macos")]
@@ -104,23 +88,40 @@ struct Route {
     rate: u32,
     failed: Arc<AtomicBool>,
     resampler: Resampler,
+    device_uid: String,
+    input_lease: Option<InputLease>,
 }
 impl Route {
     fn new(id: String, name: &str) -> Result<Self, String> {
-        if !is_virtual(name) {
-            return Err("Choisissez BlackHole comme sortie virtuelle.".into());
-        }
+        let available = devices(false)?;
+        let approved = available
+            .iter()
+            .find(|device| device.name == name)
+            .ok_or("Choisissez le microphone virtuel de l’app comme sortie.")?;
+        // The aggregate is the public microphone identity. Feed its sole loopback
+        // subdevice directly, without reconfiguring an aggregate used by a call app.
+        let playback_name = if approved.app_mic {
+            &available
+                .iter()
+                .find(|device| device.uid == "BlackHole2ch_UID")
+                .ok_or("Le pilote du micro virtuel n’est plus disponible.")?
+                .name
+        } else {
+            &approved.name
+        };
         let device = cpal::default_host()
             .devices()
             .map_err(|e| e.to_string())?
-            .find(|d| d.name().is_ok_and(|n| n == name))
+            .find(|d| d.name().is_ok_and(|n| n == *playback_name))
             .ok_or(
-                "BlackHole est absent. Installez le pilote puis actualisez les périphériques.",
+                "Le micro virtuel est absent. Actualisez les périphériques après l’installation de BlackHole.",
             )?;
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
         let mut config = supported.config();
         // Ask for a small native callback where supported. CoreAudio chooses its hardware period.
-        if let cpal::SupportedBufferSize::Range { min, max } = supported.buffer_size() {
+        if !approved.app_mic
+            && let cpal::SupportedBufferSize::Range { min, max } = supported.buffer_size()
+        {
             config.buffer_size = cpal::BufferSize::Fixed(128_u32.clamp(*min, *max));
         }
         let rate = config.sample_rate.0;
@@ -154,7 +155,7 @@ impl Route {
                 error,
                 None,
             ),
-            _ => return Err("Format audio BlackHole non pris en charge.".into()),
+            _ => return Err("Format du micro virtuel non pris en charge.".into()),
         }
         .map_err(|e| e.to_string())?;
         stream.play().map_err(|e| e.to_string())?;
@@ -165,12 +166,32 @@ impl Route {
             rate,
             failed,
             resampler: Resampler::default(),
+            device_uid: approved.uid.clone(),
+            input_lease: None,
         })
+    }
+    fn activate_input(&mut self, path: PathBuf) -> Result<(), String> {
+        if self.device_uid != virtual_microphone::UID {
+            return Err("Sélectionnez le microphone de l’app pour la bascule automatique.".into());
+        }
+        if self.input_lease.is_none() {
+            self.input_lease =
+                InputLease::activate(NativeInput, path, self.id.clone(), self.device_uid.clone())?;
+        }
+        Ok(())
+    }
+    fn close(mut self) -> Result<(), String> {
+        drop(self._stream);
+        if let Some(mut lease) = self.input_lease.take() {
+            lease.restore()?;
+        }
+        Ok(())
     }
     fn push(&mut self, bytes: &[u8]) -> Result<(), String> {
         if self.failed.load(Ordering::Relaxed) {
             return Err(
-                "La sortie virtuelle a été déconnectée. Arrêtez puis reconnectez BlackHole.".into(),
+                "La sortie virtuelle a été déconnectée. Actualisez puis relancez la traduction."
+                    .into(),
             );
         }
         let samples = self.resampler.convert(bytes, self.rate);
@@ -182,6 +203,14 @@ impl Route {
     }
 }
 enum Command {
+    Configure(PathBuf),
+    Activate {
+        id: String,
+        reply: mpsc::Sender<Result<(), String>>,
+    },
+    Shutdown {
+        reply: mpsc::Sender<Result<(), String>>,
+    },
     Open {
         id: String,
         name: String,
@@ -210,11 +239,42 @@ impl Default for AudioRoute {
         // CPAL streams stay on their owner thread. The audio callback only accesses a lock-free ring.
         std::thread::spawn(move || {
             let mut route: Option<Route> = None;
+            let mut journal: Option<PathBuf> = None;
             for command in receiver {
                 match command {
+                    Command::Configure(path) => {
+                        if crate::system_microphone::recover(&NativeInput, &path).is_err() {
+                            eprintln!(
+                                "Microphone recovery will be retried before automatic switching."
+                            );
+                        }
+                        journal = Some(path);
+                    }
+                    Command::Activate { id, reply } => {
+                        let result = route
+                            .as_mut()
+                            .filter(|r| r.id == id)
+                            .ok_or("La traduction est arrêtée.".into())
+                            .and_then(|r| {
+                                r.activate_input(
+                                    journal
+                                        .clone()
+                                        .ok_or("La restauration du micro n’est pas configurée.")?,
+                                )
+                            });
+                        let _ = reply.send(result);
+                    }
+                    Command::Shutdown { reply } => {
+                        let result = route.take().map_or(Ok(()), Route::close);
+                        let _ = reply.send(result);
+                        break;
+                    }
                     Command::Open { id, name, reply } => {
-                        route = None;
-                        let result = Route::new(id, &name).map(|r| route = Some(r));
+                        let result = route
+                            .take()
+                            .map_or(Ok(()), Route::close)
+                            .and_then(|()| Route::new(id, &name))
+                            .map(|r| route = Some(r));
                         let _ = reply.send(result);
                     }
                     Command::Push { id, bytes, reply } => {
@@ -226,10 +286,12 @@ impl Default for AudioRoute {
                         let _ = reply.send(result);
                     }
                     Command::Close { id, reply } => {
-                        if route.as_ref().is_some_and(|r| r.id == id) {
-                            route = None;
-                        }
-                        let _ = reply.send(Ok(()));
+                        let result = if route.as_ref().is_some_and(|r| r.id == id) {
+                            route.take().map_or(Ok(()), Route::close)
+                        } else {
+                            Ok(())
+                        };
+                        let _ = reply.send(result);
                     }
                     Command::Status { id, reply } => {
                         let result = route
@@ -247,6 +309,29 @@ impl Default for AudioRoute {
         });
         Self { sender }
     }
+}
+impl AudioRoute {
+    pub fn configure(&self, journal: PathBuf) -> Result<(), String> {
+        self.sender
+            .try_send(Command::Configure(journal))
+            .map_err(|e| e.to_string())
+    }
+    pub async fn shutdown(&self) -> Result<(), String> {
+        request(self.sender.clone(), |reply| Command::Shutdown { reply }).await
+    }
+}
+#[tauri::command]
+pub async fn audio_route_activate(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, AudioRoute>,
+    id: String,
+) -> Result<(), String> {
+    authorize(&window)?;
+    request(state.sender.clone(), move |reply| Command::Activate {
+        id,
+        reply,
+    })
+    .await
 }
 fn authorize(window: &tauri::WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
@@ -274,7 +359,7 @@ async fn request<T: Send + 'static>(
 #[tauri::command]
 pub async fn audio_outputs(window: tauri::WebviewWindow) -> Result<Vec<OutputDevice>, String> {
     authorize(&window)?;
-    tauri::async_runtime::spawn_blocking(devices)
+    tauri::async_runtime::spawn_blocking(|| devices(true))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -362,21 +447,121 @@ mod tests {
     }
     #[test]
     fn output_is_restricted_to_loopback() {
-        assert!(is_virtual("BlackHole 2ch"));
-        assert!(!is_virtual("MacBook Pro Speakers"));
+        let outputs = devices(false).expect("read-only device enumeration");
+        assert!(outputs.iter().all(
+            |output| output.uid == virtual_microphone::UID || output.uid == "BlackHole2ch_UID"
+        ));
     }
     #[test]
     fn enumerate_real_devices() {
-        assert!(devices().is_ok());
+        assert!(devices(false).is_ok());
         assert!(physical_inputs().is_ok());
+    }
+    #[test]
+    #[ignore = "requires installed BlackHole; silent virtual-only setup validation"]
+    fn branded_microphone_silent_io() {
+        use crate::system_microphone::InputDevice;
+        use std::sync::atomic::AtomicUsize;
+        let input_before = NativeInput.current().expect("read original system input");
+        #[cfg(target_os = "macos")]
+        fn output_defaults() -> [u32; 2] {
+            unsafe extern "C" {
+                fn interprete_default_outputs(output: *mut u32, system: *mut u32) -> i32;
+            }
+            let mut output = 0;
+            let mut system = 0;
+            // Read only: live output references are valid for this synchronous call.
+            assert_eq!(
+                unsafe { interprete_default_outputs(&mut output, &mut system) },
+                0
+            );
+            [output, system]
+        }
+        #[cfg(target_os = "macos")]
+        let outputs_before = output_defaults();
+
+        let expected = devices(true)
+            .expect("create branded virtual microphone")
+            .into_iter()
+            .find(|device| device.app_mic)
+            .expect("BlackHole 2ch must be installed");
+        assert_eq!(expected.name, virtual_microphone::NAME);
+        let device = cpal::default_host()
+            .devices()
+            .expect("devices")
+            .find(|device| device.name().is_ok_and(|name| name == expected.name))
+            .expect("branded input exists");
+        let supported = device.default_input_config().expect("branded input format");
+        let config = supported.config();
+        assert_eq!(config.channels, 2);
+        let frames = Arc::new(AtomicUsize::new(0));
+        let received = frames.clone();
+        // Count frames only; never retain or inspect anyone's audio samples.
+        let stream = device
+            .build_input_stream(
+                &config,
+                move |data: &[f32], _| {
+                    received.fetch_add(data.len() / 2, Ordering::Relaxed);
+                },
+                |error| eprintln!("Virtual input error: {error}"),
+                None,
+            )
+            .expect("open branded input");
+        stream.play().expect("start branded input");
+        let mut route =
+            Route::new("silent-setup-test".into(), &expected.name).expect("open app output");
+        route
+            .push(&vec![0; 48000])
+            .expect("enqueue digital silence");
+        std::thread::sleep(Duration::from_millis(350));
+        route.close().expect("close app output");
+        drop(stream);
+        assert!(
+            frames.load(Ordering::Relaxed) > 0,
+            "branded input delivered no frames"
+        );
+        assert!(
+            NativeInput
+                .current()
+                .is_ok_and(|current| current == input_before),
+            "system input was changed"
+        );
+        #[cfg(target_os = "macos")]
+        assert_eq!(outputs_before, output_defaults(), "system outputs changed");
+        println!(
+            "App-named virtual microphone: input/output open and frames delivered; only digital silence sent; system input unchanged."
+        );
     }
     #[test]
     #[ignore = "requires BlackHole 2ch installed; run pnpm test:virtual-mic"]
     fn virtual_microphone_loopback() {
+        use crate::system_microphone::InputDevice;
+        let original_input = NativeInput.current().expect("read original system input");
+        #[cfg(target_os = "macos")]
+        fn output_defaults() -> [u32; 2] {
+            unsafe extern "C" {
+                fn interprete_default_outputs(output: *mut u32, system_output: *mut u32) -> i32;
+            }
+            let mut output = 0;
+            let mut system = 0;
+            // The bridge writes two UInt32 device IDs into these live references.
+            assert_eq!(
+                unsafe { interprete_default_outputs(&mut output, &mut system) },
+                0
+            );
+            [output, system]
+        }
+        #[cfg(target_os = "macos")]
+        let original_outputs = output_defaults();
+        let expected = devices(true)
+            .expect("prepare app microphone")
+            .into_iter()
+            .find(|device| device.app_mic)
+            .expect("Install BlackHole 2ch and refresh the app microphone");
         let device = cpal::default_host()
             .devices()
             .expect("CoreAudio devices")
-            .find(|d| d.name().is_ok_and(|name| name == "BlackHole 2ch"))
+            .find(|d| d.name().is_ok_and(|name| name == expected.name))
             .expect("Install BlackHole 2ch, restart this app, then rerun pnpm test:virtual-mic");
         let supported = device
             .default_input_config()
@@ -406,7 +591,7 @@ mod tests {
             .play()
             .expect("Start receiving the virtual microphone");
         let mut route =
-            Route::new("loopback-test".into(), "BlackHole 2ch").expect("Open native output route");
+            Route::new("loopback-test".into(), &expected.name).expect("Open native output route");
         let tone: Vec<u8> = (0..48000)
             .flat_map(|index| {
                 let sample = ((index as f64 * std::f64::consts::TAU * 997.0 / 24000.0).sin()
@@ -435,8 +620,21 @@ mod tests {
             amplitude > 0.03,
             "The receiving microphone did not receive the synthetic 997 Hz signal (amplitude {amplitude})"
         );
+        assert!(
+            NativeInput
+                .current()
+                .is_ok_and(|input| input == original_input),
+            "system input changed during virtual-only test"
+        );
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            output_defaults(),
+            original_outputs,
+            "system outputs changed during virtual-only test"
+        );
+        println!("System input and output defaults remained unchanged.");
         println!(
-            "BlackHole output → receiving microphone verified: {} frames, 997 Hz amplitude {:.3}",
+            "App output → branded receiving microphone verified: {} frames, 997 Hz amplitude {:.3}",
             samples.len(),
             amplitude
         );

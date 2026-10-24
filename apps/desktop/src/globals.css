@@ -1580,10 +1580,30 @@ kbd {
   body {
     @apply bg-background text-foreground;
   }
-  button:not(:disabled), [role="button"]:not(:disabled) {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
     cursor: pointer;
   }
   html {
     @apply font-sans;
   }
+}
+
+.call-auto-mic {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 10px;
+  font-size: 13px;
+}
+.call-advanced {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.call-advanced > summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  padding: 6px 0;
+  font-weight: 500;
 }

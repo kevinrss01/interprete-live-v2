@@ -1,3 +1,4 @@
+import { APP_MICROPHONE_NAME } from "../lib/call-preferences";
 import { useEffect, useState } from "react";
 import { Phone, X } from "lucide-react";
 import {
@@ -66,7 +67,8 @@ export function CallToast() {
       <p className="note">
         {localStorage.getItem("interprete-call-input-label") ||
           "Microphone à configurer"}{" "}
-        → {localStorage.getItem("interprete-call-output") || "BlackHole 2ch"}
+        →{" "}
+        {localStorage.getItem("interprete-call-output") || APP_MICROPHONE_NAME}
       </p>
       {error && (
         <p className="call-error" role="alert">

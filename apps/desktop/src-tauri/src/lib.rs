@@ -1,10 +1,14 @@
 mod audio_route;
 mod calls;
+mod system_microphone;
 mod translation_overlay;
+mod virtual_microphone;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let exit_started = std::sync::atomic::AtomicBool::new(false);
+    let restore_finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(calls::CallState(std::sync::Mutex::new(
@@ -24,11 +28,17 @@ pub fn run() {
             audio_route::audio_outputs,
             audio_route::audio_physical_inputs,
             audio_route::audio_route_open,
+            audio_route::audio_route_activate,
             audio_route::audio_route_push,
             audio_route::audio_route_close,
             audio_route::audio_route_status,
         ])
         .setup(|app| {
+            app.state::<audio_route::AudioRoute>().configure(app.path().app_data_dir()?.join("microphone-restore.json"))?;
+            #[cfg(unix)] {
+                let handle = app.handle().clone();
+                ctrlc::set_handler(move || handle.exit(0))?;
+            }
             #[cfg(target_os = "macos")]
             for label in ["call-toast", "translation-overlay"] {
                 if let Some(toast) = app.get_webview_window(label)
@@ -51,6 +61,23 @@ pub fn run() {
                 window.app_handle().exit(0);
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(move |app, event| {
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event
+                && !restore_finished.load(std::sync::atomic::Ordering::SeqCst) {
+                api.prevent_exit();
+                // Repeated signals/close requests must also wait for restoration.
+                if exit_started.swap(true, std::sync::atomic::Ordering::SeqCst) { return; }
+                let handle = app.clone();
+                let completed = restore_finished.clone();
+                tauri::async_runtime::spawn(async move {
+                    if handle.state::<audio_route::AudioRoute>().shutdown().await.is_err() {
+                        eprintln!("Microphone restoration pending; recovery record retained for next launch.");
+                    }
+                    completed.store(true, std::sync::atomic::Ordering::SeqCst);
+                    handle.exit(code.unwrap_or(0));
+                });
+            }
+        });
 }
