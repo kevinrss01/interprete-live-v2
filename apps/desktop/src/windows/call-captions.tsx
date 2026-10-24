@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, GripHorizontal } from "lucide-react";
+import { GripHorizontal } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { captionAppearance, loadCaptionPreferences, saveCaptionPreferences, useCaptionPreferences, type CaptionPreferences } from "../lib/caption-preferences";
 import {
@@ -75,10 +75,6 @@ export function CaptionsView({ captions, preferences, onHidden }: { captions: Ca
     >
       <div className="captions-meta" aria-hidden="true">
         <span className="captions-dot" data-live={live} />
-        {captions.status === "preview" ? "Preview · " : ""}
-        {captions.source.toUpperCase()}
-        <ArrowRight size={11} />
-        {captions.target.toUpperCase()}
         {onHidden && <span className="caption-drag-hint"><GripHorizontal size={14} />Drag to move</span>}
       </div>
       <div className="captions-lines" aria-live="polite">
