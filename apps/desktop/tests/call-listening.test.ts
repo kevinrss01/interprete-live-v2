@@ -153,6 +153,7 @@ test("the call's audio frames feed transcription, pauses and stalls like a micro
   await capture.start();
   assert.equal(scope, "app");
   assert.equal(calls[0].args.source, "Zoom");
+  assert.equal(calls[0].args.mute, false, "captions keep the call audible");
   assert.equal(calls[0].args.onAudio, channel);
   const [speech] = voiced(140, 1);
   channel.onmessage(speech.buffer);
@@ -379,6 +380,7 @@ test("captions-only sessions never synthesize, and their audio is never a clonin
   h.feed(voiced(120, 5));
   assert.equal(h.captured[0].recordSample, false);
   assert.equal(h.captured[0].source, "Zoom");
+  assert.equal(h.captured[0].muteSource, false, "captions alone keep their voice audible");
   assert.equal(h.listening.getSnapshot().callId, "call-1");
   h.listening.stop();
   assert.equal(h.listening.getSnapshot().sessionId, null);
@@ -389,18 +391,34 @@ test("Jev's voice is requested early from on-device measurements and kept for th
   const h = fakeListening({
     match: async (features, language) => {
       requests.push({ features, language });
-      return { voice: "chris", name: "Chris", source: "jev" };
+      return { voice: "fr-marcel", name: "Marcel", source: "jev" };
     },
   });
   await h.listening.start({ profiles, options: { captions: true, voice: true } });
   h.feed(voiced(118, 60));
+  assert.equal(h.captured[0].muteSource, true, "only the translated voice is heard");
   assert.equal(requests.length, 1, "matched as soon as one second of speech was measured");
   assert.equal(requests[0].language, "fr");
   assert.ok(Math.abs(requests[0].features.medianPitchHz - 118) < 6);
-  assert.deepEqual(await h.speech(), { speak: true, voice: "chris" });
-  assert.deepEqual(await h.speech(), { speak: true, voice: "chris" });
-  assert.deepEqual(h.listening.getSnapshot().voice, { voice: "chris", name: "Chris", source: "jev" });
+  assert.deepEqual(await h.speech(), { speak: true, voice: "fr-marcel" });
+  assert.deepEqual(await h.speech(), { speak: true, voice: "fr-marcel" });
+  assert.deepEqual(h.listening.getSnapshot().voice, { voice: "fr-marcel", name: "Marcel", source: "jev" });
   assert.equal(requests.length, 1);
+});
+
+test("a voice meant for another language is replaced by the nearest native one", async () => {
+  const h = fakeListening({ match: async () => ({ voice: "chris", name: "Chris", source: "jev" }) });
+  await h.listening.start({ profiles, options: { captions: false, voice: true } });
+  h.feed(voiced(118, 60));
+  assert.deepEqual(await h.speech(), { speak: true, voice: "fr-hugo" });
+  assert.equal(h.listening.getSnapshot().voice?.source, "pitch");
+  const english = fakeListening({ match: async () => ({ voice: "chris", name: "Chris", source: "jev" }) });
+  await english.listening.start({
+    profiles: { a: { ...profiles.a, language: "en" }, b: { ...profiles.b, language: "fr" } },
+    options: { captions: false, voice: true },
+  });
+  english.feed(voiced(118, 60));
+  assert.deepEqual(await english.speech(), { speak: true, voice: "chris" });
 });
 
 test("a slow Jev answer falls back to the nearest pitch band without holding speech", async () => {
@@ -411,7 +429,7 @@ test("a slow Jev answer falls back to the nearest pitch band without holding spe
   await h.listening.start({ profiles, options: { captions: false, voice: true } });
   h.feed(voiced(232, 60));
   const started = performance.now();
-  assert.deepEqual(await h.speech(), { speak: true, voice: "jessica" });
+  assert.deepEqual(await h.speech(), { speak: true, voice: "fr-audia" });
   assert.ok(performance.now() - started < 600);
   assert.equal(h.listening.getSnapshot().voice?.source, "pitch");
 });
@@ -419,8 +437,8 @@ test("a slow Jev answer falls back to the nearest pitch band without holding spe
 test("without any voiced audio yet, speech starts with the neutral default voice", async () => {
   const h = fakeListening({ match: async () => assert.fail("nothing to match"), voiceWaitMs: 200 });
   await h.listening.start({ profiles, options: { captions: false, voice: true } });
-  assert.deepEqual(await h.speech(), { speak: true, voice: "river" });
-  assert.equal(h.listening.getSnapshot().voice?.source, "default");
+  assert.deepEqual(await h.speech(), { speak: true, voice: "fr-maxime" });
+  assert.deepEqual(h.listening.getSnapshot().voice, { voice: "fr-maxime", name: "Maxime", source: "default" });
 });
 
 const services = { services: { transcription: true, voice: true, decision: true }, session: "test-session" };

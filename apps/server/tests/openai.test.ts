@@ -27,7 +27,7 @@ test("translation deltas survive network chunk boundaries", async () => {
   try {
     globalThis.fetch = async (_url, init) => {
       const body = JSON.parse(String(init?.body));
-      assert.equal(body.model, "gpt-5.4-nano");
+      assert.equal(body.model, "gpt-5.4-mini");
       assert.equal(body.reasoning_effort, "none");
       return sse([
         'data: {"choices":[{"delta":{"content":"Hello "}}]}\n',

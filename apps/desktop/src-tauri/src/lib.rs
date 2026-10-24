@@ -63,17 +63,18 @@ pub fn run() {
                     interprete_configure_call_prompt(window);
                 }
             }
+            // Captions and the pill float above other apps, including a full-screen call or browser.
             #[cfg(target_os = "macos")]
             for label in ["translation-overlay", "call-captions"] {
-                if let Some(toast) = app.get_webview_window(label)
-                    && let Ok(window) = toast.ns_window()
+                if let Some(overlay) = app.get_webview_window(label)
+                    && let Ok(window) = overlay.ns_window()
                 {
                     unsafe extern "C" {
-                        fn interprete_configure_toast(window: *mut std::ffi::c_void);
+                        fn interprete_configure_overlay(window: *mut std::ffi::c_void);
                     }
                     // Tauri setup runs on the UI thread and keeps this native window alive.
                     unsafe {
-                        interprete_configure_toast(window);
+                        interprete_configure_overlay(window);
                     }
                 }
             }

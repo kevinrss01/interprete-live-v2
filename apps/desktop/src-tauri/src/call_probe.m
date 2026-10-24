@@ -96,27 +96,68 @@ char *interprete_physical_inputs(void) {
   }
 }
 
-// Called from Tauri setup on the AppKit thread, before the prompt can be shown.
-void interprete_configure_toast(void *window) {
-  NSWindow *native = (__bridge NSWindow *)window;
-  native.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
-  native.level = NSFloatingWindowLevel;
+static char InterpreteOriginalClass;
+// Floating windows that are not focusable: captions and the translation pill.
+@interface InterpreteOverlayPanel : NSPanel
+@end
+@implementation InterpreteOverlayPanel
+- (BOOL)canBecomeKeyWindow {
+  return NO;
 }
-
-static BOOL InterpreteCanBecomeKey(__unused id self, __unused SEL _cmd) {
+- (BOOL)canBecomeMainWindow {
+  return NO;
+}
+// NSWindow's teardown expects the class the window was created with, and tao always closes a
+// window before releasing it.
+- (void)close {
+  Class original = objc_getAssociatedObject(self, &InterpreteOriginalClass);
+  if (!original) {
+    [super close];
+    return;
+  }
+  objc_setAssociatedObject(self, &InterpreteOriginalClass, nil, OBJC_ASSOCIATION_ASSIGN);
+  object_setClass(self, original);
+  [self close];
+}
+@end
+// Keeps keyboard access to the call prompt's checkboxes and buttons.
+@interface InterpreteCallPromptPanel : InterpreteOverlayPanel
+@end
+@implementation InterpreteCallPromptPanel
+- (BOOL)canBecomeKeyWindow {
   return YES;
 }
-// NSPanel subclass that keeps keyboard access to the prompt's checkboxes and buttons.
-static Class InterpretePromptPanelClass(void) {
-  static Class panel;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    panel = objc_allocateClassPair([NSPanel class], "InterpreteCallPromptPanel", 0);
-    if (!panel) return;
-    class_addMethod(panel, @selector(canBecomeKeyWindow), (IMP)InterpreteCanBecomeKey, "c@:");
-    objc_registerClassPair(panel);
-  });
-  return panel;
+@end
+
+// macOS only lets a regular app's NSWindow float over another app's full-screen space when
+// that app is active. A non-activating panel can, so the floating windows become one. Tauri's
+// window keeps its own instance variables after NSWindow's storage; the swap only happens when
+// the panel adds none, so AppKit and Tauri never share memory.
+static BOOL InterpreteBecomePanel(NSWindow *native, Class panel) {
+  if ([native isKindOfClass:[NSPanel class]] || class_getInstanceSize(panel) != class_getInstanceSize([NSWindow class]))
+    return NO;
+  objc_setAssociatedObject(native, &InterpreteOriginalClass, object_getClass(native), OBJC_ASSOCIATION_ASSIGN);
+  object_setClass(native, panel);
+  NSPanel *converted = (NSPanel *)native;
+  converted.styleMask |= NSWindowStyleMaskNonactivatingPanel;
+  converted.floatingPanel = YES;
+  // Setting the style after creation does not update the window server's activation flag.
+  SEL prevents = NSSelectorFromString(@"_setPreventsActivation:");
+  if ([converted respondsToSelector:prevents]) {
+    void (*setPrevents)(id, SEL, BOOL) = (void (*)(id, SEL, BOOL))[converted methodForSelector:prevents];
+    setPrevents(converted, prevents, YES);
+  }
+  return YES;
+}
+
+// Called from Tauri setup on the AppKit thread, before the captions or the pill can be shown.
+void interprete_configure_overlay(void *window) {
+  NSWindow *native = (__bridge NSWindow *)window;
+  InterpreteBecomePanel(native, [InterpreteOverlayPanel class]);
+  native.hidesOnDeactivate = NO;
+  native.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary
+      | NSWindowCollectionBehaviorStationary | NSWindowCollectionBehaviorIgnoresCycle;
+  native.level = NSFloatingWindowLevel;
 }
 
 // Borderless windows grow a rectangular shadow again when shown or resized. Drop it, and the
@@ -148,27 +189,10 @@ static void InterpreteClearPromptChrome(NSWindow *native) {
   [native invalidateShadow];
 }
 
-// macOS only lets a regular app's NSWindow float over another app's full-screen space when
-// that app is active. A non-activating panel can, so the call prompt becomes one. Tauri's
-// window keeps its own instance variables after NSWindow's storage; the swap only happens when
-// NSPanel adds none, so AppKit and Tauri never share memory.
 void interprete_configure_call_prompt(void *window) {
   NSWindow *native = (__bridge NSWindow *)window;
-  Class panel = InterpretePromptPanelClass();
-  if (panel && class_getInstanceSize([NSPanel class]) == class_getInstanceSize([NSWindow class])
-      && ![native isKindOfClass:[NSPanel class]]) {
-    object_setClass(native, panel);
-    NSPanel *prompt = (NSPanel *)native;
-    prompt.styleMask |= NSWindowStyleMaskNonactivatingPanel;
-    prompt.floatingPanel = YES;
-    prompt.becomesKeyOnlyIfNeeded = NO;
-    // Setting the style after creation does not update the window server's activation flag.
-    SEL prevents = NSSelectorFromString(@"_setPreventsActivation:");
-    if ([prompt respondsToSelector:prevents]) {
-      void (*setPrevents)(id, SEL, BOOL) = (void (*)(id, SEL, BOOL))[prompt methodForSelector:prevents];
-      setPrevents(prompt, prevents, YES);
-    }
-  }
+  if (InterpreteBecomePanel(native, [InterpreteCallPromptPanel class]))
+    ((NSPanel *)native).becomesKeyOnlyIfNeeded = NO;
   native.hidesOnDeactivate = NO;
   native.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary
       | NSWindowCollectionBehaviorStationary | NSWindowCollectionBehaviorIgnoresCycle;

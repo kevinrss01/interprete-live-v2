@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { credential } from "./config";
 import { AppError } from "./errors";
-import { MATCH_VOICES, VOICE_PRESETS } from "@interprete/shared/languages";
+import { VOICE_PRESETS, speakingVoice } from "@interprete/shared/languages";
 // ponytail: Tauri origins (macOS/Linux, Windows) + Vite dev; override with ALLOWED_ORIGINS on the VPS.
 export const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ||
@@ -106,10 +106,10 @@ export function voiceOwnerKey(id: string, speaker: string, consentId: string) {
     .digest("hex")
     .slice(0, 24);
 }
-export function resolveVoice(value: string, id: string, speaker: string) {
+// Standard voices read `language` with a native voice when one exists; clones keep their owner's voice.
+export function resolveVoice(value: string, id: string, speaker: string, language: string) {
   const preset =
-    VOICE_PRESETS.find((v) => v.key === value) ??
-    MATCH_VOICES.find((v) => v.key === value);
+    speakingVoice(value, language) ?? VOICE_PRESETS.find((v) => v.key === value);
   if (preset) return preset.id;
   const c = verify(value);
   if (

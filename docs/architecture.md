@@ -25,7 +25,7 @@ flowchart LR
 
   subgraph Fournisseurs["Fournisseurs"]
     RT["OpenAI Realtime<br/>gpt-live-transcribe"]
-    LLM["OpenAI Chat<br/>gpt-5.4-nano"]
+    LLM["OpenAI Chat<br/>gpt-5.4-mini"]
     Jev["AI Gateway<br/>Jev (prêt à traduire ? voix proche)"]
     EL["ElevenLabs<br/>TTS Flash v2.5, clonage"]
   end
@@ -140,7 +140,7 @@ La page reste en `noindex` pour la revue locale.
 | POST | `/api/interpret` | Bearer | 120 / min | Traduction + synthèse, réponse en SSE |
 | POST | `/api/voice/clone` | Bearer | 4 / h | Clone la voix d'un profil (multipart, accord requis) |
 | POST | `/api/voice/delete` | Bearer | — | Supprime un clone appartenant à cette session |
-| POST | `/api/voice/match` | Bearer | 20 / min | Choisit une voix ElevenLabs prédéfinie proche d’un interlocuteur d’appel (Jev), à partir de mesures calculées sur l’appareil |
+| POST | `/api/voice/match` | Bearer | 20 / min | Choisit une voix ElevenLabs proche d’un interlocuteur d’appel (Jev), à partir de mesures calculées sur l’appareil, parmi les voix natives de la langue de traduction quand elle en a |
 
 `POST /api/interpret` accepte `speak: false` pour les sous-titres d’appel : la réponse SSE contient le feu vert et le texte, sans synthèse vocale ni résolution de voix.
 
@@ -230,6 +230,7 @@ sequenceDiagram
 
 - **Lecture pendant la parole** : le micro reste ouvert pendant la lecture. L'annulation d'écho du navigateur limite le retour du haut-parleur.
 - **Feu vert** : un segment est prononcé si Jev l'estime prêt (probabilité ≥ 0,6) ou s'il se termine par une ponctuation forte. Si Jev ne répond pas, on attend la fin de la phrase.
+- **Accent** : les voix prédéfinies ElevenLabs sont anglaises et gardent cet accent dans une autre langue. Quand la langue cible a des voix natives (aujourd’hui le français, dans `packages/shared/src/languages.ts`), le serveur remplace une voix prédéfinie par la voix native du même genre et de hauteur la plus proche. Une voix clonée reste celle de son propriétaire.
 - **Renouvellement** : la connexion Realtime est renouvelée après 45 minutes, avec une seconde connexion préparée en parallèle ; les items sont finalisés toutes les 30 secondes ou à chaque pause.
 
 ## Déploiement

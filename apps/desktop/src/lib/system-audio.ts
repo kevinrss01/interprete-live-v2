@@ -10,6 +10,8 @@ type ChannelMessage = ArrayBuffer | { type: "stalled" };
 type AudioChannel = { onmessage: (message: ChannelMessage) => void };
 export type SystemAudioOptions = CaptureOptions & {
   source: string | null;
+  // Silence the captured apps on this Mac while capturing, so only the translated voice is heard.
+  muteSource?: boolean;
   onStarted?: (started: CaptureStarted) => void;
   onSilence?: (silent: boolean) => void;
 };
@@ -50,6 +52,7 @@ export class SystemAudioCapture {
     const started = await this.call<CaptureStarted>("system_audio_start", {
       id: this.id,
       source: this.options.source,
+      mute: this.options.muteSource ?? false,
       onAudio: channel,
     });
     if (this.stopped) {
