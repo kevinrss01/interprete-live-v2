@@ -1,5 +1,5 @@
 import { languageName } from "@interprete/shared/languages";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@interprete/ui/components/checkbox";
 import type { CallOptions } from "../lib/calls";
 
 type Option = keyof CallOptions;
