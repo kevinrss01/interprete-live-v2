@@ -53,14 +53,31 @@ struct Probe {
     supported: bool,
     processes: Vec<Process>,
     error: Option<String>,
+    // Some camera is streaming, to an unknown process.
+    #[serde(default)]
+    camera: bool,
+    // Bundle of the app in front, which owns the camera when it is a call app.
+    #[serde(default)]
+    frontmost: Option<String>,
 }
 
-const CALL_APPS: [(&str, &str); 12] = [
+const CALL_APPS: &[(&str, &str)] = &[
     ("us.zoom.", "Zoom"),
     ("com.microsoft.teams", "Microsoft Teams"),
     ("com.apple.facetime", "FaceTime"),
     ("com.tinyspeck.slackmacgap", "Slack"),
     ("com.hnc.discord", "Discord"),
+    ("com.cisco.webexmeetingsapp", "Webex"),
+    ("com.webex.meetingmanager", "Webex"),
+    ("cisco-systems.spark", "Webex"),
+    ("com.skype.skype", "Skype"),
+    ("com.logmein.gotomeeting", "GoTo Meeting"),
+    ("net.whatsapp.whatsapp", "WhatsApp"),
+    ("desktop.whatsapp", "WhatsApp"),
+    ("ru.keepcoder.telegram", "Telegram"),
+    ("org.telegram.desktop", "Telegram"),
+    ("org.whispersystems.signal-desktop", "Signal"),
+    ("com.facebook.archon", "Messenger"),
     ("com.google.chrome", "Chrome / Meet"),
     ("com.apple.safari", "Safari / appel web"),
     ("com.microsoft.edgemac", "Edge / appel web"),
@@ -68,12 +85,15 @@ const CALL_APPS: [(&str, &str); 12] = [
     ("company.thebrowser.browser", "Arc / appel web"),
     ("company.thebrowser.dia", "Dia / appel web"),
     ("com.brave.browser", "Brave / appel web"),
+    ("com.operasoftware.opera", "Opera / appel web"),
+    ("com.vivaldi.vivaldi", "Vivaldi / appel web"),
+    ("org.chromium.chromium", "Chromium / appel web"),
 ];
 fn call_app(bundle: &str) -> Option<&'static str> {
     let bundle = bundle.to_lowercase();
     CALL_APPS
-        .into_iter()
-        .find_map(|(prefix, name)| bundle.starts_with(prefix).then_some(name))
+        .iter()
+        .find_map(|&(prefix, name)| bundle.starts_with(prefix).then_some(name))
 }
 // Bundle prefixes whose audio output carries a detected call. Helpers share the app prefix.
 // Safari plays through a WebKit process shared with other apps, and unknown or simulated
@@ -83,8 +103,8 @@ pub fn tap_prefixes(app: &str) -> Vec<&'static str> {
         return vec![];
     }
     let mut prefixes: Vec<&'static str> = CALL_APPS
-        .into_iter()
-        .filter_map(|(prefix, name)| (name == app).then_some(prefix))
+        .iter()
+        .filter_map(|&(prefix, name)| (name == app).then_some(prefix))
         .collect();
     // FaceTime audio is rendered by the conferencing daemon.
     if app == "FaceTime" {
@@ -118,8 +138,29 @@ fn probe() -> Result<Probe, String> {
             supported: false,
             processes: vec![],
             error: None,
+            camera: false,
+            frontmost: None,
         })
     }
+}
+// Call apps active right now: those with a running microphone, then the call app in front
+// while a camera streams. A meeting lobby or a muted call can show the camera without the mic.
+// The camera's owner is unknown, so an app holding the microphone always comes first.
+fn active_apps(probe: &Probe) -> Vec<String> {
+    let mut apps: Vec<String> = probe
+        .processes
+        .iter()
+        .filter_map(|p| call_app(&p.bundle_id).map(str::to_owned))
+        .collect();
+    apps.sort();
+    apps.dedup();
+    if probe.camera
+        && let Some(app) = probe.frontmost.as_deref().and_then(call_app)
+        && !apps.iter().any(|a| a == app)
+    {
+        apps.push(app.to_owned());
+    }
+    apps
 }
 impl Monitor {
     // Two positive polls avoid short mic probes; eight missing polls tolerate mute/device switches.
@@ -181,6 +222,17 @@ fn publish(app: &tauri::AppHandle) {
         let _ = handle.emit("call-status", &snapshot);
         if let Some(window) = handle.get_webview_window("call-toast") {
             if snapshot.call.is_some() && !snapshot.dismissed && !snapshot.accepted {
+                #[cfg(target_os = "macos")]
+                if let Ok(native) = window.ns_window() {
+                    unsafe extern "C" {
+                        fn interprete_present_call_prompt(window: *mut std::ffi::c_void);
+                    }
+                    // Runs on the UI thread; Tauri keeps the native window alive with the app.
+                    unsafe {
+                        interprete_present_call_prompt(native);
+                    }
+                    return;
+                }
                 if let Ok(Some(screen)) = handle
                     .get_webview_window("main")
                     .map_or_else(|| handle.primary_monitor(), |w| w.current_monitor())
@@ -211,14 +263,8 @@ pub fn start(app: tauri::AppHandle) {
                         let changed = monitor.snapshot.supported != probe.supported
                             || monitor.snapshot.error != probe.error;
                         monitor.snapshot.supported = probe.supported;
+                        let apps = active_apps(&probe);
                         monitor.snapshot.error = probe.error;
-                        let mut apps: Vec<String> = probe
-                            .processes
-                            .iter()
-                            .filter_map(|p| call_app(&p.bundle_id).map(str::to_owned))
-                            .collect();
-                        apps.sort();
-                        apps.dedup();
                         monitor.tick(&apps) || changed
                     }
                     Err(error) => {
@@ -381,6 +427,52 @@ mod tests {
         assert!(m.tick(&apps));
         assert!(!m.snapshot.dismissed);
     }
+    fn probe_with(bundles: &[&str], camera: bool, frontmost: Option<&str>) -> Probe {
+        Probe {
+            supported: true,
+            processes: bundles
+                .iter()
+                .map(|b| Process {
+                    bundle_id: (*b).into(),
+                })
+                .collect(),
+            error: None,
+            camera,
+            frontmost: frontmost.map(str::to_owned),
+        }
+    }
+    #[test]
+    fn camera_in_a_call_app_in_front_counts_before_the_microphone() {
+        // Meeting lobby: camera preview in Chrome, microphone still closed.
+        assert_eq!(
+            active_apps(&probe_with(&[], true, Some("com.google.Chrome"))),
+            vec!["Chrome / Meet".to_string()]
+        );
+        // A camera used while another app is in front is not attributed to a call app.
+        assert!(active_apps(&probe_with(&[], true, Some("com.apple.Photobooth"))).is_empty());
+        assert!(active_apps(&probe_with(&[], false, Some("us.zoom.xos"))).is_empty());
+        assert_eq!(
+            active_apps(&probe_with(&["us.zoom.xos"], true, Some("us.zoom.xos"))),
+            vec!["Zoom".to_string()]
+        );
+    }
+    #[test]
+    fn the_microphone_app_wins_over_the_app_in_front() {
+        // Zoom holds the microphone and camera while Chrome is in front.
+        let apps = active_apps(&probe_with(
+            &["us.zoom.xos"],
+            true,
+            Some("com.google.Chrome"),
+        ));
+        assert_eq!(apps, vec!["Zoom".to_string(), "Chrome / Meet".to_string()]);
+        let mut m = monitor();
+        assert!(!m.tick(&apps));
+        assert!(m.tick(&apps));
+        assert_eq!(
+            m.snapshot.call.as_ref().map(|c| c.app.as_str()),
+            Some("Zoom")
+        );
+    }
     #[test]
     fn only_known_apps_and_no_self_detection() {
         assert_eq!(call_app("com.google.Chrome.helper"), Some("Chrome / Meet"));
@@ -388,6 +480,9 @@ mod tests {
         assert_eq!(call_app("ai.impulselab.interprete"), None);
         assert_eq!(call_app("com.apple.WebKit.GPU"), None);
         assert_eq!(call_app("com.apple.VoiceMemos"), None);
+        assert_eq!(call_app("Cisco-Systems.Spark"), Some("Webex"));
+        assert_eq!(call_app("net.whatsapp.WhatsApp"), Some("WhatsApp"));
+        assert_eq!(call_app("com.microsoft.teams2"), Some("Microsoft Teams"));
     }
     #[test]
     fn taps_follow_the_detected_app() {

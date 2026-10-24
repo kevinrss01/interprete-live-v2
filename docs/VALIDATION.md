@@ -1,5 +1,13 @@
 # Vérifications de l’app — 24 octobre 2026
 
+## Toast d’appel dès la salle d’attente, au-dessus des apps — 24 octobre
+
+La détection compte aussi l’application d’appel au premier plan quand une caméra filme (une app qui tient le micro reste prioritaire) et reconnaît davantage d’applications d’appel et de navigateurs. Le toast devient un panneau macOS non activant, au niveau des fenêtres d’état, qui glisse depuis la droite de l’écran sous le pointeur.
+
+- Tests Rust : 27 réussis (3 tests matériels ignorés), dont l’attribution caméra/premier plan, la priorité de l’app qui tient le micro et les nouveaux identifiants d’apps. Une revue indépendante a écarté un maintien de l’appel par n’importe quelle caméra (appel jamais terminé, nouvel appel non annoncé) et une attribution à l’app au premier plan plutôt qu’à celle du micro ; les deux sont corrigés. La sonde native a été exécutée : champs caméra et premier plan lus sans demande d’autorisation ; la caméra n’a pas été allumée pour ce test.
+- Un exécutable de test isolé a vérifié la conversion du panneau sur une sous-classe de `NSWindow` à variables d’instance : même taille d’instance pour `NSWindow` et `NSPanel` sur ce Mac, variable préservée, style non activant, niveau 25, pas de focus clavier à l’affichage, position finale atteinte après l’animation, départ réduit quand un autre écran se trouve à droite.
+- Non vérifié : affichage réel au-dessus de Meet/Zoom en plein écran, détection dans une vraie salle d’attente et rendu visuel de l’animation. L’app de développement de l’utilisateur occupait déjà les ports et la capture d’écran n’est pas autorisée dans cet environnement.
+
 ## Micro au nom de l’app et activation simplifiée — 24 octobre
 
 Le microphone public **Interprete** utilise le nom configuré de l’app, un UID propre et un agrégat limité au pilote BlackHole 2ch. Un test natif a confirmé sa présence avec deux canaux d’entrée et deux de sortie à 48 kHz. Le chemin de lecture injecte directement le pilote sous-jacent, sans imposer la période de l’agrégat : cela corrige un blocage observé lors d’une répétition d’ouverture concurrente entrée/sortie.

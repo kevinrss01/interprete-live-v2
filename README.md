@@ -2,7 +2,7 @@
 
 Traduction vocale en conversation ou pendant un appel sur Mac.
 
-À l’ouverture, l’accueil propose deux choix : **Conversation** (deux personnes, un appareil) ou **Réunion en ligne**. Le mode **Réunion en ligne** détecte les applications qui utilisent le microphone et propose un toast de confirmation : sous-titres en direct de vos interlocuteurs en bas de l’écran (cochés par défaut), lecture de leur traduction avec une voix proche choisie par Jev, et traduction de votre micro vers le microphone virtuel **Interprete** (via BlackHole 2ch). Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
+À l’ouverture, l’accueil propose deux choix : **Conversation** (deux personnes, un appareil) ou **Réunion en ligne**. Le mode **Réunion en ligne** détecte les applications d’appel qui utilisent le microphone ou la caméra, dès la salle d’attente, et propose un toast de confirmation au-dessus de toutes les apps : sous-titres en direct de vos interlocuteurs en bas de l’écran (cochés par défaut), lecture de leur traduction avec une voix proche choisie par Jev, et traduction de votre micro vers le microphone virtuel **Interprete** (via BlackHole 2ch). Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
 
 **Activer la traduction** retrouve vos réglages et peut basculer le micro système automatiquement ; l’arrêt rétablit le micro précédent. Dans l’application d’appel, choisissez **Système / Par défaut** pour suivre ces changements.
 
