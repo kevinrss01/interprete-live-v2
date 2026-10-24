@@ -4,6 +4,7 @@ import {
   AudioLines,
   CircleAlert,
   History,
+  LoaderCircle,
   MessagesSquare,
   Mic,
   MicOff,
@@ -128,6 +129,28 @@ export function Interpreter({
   const busy = state.phase !== "idle" || callBusy;
   const demo = state.input === "demo";
   const microphoneActive = state.phase === "listening" && state.input === "microphone";
+  const status = callBusy ? "Translating the call…" :
+    demo && state.phase === "listening" && state.connection === "reconnecting"
+      ? "Reconnecting · audio sample"
+      : demo && (state.phase === "connecting" || state.phase === "listening")
+        ? "Playing audio sample…"
+        : state.phase === "connecting"
+          ? "Connecting microphone…"
+          : state.phase === "listening"
+            ? state.connection === "reconnecting"
+              ? "Reconnecting · mic on"
+              : state.outputActive
+                ? "Listening and translating…"
+                : `${state.profiles[state.active].name} is speaking…`
+            : state.phase === "finishing"
+              ? "Finishing the turn…"
+              : state.phase === "translating"
+                ? "Translating…"
+                : state.phase === "playing"
+                  ? "Playing the translation"
+                  : state.ready
+                    ? "Ready"
+                    : "Connecting…";
   function onTalk(id: SpeakerId) {
     if (state.phase === "connecting" && state.active === id)
       controller.cancel();
@@ -207,6 +230,27 @@ export function Interpreter({
         </div>
       </aside>
       <div className="app panel">
+        {/* ponytail: status kept as-is for now; a better placement comes later. */}
+        <header
+          className="topbar"
+          hidden={view === "history" || view === "voices" || (view === "call" && !callBusy)}
+        >
+          <div className="frame topbar-inner">
+            <div
+              className="status"
+              data-phase={callBusy ? "listening" : state.phase}
+              data-ready={state.ready}
+              role="status"
+            >
+              {busy && state.phase !== "listening" ? (
+                <LoaderCircle size={13} className="spin" aria-hidden="true" />
+              ) : (
+                <span className="status-dot" aria-hidden="true" />
+              )}
+              <span className="status-text">{status}</span>
+            </div>
+          </div>
+        </header>
       {overlayError && (
         <div className="frame alert" role="alert">
           <span>{overlayError}</span>

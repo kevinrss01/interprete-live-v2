@@ -1884,6 +1884,7 @@ p.call-notice {
   /* clip, not hidden: keeps the sticky dock working with window scroll. */
   overflow: clip;
 }
+.panel .topbar,
 .panel .dock {
   background: var(--surface);
 }
