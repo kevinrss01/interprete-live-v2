@@ -204,6 +204,38 @@ test("translation audio is delivered while capture is still running, and finaliz
   }
 });
 
+test("microphone status follows the current capture after a demo, even when a silent turn is removed", async () => {
+  const h = harness();
+  try {
+    await h.controller.start("a", true);
+    assert.equal(h.controller.getSnapshot().input, "demo");
+    h.socket.delta("Bonjour, je voudrais un café.");
+    await h.controller.stop();
+    assert.equal(h.controller.getSnapshot().input, null);
+    assert.equal(h.controller.getSnapshot().turns.at(-1)?.demo, true);
+
+    await h.controller.start("b");
+    h.options.onAudio(new Uint8Array(4800));
+    h.options.onBoundary?.();
+    await waitFor(() => h.controller.getSnapshot().turns.at(-1)?.demo === true);
+    assert.equal(h.controller.getSnapshot().phase, "listening");
+    assert.equal(h.controller.getSnapshot().input, "microphone");
+
+    const demoTurn = h.controller.getSnapshot().turns[0];
+    assert.ok(demoTurn.audioUrl);
+    let finishPlayback!: () => void;
+    h.player.play = () => new Promise<void>((resolve) => { finishPlayback = resolve; });
+    const replay = h.controller.replay(demoTurn.id);
+    assert.equal(h.controller.getSnapshot().phase, "playing");
+    assert.equal(h.controller.getSnapshot().input, null);
+    await waitFor(() => Boolean(finishPlayback));
+    finishPlayback();
+    await replay;
+  } finally {
+    h.cleanup();
+  }
+});
+
 test("closing during startup also settles a simultaneous stop and releases capture", async () => {
   const h = harness(undefined, undefined, false);
   try {

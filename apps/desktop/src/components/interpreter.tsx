@@ -4,6 +4,8 @@ import {
   ArrowLeftRight,
   CircleAlert,
   LoaderCircle,
+  Mic,
+  MicOff,
   SlidersHorizontal,
   X,
 } from "lucide-react";
@@ -45,24 +47,30 @@ export function Interpreter({ controller }: { controller: InterpreterController 
     if (!showSettings && dialog.open) dialog.close();
   }, [showSettings]);
   const busy = state.phase !== "idle";
+  const demo = state.input === "demo";
+  const microphoneActive = state.phase === "listening" && state.input === "microphone";
   const status =
-    state.phase === "connecting"
-      ? "Connexion au micro…"
-      : state.phase === "listening"
-        ? state.connection === "reconnecting"
-          ? "Reconnexion · micro actif"
-          : state.outputActive
-          ? "Écoute et traduction…"
-          : `${state.profiles[state.active].name} parle…`
-        : state.phase === "finishing"
-          ? "Fin de la prise de parole…"
-          : state.phase === "translating"
-            ? "Traduction…"
-            : state.phase === "playing"
-              ? "Lecture de la traduction"
-              : state.ready
-                ? "Prêt"
-                : "Connexion…";
+    demo && state.phase === "listening" && state.connection === "reconnecting"
+      ? "Reconnexion · exemple audio"
+      : demo && (state.phase === "connecting" || state.phase === "listening")
+        ? "Exemple audio en cours…"
+        : state.phase === "connecting"
+          ? "Connexion au micro…"
+          : state.phase === "listening"
+            ? state.connection === "reconnecting"
+              ? "Reconnexion · micro actif"
+              : state.outputActive
+                ? "Écoute et traduction…"
+                : `${state.profiles[state.active].name} parle…`
+            : state.phase === "finishing"
+              ? "Fin de la prise de parole…"
+              : state.phase === "translating"
+                ? "Traduction…"
+                : state.phase === "playing"
+                  ? "Lecture de la traduction"
+                  : state.ready
+                    ? "Prêt"
+                    : "Connexion…";
   function onTalk(id: SpeakerId) {
     if (state.phase === "connecting" && state.active === id)
       controller.cancel();
@@ -94,6 +102,7 @@ export function Interpreter({ controller }: { controller: InterpreterController 
       selected={state.active === id}
       level={state.level}
       ready={state.ready}
+      demo={demo}
       onTalk={() => onTalk(id)}
       onProfile={(p) => onProfile(id, p)}
     />
@@ -167,6 +176,41 @@ export function Interpreter({ controller }: { controller: InterpreterController 
               </button>
             </div>
           )}
+          <div className="live-controls">
+            <div className="live-controls-heading">
+              <h2>Traduction en direct</h2>
+              <span
+                className="microphone-status"
+                data-active={microphoneActive}
+              >
+                {microphoneActive ? (
+                  <Mic size={14} aria-hidden="true" />
+                ) : (
+                  <MicOff size={14} aria-hidden="true" />
+                )}
+                {microphoneActive
+                  ? "Micro actif"
+                  : !demo && state.phase === "connecting"
+                    ? "Activation du micro…"
+                    : state.input === "microphone" && state.phase === "finishing"
+                      ? "Arrêt du micro…"
+                      : "Micro désactivé"}
+              </span>
+            </div>
+            <p id="microphone-help" className="live-controls-help">
+              {demo
+                ? "L’exemple utilise un enregistrement. Votre micro reste désactivé."
+                : microphoneActive
+                  ? "La traduction est lue au fil de votre voix. Coupez le micro pour terminer."
+                  : state.phase === "idle"
+                    ? "Activez le micro de la personne qui parle pour traduire sa voix en direct."
+                    : state.phase === "connecting"
+                      ? "Autorisez l’accès au micro si votre appareil vous le demande."
+                      : state.phase === "playing"
+                        ? "Écoutez la traduction. Vous pourrez ensuite réactiver le micro."
+                        : "La traduction se termine. Vous pourrez ensuite réactiver le micro."}
+            </p>
+          </div>
           <div className="dock-grid">
             {speaker("a")}
             <div className="dock-center">
@@ -234,7 +278,7 @@ export function Interpreter({ controller }: { controller: InterpreterController 
             ))}
             <fieldset className="settings-group">
               <legend>Session</legend>
-              <p className="note">Le micro reste ouvert jusqu’à ce que vous appuyiez sur Terminer, même pendant les pauses et la lecture des traductions.</p>
+              <p className="note">Le micro reste ouvert jusqu’à ce que vous appuyiez sur Couper le micro, même pendant les pauses et la lecture des traductions.</p>
               <p className="note">
                 <kbd>A</kbd> <kbd>B</kbd> pour parler, <kbd>Échap</kbd> pour
                 arrêter. La traduction parle pendant votre prise de parole, avec

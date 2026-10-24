@@ -459,6 +459,36 @@ kbd {
   grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
   gap: 16px;
 }
+.live-controls {
+  margin-bottom: 18px;
+}
+.live-controls-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.live-controls-heading h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.microphone-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.microphone-status[data-active="true"] {
+  color: var(--accent);
+}
+.live-controls-help {
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 13px;
+  text-wrap: pretty;
+}
 .dock-center {
   /* aligns with the language row: meta (20) + gap (6) */
   padding-top: 26px;
@@ -572,15 +602,14 @@ kbd {
   justify-content: center;
   width: 34px;
   height: 34px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--fill);
 }
 .talk-label {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.3;
 }
 .talk-kbd {
   border-color: color-mix(in srgb, currentColor 22%, transparent);
@@ -916,9 +945,10 @@ kbd {
     font-size: 16px;
   }
   .talk {
-    height: 56px;
+    min-height: 64px;
+    height: auto;
     gap: 8px;
-    padding: 0 10px 0 8px;
+    padding: 10px 10px 10px 8px;
     font-size: 14px;
   }
   .talk-icon {
@@ -926,6 +956,9 @@ kbd {
     height: 30px;
   }
   .talk-stop {
+    display: none;
+  }
+  .talk-kbd {
     display: none;
   }
   .field input,

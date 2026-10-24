@@ -23,7 +23,7 @@ pnpm dev:desktop   # terminal 2 : fenêtre Tauri (Vite sur :1420)
 
 Le backend est accessible sur `http://localhost:3035` et Studio sur https://local.drizzle.studio. Ctrl+C dans le terminal backend arrête l’API, Studio et le conteneur PostgreSQL, en conservant le volume et toutes les données. Le prochain lancement réutilise cette base.
 
-Choisir les deux langues, puis utiliser le bouton de la personne qui parle. La traduction commence pendant sa prise de parole, par petits segments, sans attendre l’arrêt du micro. Le micro reste ouvert pendant les pauses et la lecture ; seul le bouton Terminer clôt son tour. Les touches **A**, **B** et **Échap** permettent aussi de piloter la session.
+Choisir les deux langues, puis appuyer sur **Activer le micro** pour la personne qui parle, dans la zone **Traduction en direct**. L’état du micro reste visible au-dessus des commandes. La traduction commence pendant sa prise de parole, par petits segments, sans attendre l’arrêt du micro. Le micro reste ouvert pendant les pauses et la lecture ; **Couper le micro** clôt son tour. Les touches **A**, **B** et **Échap** permettent aussi de piloter la session.
 
 Le bouton d’exemple utilise un enregistrement synthétique pour tester toute la chaîne sans microphone. Il ne sert jamais au clonage.
 

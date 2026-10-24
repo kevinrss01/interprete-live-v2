@@ -28,6 +28,7 @@ export type Snapshot = {
   profiles: Record<SpeakerId, Profile>;
   turns: Turn[];
   phase: Phase;
+  input: "microphone" | "demo" | null;
   active: SpeakerId;
   level: number;
   error: string | null;
@@ -120,6 +121,7 @@ const initial: Snapshot = {
   profiles: initialProfiles,
   turns: [],
   phase: "idle",
+  input: null,
   active: "a",
   level: 0,
   error: null,
@@ -355,6 +357,7 @@ export class InterpreterController {
     this.addTurn(r, r.blocks[0]);
     this.update({
       phase: "connecting", connection: "connecting", active: speaker,
+      input: demo ? "demo" : "microphone",
       error: null, warning: null, outputActive: false,
     });
     r.transcriber = new ContinuousTranscription({
@@ -620,7 +623,7 @@ export class InterpreterController {
       await this.player.idle(r.abort.signal);
       if (!this.isCurrent(r)) return;
       this.runtime = null;
-      this.update({ phase: "idle", connection: null, active: r.speaker === "a" ? "b" : "a", level: 0, outputActive: false });
+      this.update({ phase: "idle", input: null, connection: null, active: r.speaker === "a" ? "b" : "a", level: 0, outputActive: false });
     } catch (error) {
       if (this.isCurrent(r)) this.fail(r, error);
     }
@@ -646,7 +649,7 @@ export class InterpreterController {
     }
     this.player.stop();
     if (this.outputTail) clearTimeout(this.outputTail);
-    this.update({ phase: "idle", connection: null, outputActive: false, level: 0,
+    this.update({ phase: "idle", input: null, connection: null, outputActive: false, level: 0,
       ...(clearError ? { error: null, warning: null } : {}),
     });
   };

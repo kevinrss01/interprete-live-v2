@@ -25,6 +25,7 @@ export function SpeakerPanel({
   selected,
   level,
   ready,
+  demo = false,
   onTalk,
   onProfile,
 }: {
@@ -33,6 +34,7 @@ export function SpeakerPanel({
   selected: boolean;
   level: number;
   ready: boolean;
+  demo?: boolean;
   onTalk: () => void;
   onProfile: (patch: Partial<Profile>) => void;
 }) {
@@ -54,6 +56,7 @@ export function SpeakerPanel({
             ? "next"
             : "idle";
   const letter = profile.id.toUpperCase();
+  const name = profile.name || `Personne ${letter}`;
   const voice = profile.cloneStatus;
   return (
     <section
@@ -66,7 +69,7 @@ export function SpeakerPanel({
           {letter}
         </span>
         <span className="speaker-name">
-          {profile.name || `Personne ${letter}`}
+          {name}
         </span>
         <span
           className={`voice-chip ${voice === "error" ? "is-error" : ""}`}
@@ -123,12 +126,19 @@ export function SpeakerPanel({
         onClick={onTalk}
         disabled={!ready || (busy && !listening && !connecting)}
         style={{ "--level": listening ? level : 0 } as CSSProperties}
+        aria-describedby="microphone-help"
         aria-label={
           listening
-            ? "Terminer la prise de parole"
+            ? demo
+              ? "Terminer l’exemple audio"
+              : `Couper le micro · ${name}`
             : connecting
               ? "Annuler la connexion"
-              : `Parler en ${languageNative(profile.language)}`
+              : working
+                ? "Traduction en cours"
+                : playing
+                  ? "Lecture de la traduction"
+                  : `Activer le micro · ${name} · ${languageNative(profile.language)}`
         }
       >
         <span className="talk-icon" aria-hidden="true">
@@ -153,14 +163,16 @@ export function SpeakerPanel({
         </span>
         <span className="talk-label">
           {listening
-            ? "Terminer"
+            ? demo
+              ? "Terminer l’exemple"
+              : "Couper le micro"
             : connecting
               ? "Connexion…"
               : working
                 ? "Traduction…"
                 : playing
                   ? "Lecture…"
-                  : "Parler"}
+                  : "Activer le micro"}
         </span>
         {listening ? (
           <Square
