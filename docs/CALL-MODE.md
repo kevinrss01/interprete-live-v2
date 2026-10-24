@@ -1,6 +1,6 @@
-# Traduire votre microphone dans un appel sur Mac
+# Traduire un appel sur Mac
 
-Le mode **Réunion en ligne** complète le mode conversation existant. Votre microphone est traduit ; l’app n’intercepte pas la sortie audio de l’appel. Portez un casque pour éviter que les voix des autres participants ne rentrent acoustiquement dans votre micro.
+Le mode **Réunion en ligne** complète le mode conversation existant. Il traduit ce que disent vos interlocuteurs (sous-titres ou voix, à partir du son de l’application d’appel, avec votre accord) et, si vous le souhaitez, votre microphone vers l’appel. Portez un casque pour éviter que les voix des autres participants ou leur traduction ne rentrent acoustiquement dans votre micro.
 
 ## Démarrer et tester sans appel
 
@@ -20,6 +20,30 @@ Une petite pastille ovale apparaît à droite de l’écran pendant la connexion
 **Tester la pastille** affiche un aperçu, sans microphone ni appel aux fournisseurs. Cliquez sur le carré pour le fermer. Dans le navigateur, l’aperçu reste dans la page ; utilisez l’app Tauri pour l’affichage au-dessus des autres applications.
 
 Dans un navigateur, l’écoute locale et l’aperçu de simulation restent disponibles. La détection système, le toast hors fenêtre et la sortie virtuelle nécessitent l’app macOS.
+
+## Sous-titres et voix traduite de vos interlocuteurs
+
+Le toast d’appel propose trois cases, mémorisées d’un appel à l’autre :
+
+- **Sous-titres** (cochée par défaut) : ce que disent vos interlocuteurs, traduit dans votre langue, s’affiche en direct dans une fenêtre transparente en bas de l’écran, au-dessus des barres d’outils de Meet, Zoom ou Teams. Elle ne capte aucun clic, apparaît sur tous les bureaux et en plein écran, puis s’efface après quelques secondes de silence.
+- **Voix traduite** : leur traduction est lue sur la sortie actuelle du Mac. Jev choisit, une fois par session, une voix ElevenLabs prédéfinie proche de la leur (hauteur, étendue et timbre mesurés sur l’appareil ; seuls ces trois nombres sont envoyés). Si Jev ne répond pas assez vite, la voix la plus proche en hauteur est utilisée. Aucun clonage : leur voix n’est ni enregistrée ni utilisée comme échantillon. Portez un casque, sinon votre micro renverra cette voix à vos interlocuteurs.
+- **Ma voix dans l’appel** : la traduction de votre micro décrite plus bas. Elle est cochée par défaut si un microphone d’appel a déjà été configuré.
+
+Les deux cases peuvent être combinées. Les mêmes choix et un bouton **Traduire leur voix** se trouvent dans **Réunion en ligne › Leur voix**, sans attendre la détection. La pastille arrête toutes les traductions de l’appel.
+
+### Capture du son
+
+Sur macOS 14.2+, un « process tap » CoreAudio capte uniquement le son de l’application d’appel détectée (Zoom, Teams, Slack, Discord, FaceTime ou le navigateur de Meet, y compris ses processus auxiliaires). Le son reste audible normalement. Pour Safari, une simulation ou un démarrage manuel sans appel reconnu, tout le son du Mac est capté, sauf celui d’Interprète : la voix traduite, lue nativement par l’app, n’est jamais retranscrite. Un navigateur capté entièrement inclut aussi ses autres onglets.
+
+À la première capture, macOS demande l’autorisation d’enregistrer l’audio du système (Réglages Système › Confidentialité et sécurité › Enregistrement de l’écran et de l’audio système). Sans autorisation, le son reçu est silencieux : l’app le signale après 12 secondes sans aucun son, et signale aussi une capture interrompue.
+
+Le son capté suit la chaîne existante : trames PCM de 20 ms à 24 kHz, transcription OpenAI Realtime dans la langue de votre interlocuteur, découpage en fragments, feu vert de Jev, traduction en streaming. Pour les sous-titres seuls, `/api/interpret` reçoit `speak: false` : aucun appel ElevenLabs, le texte validé s’affiche dès qu’il arrive. La fin de l’appel détecté arrête aussi cette traduction.
+
+### Tester sans appel
+
+- Dans **Essayer sans appel**, **Tester les sous-titres** affiche un aperçu local, sans capture ni fournisseur.
+- **Sous-titrer l’exemple audio** envoie l’exemple synthétique de la langue de votre interlocuteur (français ou anglais) dans la vraie chaîne de traduction. Les sous-titres et, si elle est cochée, la voix traduite sont produits par les fournisseurs payants.
+- `pnpm test:system-audio` vérifie sur ce Mac que le tap système livre des trames de 20 ms pendant une seconde. Il ne conserve ni n’envoie le son, et peut déclencher la demande d’autorisation.
 
 ## Utiliser la traduction dans Meet / Zoom / Teams
 

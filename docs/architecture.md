@@ -26,7 +26,7 @@ flowchart LR
   subgraph Fournisseurs["Fournisseurs"]
     RT["OpenAI Realtime<br/>gpt-live-transcribe"]
     LLM["OpenAI Chat<br/>gpt-5.4-nano"]
-    Jev["AI Gateway<br/>Jev (prêt à traduire ?)"]
+    Jev["AI Gateway<br/>Jev (prêt à traduire ? voix proche)"]
     EL["ElevenLabs<br/>TTS Flash v2.5, clonage"]
   end
 
@@ -83,6 +83,9 @@ Le desktop importe **uniquement le type** `AppType` du serveur : le client `hc<A
 | POST | `/api/interpret` | Bearer | 120 / min | Traduction + synthèse, réponse en SSE |
 | POST | `/api/voice/clone` | Bearer | 4 / h | Clone la voix d'un profil (multipart, accord requis) |
 | POST | `/api/voice/delete` | Bearer | — | Supprime un clone appartenant à cette session |
+| POST | `/api/voice/match` | Bearer | 20 / min | Choisit une voix ElevenLabs prédéfinie proche d’un interlocuteur d’appel (Jev), à partir de mesures calculées sur l’appareil |
+
+`POST /api/interpret` accepte `speak: false` pour les sous-titres d’appel : la réponse SSE contient le feu vert et le texte, sans synthèse vocale ni résolution de voix.
 
 Chaîne de traitement d’une requête audio dans `src/routes/`, montée par `src/app.ts` :
 

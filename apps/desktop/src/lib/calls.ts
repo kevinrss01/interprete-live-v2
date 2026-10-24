@@ -3,6 +3,52 @@ import { listen } from "@tauri-apps/api/event";
 import { AudioPlayer, bytesToBase64 } from "./audio";
 
 export type DetectedCall = { id: string; app: string; simulated: boolean };
+// Their speech as captions and/or a translated voice on this Mac; the user's microphone into the call.
+export type CallOptions = { captions: boolean; voice: boolean; microphone: boolean };
+export type AcceptedCall = DetectedCall & { options: CallOptions };
+const optionsKey = "interprete-call-options-v1";
+// Captions start enabled. The microphone route stays on for people who already configured it.
+export function loadCallOptions(): CallOptions {
+  const fallback = {
+    captions: true,
+    voice: false,
+    microphone: Boolean(storedPreference("interprete-call-input-label")),
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem(optionsKey) || "null");
+    if (!saved || typeof saved !== "object") return fallback;
+    const read = (key: keyof CallOptions) =>
+      typeof saved[key] === "boolean" ? saved[key] : fallback[key];
+    return { captions: read("captions"), voice: read("voice"), microphone: read("microphone") };
+  } catch {
+    return fallback;
+  }
+}
+export function saveCallOptions(options: CallOptions) {
+  try {
+    localStorage.setItem(optionsKey, JSON.stringify(options));
+  } catch {}
+}
+function storedPreference(key: string) {
+  try {
+    return localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+// The toast window reads the languages the main window saved, without its own controller.
+export function storedLanguages() {
+  try {
+    const profiles = JSON.parse(localStorage.getItem("interprete-profiles-v1") || "null");
+    const read = (id: "a" | "b", fallback: string) =>
+      typeof profiles?.[id]?.language === "string" ? profiles[id].language : fallback;
+    return { mine: read("a", "fr"), theirs: read("b", "en") };
+  } catch {
+    return { mine: "fr", theirs: "en" };
+  }
+}
+// Explicit native route to the Mac's current output, used only for a participant's translated voice.
+export const SYSTEM_OUTPUT = "@system-output";
 export type CallSnapshot = {
   supported: boolean;
   enabled: boolean;
@@ -17,16 +63,19 @@ export const callSnapshot = () => invoke<CallSnapshot>("call_snapshot");
 export const enableCallMonitor = (enabled: boolean) =>
   invoke("call_monitor_enabled", { enabled });
 export const simulateCall = () => invoke("simulate_call");
-export const answerCall = (callId: string, accept: boolean) =>
-  invoke("answer_call", { callId, accept });
+export const answerCall = (
+  callId: string,
+  accept: boolean,
+  options: CallOptions,
+) => invoke("answer_call", { callId, accept, options });
 export const endSimulatedCall = () => invoke("end_simulated_call");
 export const physicalInputNames = () =>
   invoke<string[]>("audio_physical_inputs");
 export const outputDevices = () => invoke<OutputDevice[]>("audio_outputs");
 export const onCallStatus = (fn: (status: CallSnapshot) => void) =>
   listen<CallSnapshot>("call-status", (e) => fn(e.payload));
-export const onCallAccepted = (fn: (call: DetectedCall) => void) =>
-  listen<DetectedCall>("call-accepted", (e) => fn(e.payload));
+export const onCallAccepted = (fn: (call: AcceptedCall) => void) =>
+  listen<AcceptedCall>("call-accepted", (e) => fn(e.payload));
 export function physicalMicrophones(
   devices: MediaDeviceInfo[],
   nativeNames?: string[],
@@ -83,6 +132,9 @@ export class NativePcmPlayer {
   setActivityListener(fn: (active: boolean) => void) {
     this.activity = fn;
   }
+  private get label() {
+    return this.name === SYSTEM_OUTPUT ? "La sortie audio du Mac" : "La sortie virtuelle";
+  }
   get pendingSeconds() {
     return Math.max(0, (this.endAt - performance.now()) / 1000);
   }
@@ -107,7 +159,7 @@ export class NativePcmPlayer {
     const id = this.id;
     if (this.failure) return Promise.reject(this.failure);
     if (!id)
-      return Promise.reject(new Error("La sortie virtuelle n’est pas prête."));
+      return Promise.reject(new Error(`${this.label} n’est pas prête.`));
     let bytes = input;
     if (this.carry) {
       bytes = new Uint8Array(this.carry.length + input.length);
@@ -132,7 +184,7 @@ export class NativePcmPlayer {
                 { id },
               );
               if (status.failed)
-                throw new Error("La sortie virtuelle a été déconnectée.");
+                throw new Error(`${this.label} a été déconnectée.`);
               this.endAt = performance.now() + status.pendingSeconds * 1000;
               if (status.pendingSeconds <= 5.5) break;
               await new Promise((resolve) => setTimeout(resolve, 40));
@@ -179,7 +231,7 @@ export class NativePcmPlayer {
         id,
       });
       if (status.failed)
-        throw new Error("La sortie virtuelle a été déconnectée.");
+        throw new Error(`${this.label} a été déconnectée.`);
       if (status.pendingSeconds === 0) {
         this.endAt = 0;
         this.setActive(false);

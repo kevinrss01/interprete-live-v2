@@ -56,7 +56,7 @@ export function Home({
             <span className="home-choice-text">
               <span className="home-choice-title">Réunion en ligne</span>
               <span className="home-choice-detail">
-                Votre voix traduite dans Meet, Zoom ou Teams.
+                Sous-titres et voix traduites dans Meet, Zoom ou Teams.
               </span>
             </span>
             <span className="home-choice-meta" data-optional>

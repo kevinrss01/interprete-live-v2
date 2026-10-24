@@ -114,6 +114,8 @@ export async function* translateText(
       if (typeof delta === "string" && delta) yield delta;
     }
   }
+  // A body that ends before [DONE] was cut off: never present it as a complete translation.
+  throw new Error("TRANSLATION_STREAM");
 }
 export async function evaluateReadiness(
   text: string,

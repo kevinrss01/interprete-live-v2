@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { NativePcmPlayer } from "../src/lib/calls";
-import { InterpreterController } from "../src/lib/interpreter";
+import { InterpreterController, type SpeechChoice } from "../src/lib/interpreter";
 import {
   nextSegment,
   appendTranslation,
@@ -24,6 +24,8 @@ function harness(
   autoSession = true,
   nativePlayer?: NativePcmPlayer,
   audio = "ABQAFA==",
+  speech?: () => SpeechChoice | Promise<SpeechChoice>,
+  translate: (text: string) => string = (text) => "translation " + text,
 ) {
   const originalFetch = globalThis.fetch,
     originalSocket = globalThis.WebSocket;
@@ -31,6 +33,8 @@ function harness(
     text: string;
     followingText: string;
     isFinal: boolean;
+    speak?: boolean;
+    voice: string;
   }> = [];
   let socket: Socket;
   class Socket {
@@ -94,19 +98,20 @@ function harness(
     if (String(url) !== "/api/interpret") throw new Error("Unexpected URL");
     const input = JSON.parse(String(init?.body));
     requests.push(input);
-    const spoken = input.isFinal || !reject?.(input.text);
+    const ready = input.isFinal || !reject?.(input.text);
+    const spoken = ready && input.speak !== false;
     const events = [
       {
         type: "gate",
-        decision: spoken ? "ready" : "wait",
-        probability: spoken ? 0.99 : 0.1,
+        decision: ready ? "ready" : "wait",
+        probability: ready ? 0.99 : 0.1,
         elapsedMs: 1,
       },
-      { type: "text", delta: "translation " + input.text },
+      ...(translate(input.text) ? [{ type: "text", delta: translate(input.text) }] : []),
       ...(spoken
         ? [{ type: "audio", audio, sampleRate: 24000 }]
         : []),
-      { type: "done", spoken, text: "translation " + input.text, metrics: {} },
+      { type: "done", spoken, text: translate(input.text), metrics: {} },
     ];
     return new Response(
       events.map((e) => "data: " + JSON.stringify(e) + "\n\n").join(""),
@@ -156,6 +161,7 @@ function harness(
       captureOptions = options;
       return capture;
     },
+    speech,
   });
   return {
     controller,
@@ -437,4 +443,86 @@ test("a delayed overlay stop cannot cancel a replacement interpreter session", a
     assert.equal(h.controller.getSnapshot().sessionId, null);
     assert.equal(h.controller.getSnapshot().phase, "idle");
   } finally { h.cleanup(); }
+});
+
+test("captions commit approved text without audio and continue after the shown prefix", async () => {
+  const h = harness(
+    (text) => text.endsWith("à"),
+    undefined,
+    true,
+    undefined,
+    "ABQAFA==",
+    () => ({ speak: false }),
+  );
+  try {
+    await h.controller.start("b");
+    h.socket.delta("Bonjour à ");
+    await waitFor(() => h.requests.length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(
+      h.controller.getSnapshot().turns[0].translation,
+      "",
+      "a fragment the gate holds back is never shown",
+    );
+    h.socket.delta("tous. On commence ?");
+    await waitFor(() => h.controller.getSnapshot().turns[0].translation.includes("tous"));
+    assert.equal(h.player.chunks, 0);
+    assert.ok(h.requests.every((request) => request.speak === false));
+    h.options.onBoundary?.();
+    await waitFor(() => h.controller.getSnapshot().turns[0].status === "done");
+    const turn = h.controller.getSnapshot().turns[0];
+    assert.equal(turn.error, undefined);
+    assert.equal(h.controller.getSnapshot().error, null);
+    // Each source word is translated once: approved text is a commitment, like spoken audio.
+    const translated = h.requests
+      .filter((request) => !request.text.endsWith("à"))
+      .map((request) => request.text)
+      .join(" ");
+    assert.equal(translated.match(/Bonjour/g)?.length, 1);
+    assert.equal(translated.match(/commence/g)?.length, 1);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("a matched voice is used for speech without changing the saved profile voice", async () => {
+  const h = harness(undefined, undefined, true, undefined, "ABQAFA==", async () => ({
+    speak: true,
+    voice: "brian",
+  }));
+  try {
+    await h.controller.start("b");
+    h.socket.delta("Bonjour à tous. ");
+    await waitFor(() => h.player.chunks === 1);
+    assert.equal(h.requests[0].voice, "brian");
+    assert.equal(h.requests[0].speak, true);
+    assert.equal(h.controller.getSnapshot().profiles.b.voice, "george");
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("an empty caption is retried once, then a filler is skipped without blocking the turn", async () => {
+  const h = harness(
+    undefined,
+    undefined,
+    true,
+    undefined,
+    "ABQAFA==",
+    () => ({ speak: false }),
+    (text) => (/^hum/i.test(text) ? "" : "translation " + text),
+  );
+  try {
+    await h.controller.start("b");
+    h.socket.delta("Hum. ");
+    h.options.onBoundary?.();
+    await waitFor(() => h.controller.getSnapshot().turns[0]?.status === "done");
+    assert.equal(h.requests.filter((request) => /^hum/i.test(request.text)).length, 2);
+    h.options.onAudio(new Uint8Array(4800));
+    h.socket.delta("Bonjour à tous.");
+    await waitFor(() => h.controller.getSnapshot().turns.some((turn) => turn.translation === "translation Bonjour à tous."));
+    assert.equal(h.controller.getSnapshot().error, null);
+  } finally {
+    h.cleanup();
+  }
 });

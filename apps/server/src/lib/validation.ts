@@ -12,6 +12,8 @@ export const interpretSchema = z
     speaker: z.enum(["a", "b"]),
     voice: z.string().min(1).max(1000),
     isFinal: z.boolean(),
+    // Captions only need the translated text (false); skipping synthesis saves time and voice credits.
+    speak: z.boolean().optional(),
     followingText: z.string().max(512).default(""),
     context: z
       .array(
@@ -30,6 +32,15 @@ export const interpretSchema = z
     (x) => x.sourceLanguage !== x.targetLanguage,
     "Les deux langues doivent être différentes.",
   );
+export const voiceMatchSchema = z.object({
+  language: languageSchema,
+  features: z.object({
+    medianPitchHz: z.number().min(50).max(500),
+    pitchRangeSemitones: z.number().min(0).max(36),
+    brightness: z.number().min(0).max(1),
+    voicedSeconds: z.number().min(0.2).max(120),
+  }),
+});
 export async function bodyJson(request: { text(): Promise<string> }) {
   const text = await request.text();
   if (text.length > 25000)

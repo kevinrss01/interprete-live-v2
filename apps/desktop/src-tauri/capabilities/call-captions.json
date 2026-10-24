@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "call-captions",
+  "description": "Display-only captions: listen to caption state; no microphone, audio capture, routing or emit permissions.",
+  "windows": [
+    "call-captions"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}
