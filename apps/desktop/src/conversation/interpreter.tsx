@@ -13,7 +13,7 @@ import type { InterpreterController } from "../lib/interpreter";
 import { clearOnboardingAccount } from "../onboarding/onboarding-account";
 import { SpeakerPanel } from "./speaker-panel";
 import { CallPanel, type CallPanelHandle } from "./call-panel";
-import { TranslationPill } from "./translation-overlay";
+import { TranslationPill } from "../windows/translation-overlay";
 import {
   useTranslationOverlay,
   type OverlayUpdate,

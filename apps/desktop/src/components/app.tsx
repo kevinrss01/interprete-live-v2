@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Interpreter } from "./interpreter";
+import { Interpreter } from "../conversation/interpreter";
 import { InterpreterController } from "../lib/interpreter";
 import { Onboarding } from "../onboarding/onboarding";
 import { loadOnboardingAccount } from "../onboarding/onboarding-account";
