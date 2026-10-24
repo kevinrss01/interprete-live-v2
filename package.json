@@ -1,0 +1,40 @@
+{
+  "name": "instant-translate",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3035",
+    "build": "next build",
+    "start": "next start --port 3035",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/app/*.test.ts",
+    "benchmark": "node scripts/benchmark.mjs",
+    "test:app": "tsx --test tests/app/*.test.ts",
+    "test:benchmark": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "lucide-react": "latest",
+    "ws": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/ws": "latest",
+    "tailwindcss": "4.3.3",
+    "@tailwindcss/postcss": "4.3.3",
+    "eslint": "latest",
+    "eslint-config-next": "16.4.2",
+    "tsx": "latest",
+    "@playwright/test": "latest"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.vercel/
+.env*
+!.env.example
+playwright-report/
+test-results/
+*.tsbuildinfo
+.impeccable/
+__pycache__/
+*.pyc
+.DS_Store
+
+benchmark-corpus/
+benchmark-results/
+report/
