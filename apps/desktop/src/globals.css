@@ -1822,7 +1822,8 @@ p.call-notice {
 .settings-card {
   padding: 0 16px;
   border-radius: 12px;
-  background: var(--fill);
+  /* Lighter than --fill so the white inputs still stand out. */
+  background: color-mix(in srgb, var(--fill) 55%, var(--surface));
 }
 .settings-row {
   display: flex;
