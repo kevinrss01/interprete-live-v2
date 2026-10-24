@@ -68,3 +68,6 @@ export const app = new Hono()
   );
 
 export type AppType = typeof app;
+
+// Vercel's Hono runtime loads this app without starting the standalone server.
+export default app;

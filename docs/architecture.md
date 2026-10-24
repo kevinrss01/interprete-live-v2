@@ -1,6 +1,8 @@
 # Architecture
 
-Interprète est une app desktop [Tauri 2](https://v2.tauri.app) qui traduit à voix haute deux personnes parlant à tour de rôle sur un même appareil. Toute l'application (interface, micro, transcription, lecture) tourne dans Tauri ; le VPS héberge l’API et ses clés fournisseurs. Le socle comptes/préférences utilise PostgreSQL, configurable séparément.
+Interprète traduit à voix haute deux personnes parlant à tour de rôle sur un même appareil. Son interface React/Vite fonctionne dans l’app [Tauri 2](https://v2.tauri.app) ou dans un navigateur HTTPS. L’API commune Hono conserve les clés fournisseurs côté serveur. Le socle comptes/préférences utilise PostgreSQL.
+
+Le déploiement web utilise deux projets du workspace Vercel VoiceCheap : `interprete-live` (racine `apps/desktop`, sortie `dist`) et `interprete-backend` (racine `apps/server`, Hono en région Frankfurt), avec Neon pour PostgreSQL. `VITE_API_URL` est intégré au build web ; `ALLOWED_ORIGINS` et les origines de confiance Better Auth autorisent ce domaine sur l’API. L’entrée Vercel charge le bundle ESM `dist/app.mjs` pour éviter les imports TypeScript sans extension à l’exécution. Le serveur autonome et le déploiement VPS ci-dessous restent disponibles.
 
 ## Vue d'ensemble
 
@@ -36,7 +38,7 @@ flowchart LR
   API -- "jeton éphémère" --> RT
 ```
 
-- Les **clés permanentes** (OpenAI, ElevenLabs, AI Gateway, secret de session) ne quittent jamais le VPS.
+- Les **clés permanentes** (OpenAI, ElevenLabs, AI Gateway, secret de session) restent sur le backend ; elles ne sont pas incluses dans le bundle web ou desktop.
 - La **transcription** est la seule connexion directe app → fournisseur : l'API délivre un jeton OpenAI éphémère, puis la webview envoie le PCM du micro directement à OpenAI Realtime, sans passer par le VPS.
 - La **traduction et la voix** passent par l'API, qui renvoie le texte et l'audio en SSE.
 
