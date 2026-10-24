@@ -127,7 +127,8 @@ static void destroy(InterpreteTap *tap) API_AVAILABLE(macos(14.2)) {
 
 // Returns owned JSON: {"scope":"app"|"system","processes":n} or {"error":"..."}.
 // Without matching processes, every app except Interprète is captured, so translated speech never loops back.
-char *interprete_tap_start(const char *prefixes_json, interprete_tap_samples callback, void *context, void **handle) {
+// With mute, the captured apps stay silent on the speakers while the tap is read; destroying it restores them.
+char *interprete_tap_start(const char *prefixes_json, bool mute, interprete_tap_samples callback, void *context, void **handle) {
   @autoreleasepool {
     *handle = NULL;
     if (@available(macOS 14.2, *)) {
@@ -151,7 +152,7 @@ char *interprete_tap_start(const char *prefixes_json, interprete_tap_samples cal
       description.UUID = [NSUUID UUID];
       description.name = @"Interprète";
       description.privateTap = YES;
-      description.muteBehavior = CATapUnmuted;
+      description.muteBehavior = mute ? CATapMutedWhenTapped : CATapUnmuted;
 
       InterpreteTap *tap = [InterpreteTap new];
       tap->tap = kAudioObjectUnknown;

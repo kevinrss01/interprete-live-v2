@@ -4,7 +4,7 @@ import type {
   VoiceFeatures,
   VoiceMatch,
 } from "@interprete/shared/contracts";
-import { MATCH_VOICES, nearestMatchVoice } from "@interprete/shared/languages";
+import { matchVoices, nearestMatchVoice, speakingVoice } from "@interprete/shared/languages";
 import { api, call } from "./api";
 import { MicrophoneCapture, type CaptureOptions } from "./audio";
 import { CallAudioPlayer, SYSTEM_OUTPUT } from "./calls";
@@ -56,7 +56,11 @@ const idle: ListeningState = {
   error: null,
   ended: null,
 };
-const DEFAULT_VOICE: ChosenVoice = { voice: "river", name: "River", source: "default" };
+// The neutral voice, or its native counterpart in the translation language.
+function defaultVoice(language: string): ChosenVoice {
+  const voice = speakingVoice("river", language);
+  return { voice: voice?.key ?? "river", name: voice?.name ?? "River", source: "default" };
+}
 const sleep = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
 
 // Translates what the other participants say: the call's audio feeds the same transcription and
@@ -223,6 +227,8 @@ export class CallListening {
     const settings = {
       ...listen,
       source: this.state.app,
+      // Their translated voice replaces their own: the call's original audio is muted meanwhile.
+      muteSource: this.state.options.voice,
       onStarted: ({ scope }: { scope: CaptureScope }) => {
         if (generation === this.generation) this.update({ scope });
       },
@@ -265,13 +271,13 @@ export class CallListening {
       while (!this.profiler.features(0.8) && performance.now() < deadline - wait / 2)
         await sleep(100);
       const features = this.profiler.features(0.25);
-      if (!features) return DEFAULT_VOICE;
-      const fallback = nearestMatchVoice(features.medianPitchHz);
+      if (!features) return defaultVoice(this.targetLanguage);
+      const fallback = nearestMatchVoice(features.medianPitchHz, this.targetLanguage);
       const match = await Promise.race([
         this.match(features),
         sleep(Math.max(250, deadline - performance.now())),
       ]);
-      const chosen = MATCH_VOICES.find((voice) => voice.key === match?.voice);
+      const chosen = matchVoices(this.targetLanguage).find((voice) => voice.key === match?.voice);
       return chosen && match
         ? { voice: chosen.key, name: chosen.name, source: match.source }
         : { voice: fallback.key, name: fallback.name, source: "pitch" as const };

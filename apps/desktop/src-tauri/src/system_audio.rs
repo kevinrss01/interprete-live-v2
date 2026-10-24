@@ -79,6 +79,7 @@ impl Sink {
 unsafe extern "C" {
     fn interprete_tap_start(
         prefixes: *const std::ffi::c_char,
+        mute: bool,
         callback: extern "C" fn(*mut std::ffi::c_void, *const f32, u32, f64),
         context: *mut std::ffi::c_void,
         handle: *mut *mut std::ffi::c_void,
@@ -125,6 +126,7 @@ impl Drop for Capture {
 #[cfg(target_os = "macos")]
 fn start(
     prefixes: Vec<&'static str>,
+    mute: bool,
     channel: Channel<InvokeResponseBody>,
 ) -> Result<Capture, String> {
     let prefixes =
@@ -141,7 +143,7 @@ fn start(
     }));
     let mut handle = std::ptr::null_mut();
     let ptr =
-        unsafe { interprete_tap_start(prefixes.as_ptr(), on_samples, sink.cast(), &mut handle) };
+        unsafe { interprete_tap_start(prefixes.as_ptr(), mute, on_samples, sink.cast(), &mut handle) };
     let reply = if ptr.is_null() {
         Err("CoreAudio did not respond.".to_string())
     } else {
@@ -204,6 +206,7 @@ fn start(
 #[cfg(not(target_os = "macos"))]
 fn start(
     _prefixes: Vec<&'static str>,
+    _mute: bool,
     _channel: Channel<InvokeResponseBody>,
 ) -> Result<Capture, String> {
     Err("Capturing call audio requires macOS.".into())
@@ -266,6 +269,8 @@ pub async fn system_audio_start(
     state: tauri::State<'_, SystemAudio>,
     id: String,
     source: Option<String>,
+    // Only the translation is heard: the captured call stays silent until the capture stops.
+    mute: Option<bool>,
     on_audio: Channel<InvokeResponseBody>,
 ) -> Result<Started, String> {
     main_only(&window)?;
@@ -280,7 +285,7 @@ pub async fn system_audio_start(
     let previous = state.0.lock().map_err(|e| e.to_string())?.reserve(&id);
     let capture = tauri::async_runtime::spawn_blocking(move || {
         drop(previous);
-        start(prefixes, on_audio)
+        start(prefixes, mute.unwrap_or(false), on_audio)
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -367,7 +372,7 @@ mod tests {
             Ok(())
         });
         let opening = Instant::now();
-        let capture = start(vec![], channel).expect("Start the process tap");
+        let capture = start(vec![], false, channel).expect("Start the process tap");
         let opened = opening.elapsed();
         std::thread::sleep(Duration::from_millis(1200));
         let started = capture.started.clone();
