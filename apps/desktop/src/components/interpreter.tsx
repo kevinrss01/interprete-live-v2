@@ -156,8 +156,8 @@ export function Interpreter({ controller }: { controller: InterpreterController 
       </a>
       <header className="topbar">
         <div className="frame topbar-inner">
-          <a className="wordmark" href="#main" aria-label="Interprète, accueil">
-            Interprète
+          <a className="wordmark" href="#main">
+            <img src="/logo.png" alt="Interprète, accueil" />
           </a>
           <div
             className="status"
