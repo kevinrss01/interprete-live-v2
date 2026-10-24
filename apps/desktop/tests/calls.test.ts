@@ -83,7 +83,7 @@ test("stopping before native open resolves closes the stale route and cannot rev
   finish();
   await opening;
   assert.deepEqual(calls, ["audio_route_open", "audio_route_close"]);
-  await assert.rejects(player.enqueue(new Uint8Array([0, 1])), /prête/);
+  await assert.rejects(player.enqueue(new Uint8Array([0, 1])), /not ready/);
   player.dispose();
 });
 test("device failure stops output and is surfaced while the microphone session is live", async () => {
@@ -220,7 +220,7 @@ test("system microphone switching requires a live output session and uses its ex
       return undefined as T;
     },
   );
-  await assert.rejects(player.activateSystemMicrophone(), /arrêtée/);
+  await assert.rejects(player.activateSystemMicrophone(), /stopped/);
   await player.unlock();
   await player.activateSystemMicrophone();
   assert.equal(calls[0].command, "audio_route_open");
@@ -229,5 +229,5 @@ test("system microphone switching requires a live output session and uses its ex
     id: calls[0].id,
   });
   player.stop();
-  await assert.rejects(player.activateSystemMicrophone(), /arrêtée/);
+  await assert.rejects(player.activateSystemMicrophone(), /stopped/);
 });

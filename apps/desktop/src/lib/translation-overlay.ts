@@ -73,7 +73,7 @@ export function useTranslationOverlay(
     void publisher.publish({ sessionId, phase, source, target, test }).then(
       () => onError(null),
       (error: unknown) =>
-        onError(`La pastille n’a pas pu être affichée : ${String(error)}`),
+        onError(`The pill could not be shown: ${String(error)}`),
     );
   }, [native, publisher, sessionId, phase, source, target, test, onError]);
   useEffect(() => {

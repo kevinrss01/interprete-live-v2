@@ -14,7 +14,7 @@ export type SystemAudioOptions = CaptureOptions & {
   onSilence?: (silent: boolean) => void;
 };
 export const SILENCE_NOTICE =
-  "Aucun son de l’appel n’est capté pour l’instant. Si quelqu’un parle, autorisez Interprète dans Réglages Système › Confidentialité et sécurité › Enregistrement de l’écran et de l’audio système.";
+  "No call audio is being captured yet. If someone is speaking, allow Interprète in System Settings › Privacy & Security › Screen & System Audio Recording.";
 
 function rms(bytes: Uint8Array) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -68,7 +68,7 @@ export class SystemAudioCapture {
     if (!(message instanceof ArrayBuffer)) {
       if (message?.type === "stalled")
         this.options.onError(
-          "Le son de l’appel n’arrive plus. Vérifiez l’autorisation d’enregistrement audio, puis relancez la traduction.",
+          "Call audio stopped arriving. Check the audio recording permission, then restart the translation.",
         );
       return;
     }

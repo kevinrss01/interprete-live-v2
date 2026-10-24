@@ -143,7 +143,7 @@ fn start(
     let ptr =
         unsafe { interprete_tap_start(prefixes.as_ptr(), on_samples, sink.cast(), &mut handle) };
     let reply = if ptr.is_null() {
-        Err("CoreAudio n’a pas répondu.".to_string())
+        Err("CoreAudio did not respond.".to_string())
     } else {
         let parsed =
             serde_json::from_slice::<Reply>(unsafe { std::ffi::CStr::from_ptr(ptr) }.to_bytes())
@@ -173,7 +173,7 @@ fn start(
                     error: Some(error), ..
                 }) => error,
                 Err(error) => error,
-                _ => "La capture de l’appel n’a pas démarré.".into(),
+                _ => "Call capture did not start.".into(),
             });
         }
     };
@@ -206,7 +206,7 @@ fn start(
     _prefixes: Vec<&'static str>,
     _channel: Channel<InvokeResponseBody>,
 ) -> Result<Capture, String> {
-    Err("La capture du son d’un appel nécessite macOS.".into())
+    Err("Capturing call audio requires macOS.".into())
 }
 
 // Creating a tap happens outside the lock. Only the most recent request may install its capture:
@@ -257,7 +257,7 @@ fn main_only(window: &tauri::WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         Ok(())
     } else {
-        Err("Capture réservée à la fenêtre principale.".into())
+        Err("Capture is reserved for the main window.".into())
     }
 }
 #[tauri::command]
@@ -270,7 +270,7 @@ pub async fn system_audio_start(
 ) -> Result<Started, String> {
     main_only(&window)?;
     if id.is_empty() || id.len() > 96 {
-        return Err("Capture invalide.".into());
+        return Err("Invalid capture.".into());
     }
     let prefixes = source
         .as_deref()
@@ -292,7 +292,7 @@ pub async fn system_audio_start(
         .install(&id, capture);
     if let Err(stale) = installed {
         tauri::async_runtime::spawn_blocking(move || drop(stale));
-        return Err("Cette capture a été arrêtée.".into());
+        return Err("This capture was stopped.".into());
     }
     Ok(started)
 }

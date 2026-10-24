@@ -79,15 +79,15 @@ const CALL_APPS: &[(&str, &str)] = &[
     ("org.whispersystems.signal-desktop", "Signal"),
     ("com.facebook.archon", "Messenger"),
     ("com.google.chrome", "Chrome / Meet"),
-    ("com.apple.safari", "Safari / appel web"),
-    ("com.microsoft.edgemac", "Edge / appel web"),
-    ("org.mozilla.firefox", "Firefox / appel web"),
-    ("company.thebrowser.browser", "Arc / appel web"),
-    ("company.thebrowser.dia", "Dia / appel web"),
-    ("com.brave.browser", "Brave / appel web"),
-    ("com.operasoftware.opera", "Opera / appel web"),
-    ("com.vivaldi.vivaldi", "Vivaldi / appel web"),
-    ("org.chromium.chromium", "Chromium / appel web"),
+    ("com.apple.safari", "Safari / web call"),
+    ("com.microsoft.edgemac", "Edge / web call"),
+    ("org.mozilla.firefox", "Firefox / web call"),
+    ("company.thebrowser.browser", "Arc / web call"),
+    ("company.thebrowser.dia", "Dia / web call"),
+    ("com.brave.browser", "Brave / web call"),
+    ("com.operasoftware.opera", "Opera / web call"),
+    ("com.vivaldi.vivaldi", "Vivaldi / web call"),
+    ("org.chromium.chromium", "Chromium / web call"),
 ];
 fn call_app(bundle: &str) -> Option<&'static str> {
     let bundle = bundle.to_lowercase();
@@ -99,7 +99,7 @@ fn call_app(bundle: &str) -> Option<&'static str> {
 // Safari plays through a WebKit process shared with other apps, and unknown or simulated
 // calls have no app: an empty list captures all audio except Interprète.
 pub fn tap_prefixes(app: &str) -> Vec<&'static str> {
-    if app == "Safari / appel web" {
+    if app == "Safari / web call" {
         return vec![];
     }
     let mut prefixes: Vec<&'static str> = CALL_APPS
@@ -122,7 +122,7 @@ fn probe() -> Result<Probe, String> {
         // The bridge returns a NUL-terminated strdup allocation, valid until free below.
         let ptr = unsafe { interprete_call_probe() };
         if ptr.is_null() {
-            return Err("CoreAudio n’a pas répondu.".into());
+            return Err("CoreAudio did not respond.".into());
         }
         let result = unsafe { std::ffi::CStr::from_ptr(ptr) }.to_bytes();
         let parsed = serde_json::from_slice(result).map_err(|e| e.to_string());
@@ -289,7 +289,7 @@ fn main_only(window: &tauri::WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         Ok(())
     } else {
-        Err("Action réservée à la fenêtre principale.".into())
+        Err("This action is reserved for the main window.".into())
     }
 }
 #[tauri::command]
@@ -326,7 +326,7 @@ pub fn simulate_call(
     main_only(&window)?;
     let mut m = state.0.lock().map_err(|e| e.to_string())?;
     if m.snapshot.call.is_some() {
-        return Err("Terminez l’appel détecté avant de lancer la simulation.".into());
+        return Err("End the detected call before starting the simulation.".into());
     }
     m.snapshot.call = Some(DetectedCall {
         id: format!(
@@ -354,7 +354,7 @@ pub fn answer_call(
     options: CallOptions,
 ) -> Result<(), String> {
     if accept && !options.captions && !options.voice && !options.microphone {
-        return Err("Choisissez au moins une traduction.".into());
+        return Err("Choose at least one translation.".into());
     }
     let mut m = state.0.lock().map_err(|e| e.to_string())?;
     let call = m
@@ -362,10 +362,10 @@ pub fn answer_call(
         .call
         .as_ref()
         .filter(|c| c.id == call_id)
-        .ok_or("Cet appel est terminé.")?
+        .ok_or("This call has ended.")?
         .clone();
     if m.snapshot.accepted || m.snapshot.dismissed {
-        return Err("Cet appel a déjà reçu une réponse.".into());
+        return Err("This call has already been answered.".into());
     }
     m.snapshot.accepted = accept;
     m.snapshot.dismissed = !accept;
@@ -493,7 +493,7 @@ mod tests {
             tap_prefixes("FaceTime"),
             vec!["com.apple.facetime", "com.apple.avconferenced"]
         );
-        assert!(tap_prefixes("Safari / appel web").is_empty());
+        assert!(tap_prefixes("Safari / web call").is_empty());
         assert!(tap_prefixes("Google Meet · test").is_empty());
     }
     #[test]

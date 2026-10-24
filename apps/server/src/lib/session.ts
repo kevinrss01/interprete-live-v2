@@ -58,7 +58,7 @@ export function checkOrigin(request: Request) {
   if (origin && !allowedOrigin(origin))
     throw new AppError(
       "ORIGIN",
-      "Cette demande ne provient pas de l’application.",
+      "This request does not come from the app.",
       403,
     );
 }
@@ -71,7 +71,7 @@ export function session(request: Request) {
   if (!result || result.purpose !== "session")
     throw new AppError(
       "SESSION",
-      "Recharge la page pour démarrer une nouvelle session.",
+      "Reload the page to start a new session.",
       401,
     );
   return result;
@@ -121,7 +121,7 @@ export function resolveVoice(value: string, id: string, speaker: string) {
   )
     throw new AppError(
       "VOICE",
-      "Cette voix n’est plus disponible. Sélectionne une voix provisoire.",
+      "This voice is no longer available. Select a standard voice.",
       403,
     );
   return c.voiceId;
@@ -143,7 +143,7 @@ export function rateLimit(
   if (++bucket.count > max)
     throw new AppError(
       "RATE_LIMIT",
-      "Trop de demandes rapprochées. Patiente quelques instants.",
+      "Too many requests in a short time. Wait a moment.",
       429,
     );
   if (windows.size > 2000)

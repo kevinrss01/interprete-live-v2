@@ -22,7 +22,7 @@
       },
       {
         "label": "call-toast",
-        "title": "Appel détecté",
+        "title": "Call detected",
         "url": "index.html#call-toast",
         "width": 384,
         "height": 372,
@@ -37,7 +37,7 @@
       },
       {
         "label": "translation-overlay",
-        "title": "Traduction instantanée",
+        "title": "Live translation",
         "url": "index.html#translation-overlay",
         "width": 248,
         "height": 72,
@@ -55,7 +55,7 @@
       },
       {
         "label": "call-captions",
-        "title": "Sous-titres de l’appel",
+        "title": "Call captions",
         "url": "index.html#call-captions",
         "width": 980,
         "height": 220,

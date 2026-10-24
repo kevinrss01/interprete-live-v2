@@ -37,7 +37,7 @@ fn physical_inputs() -> Result<Vec<String>, String> {
         // The bridge returns an owned strdup buffer; free with the same C allocator after parsing.
         let ptr = unsafe { interprete_physical_inputs() };
         if ptr.is_null() {
-            return Err("Impossible de vérifier les microphones physiques.".into());
+            return Err("Unable to check the physical microphones.".into());
         }
         let parsed = serde_json::from_slice(unsafe { std::ffi::CStr::from_ptr(ptr) }.to_bytes())
             .map_err(|e| e.to_string());
@@ -99,7 +99,7 @@ impl Route {
             (
                 cpal::default_host()
                     .default_output_device()
-                    .ok_or("Aucune sortie audio n’est disponible sur ce Mac.")?,
+                    .ok_or("No audio output is available on this Mac.")?,
                 String::new(),
                 false,
             )
@@ -108,13 +108,13 @@ impl Route {
             let approved = available
                 .iter()
                 .find(|device| device.name == name)
-                .ok_or("Choisissez le microphone virtuel de l’app comme sortie.")?;
+                .ok_or("Choose the app’s virtual microphone as the output.")?;
             // Publish the aggregate as the microphone, but feed its sole loopback driver directly.
             let playback = if approved.app_mic {
                 available
                     .iter()
                     .find(|device| device.uid == "BlackHole2ch_UID")
-                    .ok_or("Le pilote du micro virtuel n’est plus disponible.")?
+                    .ok_or("The virtual microphone driver is no longer available.")?
             } else {
                 approved
             };
@@ -122,7 +122,7 @@ impl Route {
                 .devices()
                 .map_err(|e| e.to_string())?
                 .find(|device| device.name().is_ok_and(|n| n == playback.name))
-                .ok_or("Le micro virtuel est absent. Actualisez les périphériques.")?;
+                .ok_or("The virtual microphone is missing. Refresh the devices.")?;
             (device, approved.uid.clone(), approved.app_mic)
         };
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
@@ -162,7 +162,7 @@ impl Route {
                 error,
                 None,
             ),
-            _ => return Err("Format de sortie audio non pris en charge.".into()),
+            _ => return Err("Unsupported audio output format.".into()),
         }
         .map_err(|e| e.to_string())?;
         stream.play().map_err(|e| e.to_string())?;
@@ -180,7 +180,7 @@ impl Route {
     }
     fn activate_input(&mut self, path: PathBuf) -> Result<(), String> {
         if self.device_uid != virtual_microphone::UID {
-            return Err("Sélectionnez le microphone de l’app pour la bascule automatique.".into());
+            return Err("Select the app microphone for automatic switching.".into());
         }
         if self.input_lease.is_none() {
             self.input_lease =
@@ -198,15 +198,15 @@ impl Route {
     fn push(&mut self, bytes: &[u8]) -> Result<(), String> {
         if self.failed.load(Ordering::Relaxed) {
             return Err(if self.name == SYSTEM_OUTPUT {
-                "La sortie audio du Mac a été déconnectée. Relancez la traduction.".into()
+                "The Mac audio output was disconnected. Restart the translation.".into()
             } else {
-                "La sortie virtuelle a été déconnectée. Actualisez puis relancez la traduction."
+                "The virtual output was disconnected. Refresh, then restart the translation."
                     .into()
             });
         }
         let samples = self.resampler.convert(bytes, self.rate);
         if samples.len() > self.producer.vacant_len() {
-            return Err("La traduction a trop de retard. Arrêtez puis relancez l’appel.".into());
+            return Err("The translation is too far behind. Stop, then restart the call.".into());
         }
         self.producer.push_slice(&samples);
         Ok(())
@@ -281,12 +281,12 @@ impl Default for AudioRoute {
                         let result = routes
                             .iter_mut()
                             .find(|r| r.id == id)
-                            .ok_or("La traduction est arrêtée.".into())
+                            .ok_or("The translation is stopped.".into())
                             .and_then(|r| {
                                 r.activate_input(
                                     journal
                                         .clone()
-                                        .ok_or("La restauration du micro n’est pas configurée.")?,
+                                        .ok_or("Microphone restore is not configured.")?,
                                 )
                             });
                         let _ = reply.send(result);
@@ -300,7 +300,7 @@ impl Default for AudioRoute {
                         let result = close_routes(&mut routes, |r| r.id == id || r.name == name)
                             .and_then(|()| {
                                 if routes.len() >= 2 {
-                                    return Err("Trop de sorties audio sont ouvertes.".into());
+                                    return Err("Too many audio outputs are open.".into());
                                 }
                                 Route::new(id, &name).map(|route| routes.push(route))
                             });
@@ -310,7 +310,7 @@ impl Default for AudioRoute {
                         let result = routes
                             .iter_mut()
                             .find(|r| r.id == id)
-                            .ok_or("La sortie audio est arrêtée.".into())
+                            .ok_or("The audio output is stopped.".into())
                             .and_then(|r| r.push(&bytes));
                         let _ = reply.send(result);
                     }
@@ -326,7 +326,7 @@ impl Default for AudioRoute {
                                 pending_seconds: r.producer.occupied_len() as f64 / r.rate as f64,
                                 failed: r.failed.load(Ordering::Relaxed),
                             })
-                            .ok_or("La sortie audio est arrêtée.".into());
+                            .ok_or("The audio output is stopped.".into());
                         let _ = reply.send(result);
                     }
                 }
@@ -362,7 +362,7 @@ fn authorize(window: &tauri::WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         Ok(())
     } else {
-        Err("Action audio réservée à la fenêtre principale.".into())
+        Err("This audio action is reserved for the main window.".into())
     }
 }
 async fn request<T: Send + 'static>(
@@ -373,10 +373,10 @@ async fn request<T: Send + 'static>(
         let (reply, receiver) = mpsc::channel();
         sender
             .try_send(make(reply))
-            .map_err(|_| "La sortie audio est occupée. Arrêtez puis réessayez.".to_string())?;
+            .map_err(|_| "The audio output is busy. Stop, then try again.".to_string())?;
         receiver
             .recv_timeout(Duration::from_secs(5))
-            .map_err(|_| "La sortie audio ne répond plus.".to_string())?
+            .map_err(|_| "The audio output is not responding.".to_string())?
     })
     .await
     .map_err(|e| e.to_string())?
@@ -412,13 +412,13 @@ pub async fn audio_route_push(
 ) -> Result<(), String> {
     authorize(&window)?;
     if audio.len() > 256_000 {
-        return Err("Paquet audio trop volumineux.".into());
+        return Err("Audio packet too large.".into());
     }
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(audio)
         .map_err(|e| e.to_string())?;
     if bytes.len() % 2 != 0 {
-        return Err("Paquet PCM incomplet.".into());
+        return Err("Incomplete PCM packet.".into());
     }
     request(state.sender.clone(), move |reply| Command::Push {
         id,

@@ -63,11 +63,11 @@ export function CaptionsView({ captions }: { captions: CaptionsUpdate }) {
       className="captions"
       data-hidden={hidden}
       role="region"
-      aria-label="Sous-titres de l’appel"
+      aria-label="Call captions"
     >
       <div className="captions-meta" aria-hidden="true">
         <span className="captions-dot" data-live={live} />
-        {captions.status === "preview" ? "Aperçu · " : ""}
+        {captions.status === "preview" ? "Preview · " : ""}
         {captions.source.toUpperCase()}
         <ArrowRight size={11} />
         {captions.target.toUpperCase()}
@@ -76,8 +76,8 @@ export function CaptionsView({ captions }: { captions: CaptionsUpdate }) {
         {waiting ? (
           <p className="caption-line caption-waiting">
             {captions.status === "starting"
-              ? "Connexion au son de l’appel…"
-              : "Sous-titres prêts. Ils s’afficheront dès que quelqu’un parle."}
+              ? "Connecting to the call audio…"
+              : "Captions ready. They will appear as soon as someone speaks."}
           </p>
         ) : (
           captions.lines.map((line, index) => (

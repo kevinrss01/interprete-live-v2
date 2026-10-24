@@ -63,19 +63,19 @@ export function CallToast() {
       <div className="call-toast-head">
         <Phone size={19} aria-hidden="true" />
         <strong id="call-toast-title">
-          {call?.simulated ? "Simulation d’appel" : "Appel détecté"}
+          {call?.simulated ? "Simulated call" : "Call detected"}
         </strong>
         <button
           className="icon-btn"
           type="button"
-          aria-label="Ignorer cet appel"
+          aria-label="Dismiss this call"
           disabled={busy || !call}
           onClick={() => void answer(false)}
         >
           <X size={17} aria-hidden="true" />
         </button>
       </div>
-      <p>{call?.app ?? "Recherche d’un appel…"}</p>
+      <p>{call?.app ?? "Looking for a call…"}</p>
       <CallOptionChecks
         options={options}
         include={["captions", "voice", "microphone"]}
@@ -84,7 +84,7 @@ export function CallToast() {
         theirs={languages.theirs}
         route={`${
           localStorage.getItem("interprete-call-input-label") ||
-          "Microphone à configurer"
+          "Microphone not set up"
         } → ${localStorage.getItem("interprete-call-output") || APP_MICROPHONE_NAME}`}
         onChange={choose}
       />
@@ -100,7 +100,7 @@ export function CallToast() {
           disabled={busy || !call}
           onClick={() => void answer(false)}
         >
-          Ignorer
+          Dismiss
         </button>
         <button
           type="button"
@@ -108,7 +108,7 @@ export function CallToast() {
           disabled={busy || !call || !chosen}
           onClick={() => void answer(true)}
         >
-          Traduire l’appel
+          Translate the call
         </button>
       </div>
     </main>

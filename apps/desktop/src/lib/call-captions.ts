@@ -94,7 +94,7 @@ export class CaptionsPublisher {
       try {
         await this.call<void>("set_call_captions", { update });
       } catch (error) {
-        this.onError(`Les sous-titres n’ont pas pu être affichés : ${String(error)}`);
+        this.onError(`The captions could not be shown: ${String(error)}`);
       }
     }
     this.running = false;

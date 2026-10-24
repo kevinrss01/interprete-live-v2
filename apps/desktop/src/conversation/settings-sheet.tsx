@@ -62,10 +62,10 @@ function VoiceSettings({
         <span className={`mark mark-${profile.id}`} aria-hidden="true">
           {letter}
         </span>
-        Personne {letter}
+        Person {letter}
       </legend>
       <div className="field">
-        <Label htmlFor={`name-${profile.id}`}>Nom</Label>
+        <Label htmlFor={`name-${profile.id}`}>Name</Label>
         <Input
           id={`name-${profile.id}`}
           name={`name-${profile.id}`}
@@ -78,7 +78,7 @@ function VoiceSettings({
       </div>
       {current !== "ready" && (
         <div className="field">
-          <Label htmlFor={`voice-${profile.id}`}>Voix</Label>
+          <Label htmlFor={`voice-${profile.id}`}>Voice</Label>
           <Select
             items={VOICE_PRESETS.map((v) => ({
               value: v.key,
@@ -120,9 +120,9 @@ function VoiceSettings({
           }
         />
         <span>
-          <strong>Utiliser ma propre voix</strong>
+          <strong>Use my own voice</strong>
           <small>
-            J’autorise la création et l’utilisation de ma voix pour cette
+            I authorize the creation and use of my voice for this
             conversation.
           </small>
         </span>
@@ -132,12 +132,12 @@ function VoiceSettings({
           <div className="clone-progress-head">
             <span>
               {current === "creating"
-                ? "Création de la voix…"
+                ? "Creating the voice…"
                 : current === "verification"
-                  ? "Vérification nécessaire"
+                  ? "Verification required"
                   : current === "error"
-                    ? "Création à réessayer"
-                    : "Échantillon"}
+                    ? "Creation needs a retry"
+                    : "Sample"}
             </span>
             <span className="tabular">
               {Math.min(SAMPLE_TARGET, profile.sampleSeconds)} / {SAMPLE_TARGET}{" "}
@@ -147,7 +147,7 @@ function VoiceSettings({
           <div
             className="progress"
             role="progressbar"
-            aria-label="Échantillon pour le clonage"
+            aria-label="Cloning sample"
             aria-valuemin={0}
             aria-valuemax={SAMPLE_TARGET}
             aria-valuenow={Math.min(SAMPLE_TARGET, profile.sampleSeconds)}
@@ -159,15 +159,15 @@ function VoiceSettings({
             />
           </div>
           <p className="note">
-            La création démarre après 30 s de parole. Une minute améliore la
-            ressemblance.
+            Creation starts after 30 s of speech. A full minute improves the
+            likeness.
           </p>
         </div>
       )}
       {current === "ready" && (
         <p className="note">
-          <Check size={13} aria-hidden="true" /> Votre voix est prête. Elle est
-          conservée dans votre compte ElevenLabs.
+          <Check size={13} aria-hidden="true" /> Your voice is ready. It is
+          stored in your ElevenLabs account.
         </p>
       )}
       {profile.cloneError && (
@@ -181,8 +181,8 @@ function VoiceSettings({
             <Button className="btn" onClick={onClone}>
               <Sparkles size={15} aria-hidden="true" />
               {current === "error"
-                ? "Réessayer la création"
-                : "Créer la voix maintenant"}
+                ? "Retry creation"
+                : "Create the voice now"}
             </Button>
           )}
           {canRemove && (
@@ -193,7 +193,7 @@ function VoiceSettings({
               onClick={onRemove}
             >
               <Trash2 size={15} aria-hidden="true" />
-              Supprimer ma voix
+              Delete my voice
             </Button>
           )}
         </div>
@@ -237,15 +237,15 @@ export function SettingsSheet({
       >
         <div className="sheet-inner">
           <div className="sheet-head">
-            <SheetTitle id="settings-title">Réglages</SheetTitle>
+            <SheetTitle id="settings-title">Settings</SheetTitle>
             <SheetDescription className="sr-only">
-              Langues, voix et session.
+              Languages, voices, and session.
             </SheetDescription>
             <Button
               variant="ghost"
               className="icon-btn"
               onClick={() => onOpenChange(false)}
-              aria-label="Fermer les réglages"
+              aria-label="Close settings"
             >
               <X size={18} aria-hidden="true" />
             </Button>
@@ -273,18 +273,18 @@ export function SettingsSheet({
                   step={1}
                   value={Math.round(volume * 100)}
                   style={{ "--volume": `${Math.round(volume * 100)}%` } as CSSProperties}
-                  aria-label="Volume de la traduction"
+                  aria-label="Translation volume"
                   onChange={(e) => onVolume(Number(e.target.value) / 100)}
                 />
               </label>
               <p className="note">
-                Le micro reste ouvert jusqu’à ce que vous appuyiez sur Couper le micro,
-                même pendant les pauses et la lecture des traductions.
+                The microphone stays on until you press Mute microphone,
+                even during pauses and while translations play.
               </p>
               <p className="note">
-                <kbd>A</kbd> <kbd>B</kbd> pour parler, <kbd>Échap</kbd> pour
-                arrêter. La traduction parle pendant votre prise de parole, avec
-                l’annulation d’écho du navigateur.
+                <kbd>A</kbd> <kbd>B</kbd> to speak, <kbd>Esc</kbd> to
+                stop. The translation plays while you speak, with the
+                browser’s echo cancellation.
               </p>
             </fieldset>
             <div className="settings-group">
@@ -295,31 +295,31 @@ export function SettingsSheet({
                   <dd>OpenAI · GPT Live Transcribe</dd>
                 </div>
                 <div>
-                  <dt>Traduction</dt>
+                  <dt>Translation</dt>
                   <dd>OpenAI · GPT-5.4 nano</dd>
                 </div>
                 <div>
                   <dt>Validation</dt>
                   <dd>
                     Jev 1.14.0
-                    {decisionAvailable ? "" : " · indisponible"}
+                    {decisionAvailable ? "" : " · unavailable"}
                   </dd>
                 </div>
                 <div>
-                  <dt>Voix et clonage</dt>
+                  <dt>Voices and cloning</dt>
                   <dd>ElevenLabs · Flash v2.5</dd>
                 </div>
               </dl>
               <p className="note">
-                Voix générées par IA. L’app ne conserve pas les conversations
-                sur son serveur. Les échantillons autorisés pour le clonage sont
-                transmis à ElevenLabs ; vous pouvez supprimer votre voix
-                ci-dessus.
+                AI-generated voices. The app does not store conversations
+                on its server. Samples authorized for cloning are
+                sent to ElevenLabs; you can delete your voice
+                above.
               </p>
             </div>
             {onLeave && (
               <button type="button" className="settings-dev-leave" onClick={onLeave}>
-                dev : se déconnecter
+                dev: sign out
               </button>
             )}
           </div>

@@ -26,7 +26,7 @@ pub fn outputs(create: bool) -> Result<Vec<OutputDevice>, String> {
         // The bridge returns an owned strdup allocation; copy/parse before matching free.
         let ptr = unsafe { interprete_virtual_outputs(name.as_ptr(), uid.as_ptr(), create) };
         if ptr.is_null() {
-            return Err("Impossible de préparer le micro de l’app.".into());
+            return Err("Unable to prepare the app microphone.".into());
         }
         #[derive(Deserialize)]
         struct ResultBody {

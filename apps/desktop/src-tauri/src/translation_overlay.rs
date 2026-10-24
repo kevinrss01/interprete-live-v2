@@ -44,7 +44,7 @@ impl Snapshot {
                 .as_ref()
                 .is_some_and(|id| !id.is_empty() && id.len() <= 96)
             {
-                return Err("Session de traduction invalide.".into());
+                return Err("Invalid translation session.".into());
             }
             for language in [&update.source, &update.target] {
                 if !(2..=12).contains(&language.len())
@@ -52,7 +52,7 @@ impl Snapshot {
                         .bytes()
                         .all(|c| c.is_ascii_alphabetic() || c == b'-')
                 {
-                    return Err("Langue de traduction invalide.".into());
+                    return Err("Invalid translation language.".into());
                 }
             }
         }
@@ -64,7 +64,7 @@ impl Snapshot {
     }
     fn request_stop(&mut self, session_id: &str) -> Result<bool, String> {
         if !self.active() || self.session.session_id.as_deref() != Some(session_id) {
-            return Err("Cette traduction est déjà terminée.".into());
+            return Err("This translation has already ended.".into());
         }
         if self.stop_requested {
             return Ok(false);
@@ -119,7 +119,7 @@ fn authorize(window: &tauri::WebviewWindow, main_only: bool) -> Result<(), Strin
     if window.label() == "main" || (!main_only && window.label() == "translation-overlay") {
         Ok(())
     } else {
-        Err("Action réservée à la traduction.".into())
+        Err("This action is reserved for the translation.".into())
     }
 }
 #[tauri::command]

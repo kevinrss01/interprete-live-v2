@@ -49,7 +49,7 @@ export const voicePreview = new Hono().post(
       },
     );
     if (!response.ok)
-      throw new AppError("PREVIEW_PROVIDER", "ElevenLabs n’a pas pu lire cette voix.", 502);
+      throw new AppError("PREVIEW_PROVIDER", "ElevenLabs could not play this voice.", 502);
     return c.body(await response.arrayBuffer(), 200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" });
   },
 );

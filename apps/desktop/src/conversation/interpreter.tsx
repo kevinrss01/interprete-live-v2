@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ArrowLeftRight,
-  ChevronLeft,
+  AudioLines,
   CircleAlert,
-  LoaderCircle,
+  History,
+  MessagesSquare,
   Mic,
   MicOff,
+  Phone,
   SlidersHorizontal,
   X,
 } from "lucide-react";
@@ -21,7 +23,6 @@ import {
 } from "../lib/translation-overlay";
 import { desktopAvailable } from "../lib/calls";
 import { Conversation } from "./conversation";
-import { Home, type HomeChoice } from "./home";
 import { SettingsSheet } from "./settings-sheet";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 import { Button } from "@interprete/ui/components/button";
@@ -37,11 +38,15 @@ import {
   AlertDialogTitle,
 } from "@interprete/ui/components/alert-dialog";
 
-type View = "home" | HomeChoice;
-const VIEW_TITLES: Record<HomeChoice, string> = {
-  conversation: "Conversation",
-  call: "Réunion en ligne",
-};
+type View = "conversation" | "call" | "history" | "voices";
+
+// ponytail: History and Voices are empty prototype pages.
+const NAV: { view: View; label: string; icon: typeof Phone }[] = [
+  { view: "conversation", label: "Conversation", icon: MessagesSquare },
+  { view: "call", label: "Online meeting", icon: Phone },
+  { view: "history", label: "History", icon: History },
+  { view: "voices", label: "Voices", icon: AudioLines },
+];
 
 type PendingConfirm =
   | { kind: "clear" }
@@ -63,8 +68,7 @@ export function Interpreter({
   const [callOverlay, setCallOverlay] = useState<OverlayUpdate | null>(null);
   const [overlayError, setOverlayError] = useState<string | null>(null);
   const [callBusy, setCallBusy] = useState(false);
-  // Every launch starts on the two-choice home screen.
-  const [view, setView] = useState<View>("home");
+  const [view, setView] = useState<View>("conversation");
   const callMode = view === "call";
   const mainRef = useRef<HTMLElement>(null);
   const shownView = useRef(view);
@@ -124,28 +128,6 @@ export function Interpreter({
   const busy = state.phase !== "idle" || callBusy;
   const demo = state.input === "demo";
   const microphoneActive = state.phase === "listening" && state.input === "microphone";
-  const status = callBusy ? "Traduction de l’appel…" :
-    demo && state.phase === "listening" && state.connection === "reconnecting"
-      ? "Reconnexion · exemple audio"
-      : demo && (state.phase === "connecting" || state.phase === "listening")
-        ? "Exemple audio en cours…"
-        : state.phase === "connecting"
-          ? "Connexion au micro…"
-          : state.phase === "listening"
-            ? state.connection === "reconnecting"
-              ? "Reconnexion · micro actif"
-              : state.outputActive
-                ? "Écoute et traduction…"
-                : `${state.profiles[state.active].name} parle…`
-            : state.phase === "finishing"
-              ? "Fin de la prise de parole…"
-              : state.phase === "translating"
-                ? "Traduction…"
-                : state.phase === "playing"
-                  ? "Lecture de la traduction"
-                  : state.ready
-                    ? "Prêt"
-                    : "Connexion…";
   function onTalk(id: SpeakerId) {
     if (state.phase === "connecting" && state.active === id)
       controller.cancel();
@@ -193,65 +175,45 @@ export function Interpreter({
     />
   );
   return (
-    <div className="app">
+    <div className="shell">
       <a className="skip-link" href="#main">
-        Aller au contenu
+        Skip to content
       </a>
-      <header className="topbar">
-        <div className="frame topbar-inner">
-          {view === "home" ? (
-            <span className="wordmark">
-              <img src={logo} alt="Interprète" />
-            </span>
-          ) : (
-            <div className="topbar-title">
-              <Button
-                variant="ghost"
-                className="icon-btn topbar-back"
-                onClick={() => openView("home")}
-                aria-label="Retour à l’accueil"
-                title="Accueil"
-              >
-                <ChevronLeft size={18} aria-hidden="true" />
-              </Button>
-              <span>{VIEW_TITLES[view]}</span>
-            </div>
-          )}
-          <div
-            className="status"
-            data-phase={callBusy ? "listening" : state.phase}
-            data-ready={state.ready}
-            role="status"
-            // The call panel shows its own session status; this one tracks the conversation.
-            hidden={view === "home" || (view === "call" && !callBusy)}
-          >
-            {busy && state.phase !== "listening" ? (
-              <LoaderCircle size={13} className="spin" aria-hidden="true" />
-            ) : (
-              <span className="status-dot" aria-hidden="true" />
-            )}
-            <span className="status-text">{status}</span>
-          </div>
-          <Button
-            variant="ghost"
-            className="icon-btn topbar-settings"
+      <aside className="sidebar" aria-label="Navigation">
+        <img className="sidebar-logo" src={logo} alt="Interprète" />
+        <nav className="sidebar-nav">
+          {NAV.map(({ view: id, label, icon: Icon }) => (
+            <button
+              key={id}
+              className="sidebar-item"
+              aria-current={view === id ? "page" : undefined}
+              onClick={() => openView(id)}
+            >
+              <Icon size={16} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <button
+            className="sidebar-item"
             onClick={() => setShowSettings(true)}
             aria-haspopup="dialog"
             aria-expanded={showSettings}
-            aria-label="Réglages"
-            title="Réglages"
           >
-            <SlidersHorizontal size={18} aria-hidden="true" />
-          </Button>
+            <SlidersHorizontal size={16} aria-hidden="true" />
+            Settings
+          </button>
         </div>
-      </header>
+      </aside>
+      <div className="app panel">
       {overlayError && (
         <div className="frame alert" role="alert">
           <span>{overlayError}</span>
           <Button
             variant="ghost"
             className="icon-btn"
-            aria-label="Fermer le message de la pastille"
+            aria-label="Dismiss overlay message"
             onClick={() => setOverlayError(null)}
           >
             <X size={16} aria-hidden="true" />
@@ -275,7 +237,6 @@ export function Interpreter({
         className="frame main"
         data-view={view}
       >
-        {view === "home" && <Home profiles={state.profiles} onChoose={openView} />}
         <CallPanel
           ref={callPanelRef}
           onOverlayChange={setCallOverlay}
@@ -296,6 +257,14 @@ export function Interpreter({
             busy={busy}
           />
         )}
+        {(view === "history" || view === "voices") && (
+          <section
+            className="placeholder"
+            aria-label={NAV.find((n) => n.view === view)?.label}
+          >
+            <p className="empty-title">Coming soon</p>
+          </section>
+        )}
       </main>
       <div className="dock" hidden={view !== "conversation"}>
         <div className="frame">
@@ -307,7 +276,7 @@ export function Interpreter({
                 variant="ghost"
                 className="icon-btn"
                 onClick={controller.dismissError}
-                aria-label="Fermer le message"
+                aria-label="Dismiss message"
               >
                 <X size={16} aria-hidden="true" />
               </Button>
@@ -324,25 +293,25 @@ export function Interpreter({
                 <MicOff size={14} aria-hidden="true" />
               )}
               {microphoneActive
-                ? "Micro actif"
+                ? "Mic on"
                 : !demo && state.phase === "connecting"
-                  ? "Activation du micro…"
+                  ? "Turning on mic…"
                   : state.input === "microphone" && state.phase === "finishing"
-                    ? "Arrêt du micro…"
-                    : "Micro désactivé"}
+                    ? "Turning off mic…"
+                    : "Mic off"}
             </span>
             <span id="microphone-help" className="live-controls-help">
               {demo
-                ? "L’exemple utilise un enregistrement, sans votre micro."
+                ? "The sample uses a recording, not your mic."
                 : microphoneActive
-                  ? "La traduction suit votre voix. Coupez le micro pour terminer."
+                  ? "The translation follows your voice. Turn off the mic to finish."
                   : state.phase === "idle"
-                    ? "Activez le micro de la personne qui parle."
+                    ? "Turn on the speaker’s mic."
                     : state.phase === "connecting"
-                      ? "Autorisez l’accès au micro si demandé."
+                      ? "Allow microphone access if asked."
                       : state.phase === "playing"
-                        ? "Lecture de la traduction…"
-                        : "Fin de la traduction…"}
+                        ? "Playing the translation…"
+                        : "Finishing the translation…"}
             </span>
           </p>
           <div className="dock-grid">
@@ -355,10 +324,10 @@ export function Interpreter({
                   onClick={() => controller.cancel()}
                   aria-label={
                     state.phase === "listening" || state.phase === "connecting"
-                      ? "Annuler la prise de parole"
-                      : "Arrêter"
+                      ? "Cancel turn"
+                      : "Stop"
                   }
-                  title="Arrêter (Échap)"
+                  title="Stop (Esc)"
                 >
                   <X size={18} aria-hidden="true" />
                 </Button>
@@ -367,8 +336,8 @@ export function Interpreter({
                   variant="ghost"
                   className="icon-btn round"
                   onClick={swap}
-                  aria-label="Inverser les deux langues"
-                  title="Inverser les langues"
+                  aria-label="Swap languages"
+                  title="Swap languages"
                 >
                   <ArrowLeftRight size={16} aria-hidden="true" />
                 </Button>
@@ -377,6 +346,7 @@ export function Interpreter({
             {speaker("b")}
           </div>
         </div>
+      </div>
       </div>
       <SettingsSheet
         open={showSettings}
@@ -401,23 +371,23 @@ export function Interpreter({
           <AlertDialogHeader>
             <AlertDialogTitle>
               {pending?.kind === "remove"
-                ? "Supprimer cette voix"
-                : "Effacer la conversation"}
+                ? "Delete this voice"
+                : "Clear conversation"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pending?.kind === "remove"
-                ? "Supprimer définitivement cette voix du compte ElevenLabs ?"
-                : "Effacer le texte et l’audio de cette conversation sur cet appareil ?"}
+                ? "Permanently delete this voice from the ElevenLabs account?"
+                : "Clear this conversation’s text and audio on this device?"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-11 px-4">Annuler</AlertDialogCancel>
+            <AlertDialogCancel className="h-11 px-4">Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="h-11 px-4"
               variant={pending?.kind === "remove" ? "destructive" : "default"}
               onClick={confirmPending}
             >
-              {pending?.kind === "remove" ? "Supprimer" : "Effacer"}
+              {pending?.kind === "remove" ? "Delete" : "Clear"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -45,7 +45,7 @@ test("fragmented text/audio streams require an explicit successful end", async (
       sse(['data: {"type":"text","delta":"partial"}\n\n']);
     await assert.rejects(
       () => streamInterpretation(body, new AbortController().signal, () => {}),
-      /avant la fin/,
+      /before the translation finished/,
     );
     globalThis.fetch = async () =>
       sse([

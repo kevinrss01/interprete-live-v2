@@ -156,7 +156,7 @@ export class CallListening {
         this.update({
           sessionId: null,
           callId: null,
-          error: snapshot.error ?? "La traduction de l’appel n’a pas démarré.",
+          error: snapshot.error ?? "The call translation did not start.",
           ended: "failed",
         });
       }

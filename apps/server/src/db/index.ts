@@ -9,7 +9,7 @@ let database: ReturnType<typeof connect> | undefined;
 function connect() {
   const url = z.url({ protocol: /^postgres(ql)?$/ }).safeParse(process.env.DATABASE_URL);
   if (!url.success)
-    throw new AppError("DATABASE_NOT_CONFIGURED", "DATABASE_URL doit être configurée.", 503);
+    throw new AppError("DATABASE_NOT_CONFIGURED", "DATABASE_URL must be configured.", 503);
   const pool = new Pool({ connectionString: url.data, connectionTimeoutMillis: 5000 });
   pool.on("error", () => console.error("PostgreSQL connection failed"));
   return drizzle(pool, { schema });

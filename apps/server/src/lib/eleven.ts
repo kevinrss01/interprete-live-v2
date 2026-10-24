@@ -32,7 +32,7 @@ export async function speechSocket(
   done.catch(() => {});
   const abort = () => {
     ws.terminate();
-    rejectDone(new AppError("ABORTED", "La lecture a été arrêtée.", 499));
+    rejectDone(new AppError("ABORTED", "Playback was stopped.", 499));
   };
   signal.addEventListener("abort", abort, { once: true });
   ws.on("message", (raw) => {
@@ -42,7 +42,7 @@ export async function speechSocket(
         rejectDone(
           new AppError(
             "VOICE_ERROR",
-            "La voix n’a pas pu être générée. Réessaie avec une voix provisoire.",
+            "The voice could not be generated. Try again with a standard voice.",
             502,
           ),
         );
@@ -62,7 +62,7 @@ export async function speechSocket(
     rejectDone(
       new AppError(
         "VOICE_NETWORK",
-        "La connexion à ElevenLabs a été interrompue.",
+        "The connection to ElevenLabs was interrupted.",
         502,
       ),
     ),
@@ -72,7 +72,7 @@ export async function speechSocket(
       rejectDone(
         new AppError(
           "VOICE_CLOSED",
-          "La synthèse vocale a été interrompue. Réessaie.",
+          "Speech synthesis was interrupted. Try again.",
           502,
         ),
       );
@@ -80,7 +80,7 @@ export async function speechSocket(
   await new Promise<void>((resolve, reject) => {
     const onError = () =>
       reject(
-        new AppError("VOICE_NETWORK", "Impossible de joindre ElevenLabs.", 502),
+        new AppError("VOICE_NETWORK", "Can’t reach ElevenLabs.", 502),
       );
     ws.once("error", onError);
     ws.once("open", () => {
@@ -109,7 +109,7 @@ export async function speechSocket(
       if (ws.readyState !== WebSocket.OPEN)
         throw new AppError(
           "VOICE_CLOSED",
-          "La connexion vocale est fermée.",
+          "The voice connection is closed.",
           502,
         );
       ws.send(JSON.stringify({ text, try_trigger_generation: true }));
@@ -127,7 +127,7 @@ export async function speechSocket(
                 reject(
                   new AppError(
                     "VOICE_TIMEOUT",
-                    "La voix met trop de temps à répondre.",
+                    "The voice is taking too long to respond.",
                     504,
                   ),
                 ),

@@ -47,7 +47,7 @@ impl Snapshot {
                 .as_ref()
                 .is_some_and(|id| !id.is_empty() && id.len() <= 96)
             {
-                return Err("Session de sous-titres invalide.".into());
+                return Err("Invalid captions session.".into());
             }
             for language in [&update.source, &update.target] {
                 if !(2..=12).contains(&language.len())
@@ -55,7 +55,7 @@ impl Snapshot {
                         .bytes()
                         .all(|c| c.is_ascii_alphabetic() || c == b'-')
                 {
-                    return Err("Langue des sous-titres invalide.".into());
+                    return Err("Invalid captions language.".into());
                 }
             }
             // The app sends the tail of recent lines; anything larger is a bug, not a caption.
@@ -65,7 +65,7 @@ impl Snapshot {
                     .iter()
                     .any(|line| line.id.len() > 96 || line.text.len() > 4000)
             {
-                return Err("Sous-titres trop longs.".into());
+                return Err("Captions are too long.".into());
             }
         }
         self.captions = update;
@@ -123,7 +123,7 @@ pub fn set_call_captions(
     update: Update,
 ) -> Result<(), String> {
     if window.label() != "main" {
-        return Err("Action réservée à la fenêtre principale.".into());
+        return Err("This action is reserved for the main window.".into());
     }
     let reposition = {
         let mut snapshot = state.0.lock().map_err(|e| e.to_string())?;
@@ -139,7 +139,7 @@ pub fn call_captions_snapshot(
     state: tauri::State<State>,
 ) -> Result<Snapshot, String> {
     if window.label() != "main" && window.label() != "call-captions" {
-        return Err("Action réservée aux sous-titres.".into());
+        return Err("This action is reserved for the captions.".into());
     }
     Ok(state.0.lock().map_err(|e| e.to_string())?.clone())
 }

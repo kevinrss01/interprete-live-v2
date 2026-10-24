@@ -30,7 +30,7 @@ test("session tokens are bearer-only and bound to the app origins", () => {
           headers: { ...headers, origin: "https://another.test" },
         }),
       ),
-    /application/,
+    /does not come from the app/,
   );
   assert.throws(
     () =>
@@ -65,7 +65,7 @@ test("rate limits reject repeated work and reset for a different session", () =>
   const id = randomUUID();
   rateLimit(id, "test", 2);
   rateLimit(id, "test", 2);
-  assert.throws(() => rateLimit(id, "test", 2), /Trop de demandes/);
+  assert.throws(() => rateLimit(id, "test", 2), /Too many requests/);
   assert.doesNotThrow(() => rateLimit(randomUUID(), "test", 2));
 });
 
@@ -98,7 +98,7 @@ test("translation inputs must use different supported languages and bounded text
           body: "x".repeat(25001),
         }),
       ),
-    /longue/,
+    /too long/,
   );
 });
 

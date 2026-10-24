@@ -34,19 +34,19 @@ impl InputDevice for NativeInput {
                 unsafe { interprete_default_input_uid(bytes.as_mut_ptr().cast(), bytes.len()) };
             if status != 0 {
                 return Err(format!(
-                    "Lecture du micro système impossible (CoreAudio {status})."
+                    "Unable to read the system microphone (CoreAudio {status})."
                 ));
             }
             let end = bytes
                 .iter()
                 .position(|byte| *byte == 0)
-                .ok_or("Identifiant du micro invalide.")?;
+                .ok_or("Invalid microphone identifier.")?;
             String::from_utf8(bytes[..end].to_vec())
-                .map_err(|_| "Identifiant du micro invalide.".into())
+                .map_err(|_| "Invalid microphone identifier.".into())
         }
         #[cfg(not(target_os = "macos"))]
         {
-            Err("La bascule du micro système nécessite macOS.".into())
+            Err("Switching the system microphone requires macOS.".into())
         }
     }
     fn select(&self, uid: &str) -> Result<(), String> {
@@ -55,21 +55,21 @@ impl InputDevice for NativeInput {
             unsafe extern "C" {
                 fn interprete_set_default_input_uid(uid: *const std::ffi::c_char) -> i32;
             }
-            let uid = std::ffi::CString::new(uid).map_err(|_| "Identifiant du micro invalide.")?;
+            let uid = std::ffi::CString::new(uid).map_err(|_| "Invalid microphone identifier.")?;
             // The borrowed CString remains alive for the synchronous CoreAudio call.
             let status = unsafe { interprete_set_default_input_uid(uid.as_ptr()) };
             if status == 0 {
                 Ok(())
             } else {
                 Err(format!(
-                    "Bascule du micro système impossible (CoreAudio {status}). Vérifiez que le microphone est connecté."
+                    "Unable to switch the system microphone (CoreAudio {status}). Check that the microphone is connected."
                 ))
             }
         }
         #[cfg(not(target_os = "macos"))]
         {
             let _ = uid;
-            Err("La bascule du micro système nécessite macOS.".into())
+            Err("Switching the system microphone requires macOS.".into())
         }
     }
     fn fallback(&self) -> Option<String> {
@@ -140,9 +140,9 @@ fn read_record(path: &Path) -> Result<Option<Record>, String> {
     match fs::read(path) {
         Ok(bytes) => serde_json::from_slice(&bytes)
             .map(Some)
-            .map_err(|_| "Le fichier de restauration du micro est invalide.".into()),
+            .map_err(|_| "The microphone restore file is invalid.".into()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(_) => Err("Impossible de lire la restauration du micro.".into()),
+        Err(_) => Err("Unable to read the microphone restore record.".into()),
     }
 }
 fn restore_device<D: InputDevice>(device: &D, previous: &str, target: &str) -> Result<(), String> {
@@ -168,7 +168,7 @@ pub fn recover<D: InputDevice>(device: &D, path: &Path) -> Result<(), String> {
                 .is_none_or(|start| Some(start) == record.owner_start))
     {
         return Err(
-            "Une autre session contrôle déjà le micro système. Arrêtez-la avant de démarrer."
+            "Another session already controls the system microphone. Stop it before starting."
                 .into(),
         );
     }
@@ -177,7 +177,7 @@ pub fn recover<D: InputDevice>(device: &D, path: &Path) -> Result<(), String> {
         restore_device(device, &record.previous, &record.target)?;
     }
     fs::remove_file(path)
-        .map_err(|_| "Impossible de terminer la restauration du micro.".to_string())
+        .map_err(|_| "Unable to finish restoring the microphone.".to_string())
 }
 pub struct InputLease<D: InputDevice = NativeInput> {
     device: D,
@@ -207,9 +207,9 @@ impl<D: InputDevice> InputLease<D> {
         };
         let parent = path
             .parent()
-            .ok_or("Emplacement de restauration invalide.")?;
+            .ok_or("Invalid restore location.")?;
         fs::create_dir_all(parent)
-            .map_err(|_| "Impossible de préparer la restauration du micro.")?;
+            .map_err(|_| "Unable to prepare the microphone restore.")?;
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
@@ -232,7 +232,7 @@ impl<D: InputDevice> InputLease<D> {
             fs::hard_link(&staging, &path)
         })();
         let _ = fs::remove_file(&staging);
-        written.map_err(|_| "Impossible de sauvegarder le micro d’origine ; une autre session utilise peut-être la bascule automatique.".to_string())?;
+        written.map_err(|_| "Unable to save the original microphone; another session may be using automatic switching.".to_string())?;
         let mut lease = Self {
             device,
             path,
@@ -258,7 +258,7 @@ impl<D: InputDevice> InputLease<D> {
             restore_device(&self.device, &self.record.previous, &self.record.target)?;
         }
         fs::remove_file(&self.path)
-            .map_err(|_| "Impossible de terminer la restauration du micro.".to_string())?;
+            .map_err(|_| "Unable to finish restoring the microphone.".to_string())?;
         self.armed = false;
         Ok(())
     }

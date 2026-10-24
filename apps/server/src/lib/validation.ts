@@ -3,7 +3,7 @@ import { LANGUAGES } from "@interprete/shared/languages";
 import { AppError } from "./errors";
 export const languageSchema = z
   .string()
-  .refine((x) => LANGUAGES.some((l) => l.code === x), "Langue non disponible");
+  .refine((x) => LANGUAGES.some((l) => l.code === x), "Language not available");
 export const interpretSchema = z
   .object({
     text: z.string().trim().min(1).max(4000),
@@ -30,7 +30,7 @@ export const interpretSchema = z
   })
   .refine(
     (x) => x.sourceLanguage !== x.targetLanguage,
-    "Les deux langues doivent être différentes.",
+    "The two languages must be different.",
   );
 export const voiceMatchSchema = z.object({
   language: languageSchema,
@@ -44,11 +44,11 @@ export const voiceMatchSchema = z.object({
 export async function bodyJson(request: { text(): Promise<string> }) {
   const text = await request.text();
   if (text.length > 25000)
-    throw new AppError("PAYLOAD", "Cette phrase est trop longue.", 413);
+    throw new AppError("PAYLOAD", "This sentence is too long.", 413);
   try {
     return JSON.parse(text);
   } catch {
-    throw new AppError("PAYLOAD", "La demande est illisible.");
+    throw new AppError("PAYLOAD", "The request could not be read.");
   }
 }
 export function parse<T>(schema: z.ZodType<T>, data: unknown): T {
@@ -56,7 +56,7 @@ export function parse<T>(schema: z.ZodType<T>, data: unknown): T {
   if (!result.success)
     throw new AppError(
       "VALIDATION",
-      result.error.issues[0]?.message || "Vérifie les informations saisies.",
+      result.error.issues[0]?.message || "Check the information you entered.",
     );
   return result.data;
 }

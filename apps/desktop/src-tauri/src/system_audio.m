@@ -159,7 +159,7 @@ char *interprete_tap_start(const char *prefixes_json, interprete_tap_samples cal
       tap->callback = callback;
       tap->context = context;
       OSStatus status = AudioHardwareCreateProcessTap(description, &tap->tap);
-      if (status != noErr) return failure(@"Impossible de capter le son de l’appel.", status);
+      if (status != noErr) return failure(@"Unable to capture the call audio.", status);
 
       AudioStreamBasicDescription format = {0};
       UInt32 size = sizeof(format);
@@ -168,13 +168,13 @@ char *interprete_tap_start(const char *prefixes_json, interprete_tap_samples cal
       if (status != noErr || format.mFormatID != kAudioFormatLinearPCM || !(format.mFormatFlags & kAudioFormatFlagIsFloat) ||
           format.mBitsPerChannel != 32 || format.mSampleRate <= 0) {
         destroy(tap);
-        return failure(@"Format audio de l’appel non pris en charge.", status);
+        return failure(@"Unsupported call audio format.", status);
       }
       tap->rate = format.mSampleRate;
 
       // A private aggregate device that only contains the tap: no microphone or output stream is mixed in.
       NSDictionary *aggregate = @{
-        @kAudioAggregateDeviceNameKey: @"Interprète · audio de l’appel",
+        @kAudioAggregateDeviceNameKey: @"Interprète · call audio",
         @kAudioAggregateDeviceUIDKey: [NSUUID UUID].UUIDString,
         @kAudioAggregateDeviceIsPrivateKey: @YES,
         @kAudioAggregateDeviceIsStackedKey: @NO,
@@ -187,7 +187,7 @@ char *interprete_tap_start(const char *prefixes_json, interprete_tap_samples cal
       status = AudioHardwareCreateAggregateDevice((__bridge CFDictionaryRef)aggregate, &tap->aggregate);
       if (status != noErr) {
         destroy(tap);
-        return failure(@"Impossible de préparer la capture de l’appel.", status);
+        return failure(@"Unable to prepare the call capture.", status);
       }
       tap.queue = dispatch_queue_create(
         "ai.impulselab.interprete.call-audio",
@@ -202,12 +202,12 @@ char *interprete_tap_start(const char *prefixes_json, interprete_tap_samples cal
       if (status == noErr) status = AudioDeviceStart(tap->aggregate, tap->proc);
       if (status != noErr) {
         destroy(tap);
-        return failure(@"Impossible de démarrer la capture de l’appel.", status);
+        return failure(@"Unable to start the call capture.", status);
       }
       *handle = (__bridge_retained void *)tap;
       return owned_json(@{@"scope": processes.count ? @"app" : @"system", @"processes": @(processes.count)});
     }
-    return owned_json(@{@"error": @"La capture du son d’un appel nécessite macOS 14.2 ou plus récent."});
+    return owned_json(@{@"error": @"Capturing call audio requires macOS 14.2 or later."});
   }
 }
 

@@ -59,12 +59,12 @@ export const app = new Hono()
   .route("/api", voicePreview)
   .route("/api", voiceMatch)
   .notFound(() =>
-    errorResponse(new AppError("NOT_FOUND", "Cette route n’existe pas.", 404)),
+    errorResponse(new AppError("NOT_FOUND", "This route does not exist.", 404)),
   )
   .onError((e) =>
     errorResponse(
       e instanceof HTTPException
-        ? new AppError("PAYLOAD", "La demande est illisible.", e.status)
+        ? new AppError("PAYLOAD", "The request could not be read.", e.status)
         : e,
     ),
   );

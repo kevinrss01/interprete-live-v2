@@ -44,15 +44,15 @@ export function Conversation({
       {turns.length === 0 ? (
         <div className="empty">
           <p className="empty-title">
-            Choisissez vos langues, puis activez le micro.
+            Choose your languages, then turn on the microphone.
           </p>
           <p className="empty-text">
-            La traduction s’affiche ici et se lit à voix haute. Gardez le son
-            activé.
+            The translation appears here and is read aloud. Keep the sound
+            on.
           </p>
           <Button className="btn" onClick={onDemo} disabled={busy}>
             <Play size={13} fill="currentColor" aria-hidden="true" />
-            Essayer un exemple audio
+            Try an audio sample
           </Button>
         </div>
       ) : (
@@ -64,14 +64,14 @@ export function Conversation({
               disabled={busy}
               onClick={onDemo}
             >
-              Exemple audio
+              Audio sample
             </Button>
             <Button
               variant="ghost"
               className="icon-btn"
               onClick={onClear}
-              aria-label="Effacer la conversation"
-              title="Effacer la conversation"
+              aria-label="Clear the conversation"
+              title="Clear the conversation"
               disabled={busy}
             >
               <Trash2 size={16} aria-hidden="true" />
@@ -101,16 +101,16 @@ export function Conversation({
                         {turn.targetLanguage.toUpperCase()}
                       </span>
                       <span className="sr-only">
-                        {languageName(turn.sourceLanguage)} vers{" "}
+                        {languageName(turn.sourceLanguage)} to{" "}
                         {languageName(turn.targetLanguage)}
                       </span>
                     </span>
-                    {turn.demo && <span className="tag">Exemple</span>}
+                    {turn.demo && <span className="tag">Sample</span>}
                   </p>
                   {(turn.source || turn.status === "draft") && (
                     <p className="turn-source">
                       {turn.source || (
-                        <span className="pending">À l’écoute…</span>
+                        <span className="pending">Listening…</span>
                       )}
                     </p>
                   )}
@@ -118,13 +118,13 @@ export function Conversation({
                     (turn.source && turn.status !== "error")) && (
                     <p className="turn-translation">
                       {turn.translation || (
-                        <span className="pending">Traduction…</span>
+                        <span className="pending">Translating…</span>
                       )}
                       {turn.status === "working" && (
                         <LoaderCircle
                           size={15}
                           className="spin"
-                          aria-label="Traduction en cours"
+                          aria-label="Translating"
                         />
                       )}
                     </p>
@@ -146,18 +146,18 @@ export function Conversation({
                             fill="currentColor"
                             aria-hidden="true"
                           />
-                          Réécouter
+                          Replay
                         </Button>
                       )}
                       {(turn.metrics.firstAudioMs !== undefined ||
                         turn.metrics.playbackMs !== undefined) && (
                         <span className="tabular">
-                          Premier audio à{" "}
+                          First audio at{" "}
                           {(
                             (turn.metrics.firstAudioMs ??
                               turn.metrics.playbackMs ??
                               0) / 1000
-                          ).toLocaleString("fr-FR", {
+                          ).toLocaleString("en-US", {
                             maximumFractionDigits: 1,
                           })}{" "}
                           s

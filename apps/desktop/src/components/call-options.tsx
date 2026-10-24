@@ -23,20 +23,20 @@ export function CallOptionChecks({
 }) {
   const details: Record<Option, { title: string; detail: string }> = {
     captions: {
-      title: "Sous-titres",
-      detail: `Leur ${languageName(theirs).toLowerCase()} traduit en ${languageName(mine).toLowerCase()}, en bas de l’écran.`,
+      title: "Captions",
+      detail: `Their ${languageName(theirs)} translated into ${languageName(mine)}, at the bottom of the screen.`,
     },
     voice: {
-      title: "Voix traduite",
-      detail: "Leur traduction lue sur ce Mac, avec une voix proche. Casque conseillé.",
+      title: "Translated voice",
+      detail: "Their translation played on this Mac in a similar voice. Headphones recommended.",
     },
     microphone: {
-      title: "Ma voix dans l’appel",
-      detail: route ?? "Votre micro traduit, envoyé par le micro virtuel.",
+      title: "My voice in the call",
+      detail: route ?? "Your translated microphone, sent through the virtual microphone.",
     },
   };
   return (
-    <div className="call-options" role="group" aria-label="Traductions de l’appel">
+    <div className="call-options" role="group" aria-label="Call translations">
       {include.map((key) => (
         <label className="check" key={key}>
           <Checkbox

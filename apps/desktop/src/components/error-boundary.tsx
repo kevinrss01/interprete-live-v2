@@ -10,9 +10,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }> {
     if (!this.state.failed) return this.props.children;
     return (
       <main className="error-page">
-        <h1>La conversation a été interrompue.</h1>
-        <p>Rechargez l’interface pour reprendre.</p>
-        <Button onClick={() => location.reload()}>Réessayer</Button>
+        <h1>The conversation was interrupted.</h1>
+        <p>Reload the interface to continue.</p>
+        <Button onClick={() => location.reload()}>Try again</Button>
       </main>
     );
   }

@@ -163,7 +163,7 @@ test("the call's audio frames feed transcription, pauses and stalls like a micro
   channel.onmessage(silence);
   assert.equal(boundaries, 1, "one boundary per pause");
   channel.onmessage({ type: "stalled" });
-  assert.match(errors[0], /n’arrive plus/);
+  assert.match(errors[0], /stopped arriving/);
   assert.deepEqual(audio, [960, 960, 960]);
   await capture.stop();
   channel.onmessage(speech.buffer);
@@ -294,7 +294,7 @@ function fakeListening({
   };
 }
 const profiles = {
-  a: { id: "a", name: "Vous", language: "fr", voice: "sarah", consent: false, cloneStatus: "off", sampleSeconds: 0 },
+  a: { id: "a", name: "You", language: "fr", voice: "sarah", consent: false, cloneStatus: "off", sampleSeconds: 0 },
   b: { id: "b", name: "Eux", language: "en", voice: "george", consent: true, cloneStatus: "ready", sampleSeconds: 0 },
 } as const;
 
@@ -407,7 +407,7 @@ test("a capture failure ends the session with its error instead of a silent fini
     native: true,
     systemCapture: () => ({
       start: async () => {
-        throw new Error("Capture refusée par macOS.");
+        throw new Error("Capture denied by macOS.");
       },
       stop: async () => null,
       setOutputActive: () => {},
@@ -422,7 +422,7 @@ test("a capture failure ends the session with its error instead of a silent fini
     const state = listening.getSnapshot();
     assert.equal(state.sessionId, null);
     assert.equal(state.ended, "failed");
-    assert.match(state.error ?? "", /Capture refusée/);
+    assert.match(state.error ?? "", /Capture denied/);
   } finally {
     listening.dispose();
     globalThis.fetch = original;
