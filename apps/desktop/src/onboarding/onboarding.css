@@ -119,6 +119,49 @@
   font-size: 15px;
 }
 
+/* Only the titles rise. The form fields stay put; login reserves the same
+   hint line as sign-up so the two forms share one height and one position.
+   The logo sits outside this panel. */
+.onboarding-switch-panel {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+@keyframes onboarding-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.onboarding-switch-panel[data-motion] .onboarding-intro h1 > span,
+.onboarding-switch-panel[data-motion] .onboarding-intro h1 > em,
+.onboarding-switch-panel[data-motion] .onboarding-intro p,
+.onboarding-switch-panel[data-motion] .onboarding-form h2 {
+  animation: onboarding-rise 340ms var(--ease) both;
+}
+.onboarding-switch-panel[data-motion] .onboarding-intro h1 > em {
+  animation-delay: 40ms;
+}
+.onboarding-switch-panel[data-motion] .onboarding-intro p {
+  animation-delay: 70ms;
+}
+.onboarding-switch-panel[data-motion="back"] .onboarding-intro h1 > span,
+.onboarding-switch-panel[data-motion="back"] .onboarding-form h2 {
+  animation-delay: 30ms;
+}
+.onboarding-switch-panel[data-motion="back"] .onboarding-intro h1 > em {
+  animation-delay: 60ms;
+}
+.onboarding-switch-panel[data-motion="back"] .onboarding-intro p {
+  animation-delay: 90ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-switch-panel,
+  .onboarding-switch-panel * {
+    animation: none;
+  }
+}
+
 /* Step 1 — profile */
 .onboarding-profile {
   width: 100%;
@@ -129,6 +172,9 @@
   align-items: center;
 }
 .onboarding-intro h1 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   margin: 0;
   font-size: clamp(36px, 4.4vw, 64px);
   font-weight: 700;
@@ -170,23 +216,44 @@
   flex-direction: column;
   gap: 10px;
 }
-.onboarding-field > span {
+.onboarding-field > span,
+.onboarding-field > [data-slot="label"] {
   font-size: 16px;
   font-weight: 600;
+  line-height: 24px;
+}
+.onboarding-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 24px;
+}
+.onboarding-field-head .onboarding-inline-link {
+  min-height: 0;
+  font-size: 14px;
+  font-weight: 500;
 }
 .onboarding-field input,
-.onboarding-field select {
+.onboarding-field [data-slot="select-trigger"] {
+  width: 100%;
   min-height: 50px;
   padding: 0 18px;
   border: 1px solid var(--line-2);
   border-radius: 8px;
   background: var(--surface);
   font-size: 17px;
+  box-shadow: none;
 }
-.onboarding-field select {
-  appearance: none;
-  padding-right: 48px;
-  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%231b1b1a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E") no-repeat right 18px center;
+.onboarding-field input:focus,
+.onboarding-field input:focus-visible,
+.onboarding-field [data-slot="select-trigger"]:focus,
+.onboarding-field [data-slot="select-trigger"]:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  box-shadow: none;
 }
 .onboarding-field input::placeholder {
   color: var(--ink-3);
@@ -194,6 +261,10 @@
 .onboarding-field small {
   color: var(--ink-3);
   font-size: 14px;
+}
+/* Same line as the language hint, kept invisible so login does not sit higher. */
+.onboarding-reserve {
+  visibility: hidden;
 }
 .onboarding-inline-link {
   min-height: 0;
@@ -225,6 +296,7 @@
 /* Dev-only controls: dashed, so they never pass for product UI. */
 .onboarding-dev {
   align-self: center;
+  flex: none;
   min-height: 32px;
   padding: 0 12px;
   border: 1px dashed var(--line-2);
@@ -232,6 +304,7 @@
   background: transparent;
   color: var(--ink-3);
   font-size: 12px;
+  white-space: nowrap;
   cursor: pointer;
 }
 .onboarding-back {

@@ -28,3 +28,9 @@ export function saveOnboardingAccount(account: OnboardingAccount) {
     localStorage.setItem(storageKey, JSON.stringify(account));
   } catch {}
 }
+
+export function clearOnboardingAccount() {
+  try {
+    localStorage.removeItem(storageKey);
+  } catch {}
+}

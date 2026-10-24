@@ -150,9 +150,9 @@ At widths of (640px) or less, gutters become (16px), header height (52px), dock 
 
 ## Elevation & Depth
 
-The interface uses tonal separation and hairlines, with no drop shadows for depth. The modal backdrop dims the canvas at (24%) charcoal. The live speaking control has a red ring that grows with input level; it is audio feedback, not a surface shadow. The disconnected status dot uses an inset outline.
+The interface uses tonal separation and hairlines, with no drop shadows for depth. The modal backdrop dims the canvas at (24%) charcoal. The live speaking control has a red ring that grows with input level; it is audio feedback, not a surface shadow. The ready status dot is a plain (8px) green circle (`#2fbe4f`). Listening and a live call use the same circle in signal red. The disconnected status dot uses an inset outline.
 
-State transitions use `--ease`: controls change over (150ms), press feedback over (120ms), and the sheet enters over (200ms). Audio feedback responds over (80ms); cloning progress uses (300ms). Spinners and the listening status pulse signal ongoing work. Reduced-motion preference removes transitions and CSS animations.
+State transitions use `--ease`: controls change over (150ms), press feedback over (120ms), and the sheet enters over (200ms). Audio feedback responds over (80ms); cloning progress uses (300ms). Leaving onboarding runs for (460ms). The onboarding fades and eases back over (180ms); the app fades in over (420ms) while a fixed soft focus clears. The blur radius does not animate. Spinners and the listening status pulse signal ongoing work. Reduced-motion preference removes transitions and CSS animations, including that handoff.
 
 ## Shapes
 

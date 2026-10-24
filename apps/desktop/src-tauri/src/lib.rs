@@ -5,6 +5,9 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Keeps the embedded desktop icon in sync with icons/. See build.rs.
+    let _ = env!("INTERPRETE_ICON_STAMP");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(calls::CallState(std::sync::Mutex::new(
