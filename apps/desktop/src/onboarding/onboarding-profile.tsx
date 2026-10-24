@@ -1,6 +1,15 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { LANGUAGES, type Language } from "@interprete/shared/languages";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type OnboardingProfileValues = {
   language: Language;
@@ -52,8 +61,7 @@ export function OnboardingProfile({
     <div className="onboarding-profile">
       <section className="onboarding-intro">
         <h1>
-          All your languages.
-          <br />
+          <span>All your languages.</span>
           <em>Always your voice.</em>
         </h1>
         <p>Let’s get to know each other.</p>
@@ -68,25 +76,39 @@ export function OnboardingProfile({
         >
           <h2>About you</h2>
           <Field label="First name">
-            <input
+            <Input
               required
               autoFocus
               maxLength={40}
               autoComplete="given-name"
               placeholder="Your first name"
               value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setFirstName(e.target.value)}
             />
           </Field>
-          <Field label="Your language" hint="You’ll read a short text in this language.">
-            <select value={language} onChange={(e) => setLanguage(e.target.value as Language)}>
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.native}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <div className="onboarding-field">
+            <Label htmlFor="onboarding-language">Your language</Label>
+            <Select
+              items={LANGUAGES.map((l) => ({ value: l.code, label: l.native }))}
+              value={language}
+              onValueChange={(value) => {
+                if (!value || !LANGUAGES.some((l) => l.code === value)) return;
+                setLanguage(value as Language);
+              }}
+            >
+              <SelectTrigger id="onboarding-language">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start" alignItemWithTrigger={false}>
+                {LANGUAGES.map((l) => (
+                  <SelectItem key={l.code} value={l.code} className="pl-3">
+                    {l.native}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <small>You’ll read a short text in this language.</small>
+          </div>
           <button className="onboarding-primary onboarding-wide" type="submit">
             Continue
             <ArrowRight size={18} aria-hidden="true" />
@@ -111,7 +133,7 @@ export function OnboardingProfile({
           </button>
           <h2>Your account</h2>
           <Field label="Email">
-            <input
+            <Input
               required
               autoFocus
               type="email"
@@ -119,7 +141,7 @@ export function OnboardingProfile({
               autoComplete="email"
               placeholder="you@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
             />
           </Field>
           <Field label="Password">
@@ -179,7 +201,7 @@ export function PasswordInput({
   useEffect(() => input.current?.setCustomValidity(mismatch ? "The passwords don’t match." : ""), [mismatch]);
   return (
     <span className="onboarding-password">
-      <input
+      <Input
         ref={input}
         required
         type={shown ? "text" : "password"}
@@ -188,7 +210,7 @@ export function PasswordInput({
         autoComplete={login ? "current-password" : "new-password"}
         placeholder={placeholder}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
         aria-invalid={mismatch || undefined}
       />
       <button type="button" onClick={() => setShown(!shown)} aria-label={shown ? "Hide password" : "Show password"}>

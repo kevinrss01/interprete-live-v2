@@ -5,6 +5,7 @@ import type { InterpreterController } from "../lib/interpreter";
 import { loadOnboardingAccount, saveOnboardingAccount, type OnboardingAccount } from "./onboarding-account";
 import { onboardingReadCount, onboardingWords } from "./onboarding-alignment";
 import { OnboardingHeader, OnboardingStepper, type OnboardingStep } from "./onboarding-header";
+import { Auth, type AuthScreen } from "./auth";
 import { OnboardingPreview } from "./onboarding-preview";
 import { OnboardingProfile, type OnboardingProfileValues } from "./onboarding-profile";
 import { OnboardingReading } from "./onboarding-reading";
@@ -20,16 +21,19 @@ const MIN_SECONDS = 10; // ElevenLabs instant cloning minimum, also enforced by 
 export function Onboarding({
   controller,
   onDone,
-  onLogin,
 }: {
   controller: InterpreterController;
   onDone: () => void;
-  onLogin: () => void;
 }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const profile = state.profiles.a;
   const [account, setAccount] = useState<OnboardingAccount | null>(loadOnboardingAccount);
   const [step, setStep] = useState<OnboardingStep>(account ? "voice" : "profile");
+  // Login stays inside this screen so the logo header is not remounted.
+  const [auth, setAuth] = useState<AuthScreen | null>(null);
+  // Direction of the last login ↔ create-account switch. Null until the first switch,
+  // so the opening screen does not animate in.
+  const [motion, setMotion] = useState<"forward" | "back" | null>(null);
   const language = account?.language ?? profile.language;
   const recording = useOnboardingRecording(language);
   const [offset, setOffset] = useState(0);
@@ -196,7 +200,7 @@ export function Onboarding({
           step === "profile" && import.meta.env.DEV ? (
             // Dev only: open the app without creating an account each time.
             <button type="button" className="onboarding-dev" onClick={skipForDev}>
-              Dev: skip onboarding
+              dev: skip onboarding
             </button>
           ) : step !== "voice" || saving ? null : recording.status !== "idle" ? (
             <button type="button" className="onboarding-quiet" onClick={recording.reset}>
@@ -210,13 +214,36 @@ export function Onboarding({
         }
       />
       <main className="onboarding-main">
-        {step === "profile" && <OnboardingProfile onSubmit={createAccount} onLogin={onLogin} />}
-        {step === "voice" && (
+        {(auth || step === "profile") && (
+          <div key={auth ? "auth" : "signup"} className="onboarding-switch-panel" data-motion={motion ?? undefined}>
+            {auth ? (
+              <Auth
+                screen={auth}
+                controller={controller}
+                onNavigate={setAuth}
+                onSignUp={() => {
+                  setMotion("back");
+                  setAuth(null);
+                }}
+                onSignedIn={onDone}
+              />
+            ) : (
+              <OnboardingProfile
+                onSubmit={createAccount}
+                onLogin={() => {
+                  setMotion("forward");
+                  setAuth("login");
+                }}
+              />
+            )}
+          </div>
+        )}
+        {step === "voice" && !auth && (
           <OnboardingReading language={language} read={read} live={recordingNow}>
             {bottom}
           </OnboardingReading>
         )}
-        {step === "preview" && sample && (
+        {step === "preview" && sample && !auth && (
           <OnboardingPreview
             voice={profile.cloneVoice}
             sample={sample}

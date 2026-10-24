@@ -3,10 +3,9 @@ import { ArrowLeft, ArrowRight, LoaderCircle } from "lucide-react";
 import { LANGUAGES, type Language } from "@interprete/shared/languages";
 import { rpc, signIn } from "../lib/account";
 import type { InterpreterController } from "../lib/interpreter";
-import { saveOnboardingAccount } from "../onboarding/onboarding-account";
-import { OnboardingHeader } from "../onboarding/onboarding-header";
-import { Field, PasswordInput } from "../onboarding/onboarding-profile";
-import "../onboarding/onboarding.css";
+import { saveOnboardingAccount } from "./onboarding-account";
+import { Field, PasswordInput } from "./onboarding-profile";
+import "./onboarding.css";
 
 export type AuthScreen = "login" | "forgot" | "reset";
 
@@ -25,28 +24,35 @@ export function Auth({
   onSignedIn: () => void;
 }) {
   return (
-    <div className="onboarding">
-      <OnboardingHeader />
-      <main className="onboarding-main">
-        {screen === "login" && (
-          <Login controller={controller} onForgot={() => onNavigate("forgot")} onSignUp={onSignUp} onSignedIn={onSignedIn} />
-        )}
-        {screen === "forgot" && <Forgot onBack={() => onNavigate("login")} onReset={() => onNavigate("reset")} />}
-        {screen === "reset" && <Reset onDone={() => onNavigate("login")} />}
-      </main>
-    </div>
+    <>
+      {screen === "login" && (
+        <Login controller={controller} onForgot={() => onNavigate("forgot")} onSignUp={onSignUp} onSignedIn={onSignedIn} />
+      )}
+      {screen === "forgot" && <Forgot onBack={() => onNavigate("login")} onReset={() => onNavigate("reset")} />}
+      {screen === "reset" && <Reset onDone={() => onNavigate("login")} />}
+    </>
   );
 }
 
-function Layout({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+function Layout({
+  title,
+  subtitle,
+  lead,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  lead: string;
+  children: ReactNode;
+}) {
   return (
     <div className="onboarding-profile">
       <section className="onboarding-intro">
         <h1>
-          {title}
-          <br />
+          <span>{title}</span>
           <em>{subtitle}</em>
         </h1>
+        <p>{lead}</p>
       </section>
       {children}
     </div>
@@ -117,7 +123,7 @@ function Login({
   }
 
   return (
-    <Layout title="Welcome back." subtitle="Your voice is waiting.">
+    <Layout title="Welcome back." subtitle="Your voice is waiting." lead="Use your email and password.">
       <form className="onboarding-form" onSubmit={submit}>
         <h2>Log in</h2>
         <Field label="Email">
@@ -132,12 +138,18 @@ function Login({
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
-        <Field label="Password">
+        <div className="onboarding-field">
+          <span className="onboarding-field-head">
+            <span>Password</span>
+            <button type="button" className="onboarding-quiet onboarding-inline-link" onClick={onForgot}>
+              Forgot password?
+            </button>
+          </span>
           <PasswordInput login value={password} onChange={setPassword} placeholder="Your password" />
-        </Field>
-        <button type="button" className="onboarding-quiet onboarding-inline-link" onClick={onForgot}>
-          Forgot password?
-        </button>
+          <small className="onboarding-reserve" aria-hidden="true">
+            You’ll read a short text in this language.
+          </small>
+        </div>
         <ErrorLine error={error} />
         <Submit pending={pending} label="Log in" pendingLabel="Logging in…" />
         <p className="onboarding-switch">
@@ -157,7 +169,7 @@ function Forgot({ onBack, onReset }: { onBack: () => void; onReset: () => void }
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   return (
-    <Layout title="It happens." subtitle="Let’s get you back in.">
+    <Layout title="It happens." subtitle="Let’s get you back in." lead="We’ll send a link to your email.">
       {sent ? (
         <div className="onboarding-form">
           <h2>Check your email</h2>
@@ -215,7 +227,7 @@ function Reset({ onDone }: { onDone: () => void }) {
   const [done, setDone] = useState(false);
   const mismatch = confirm.length > 0 && confirm !== password;
   return (
-    <Layout title="Almost there." subtitle="Pick a new password.">
+    <Layout title="Almost there." subtitle="Pick a new password." lead="Choose something you haven’t used here.">
       {done ? (
         <div className="onboarding-form">
           <h2>Password updated</h2>

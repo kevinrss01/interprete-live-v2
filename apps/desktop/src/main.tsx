@@ -9,7 +9,6 @@ import { Interpreter } from "./components/interpreter";
 import { InterpreterController } from "./lib/interpreter";
 import { Onboarding } from "./onboarding/onboarding";
 import { loadOnboardingAccount } from "./onboarding/onboarding-account";
-import { Auth, type AuthScreen } from "./auth/auth";
 
 class ErrorBoundary extends Component<{ children: ReactNode }> {
   state = { failed: false };
@@ -31,7 +30,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }> {
 // One controller for onboarding and conversation: they share profile, consent and voice.
 function App() {
   const [controller] = useState(() => new InterpreterController());
-  const [screen, setScreen] = useState<"onboarding" | AuthScreen | "app">(() =>
+  const [screen, setScreen] = useState<"onboarding" | "app">(() =>
     loadOnboardingAccount()?.complete ? "app" : "onboarding",
   );
   useEffect(() => {
@@ -39,19 +38,7 @@ function App() {
     return () => controller.dispose();
   }, [controller]);
   if (screen === "app") return <Interpreter controller={controller} />;
-  if (screen === "onboarding")
-    return (
-      <Onboarding controller={controller} onDone={() => setScreen("app")} onLogin={() => setScreen("login")} />
-    );
-  return (
-    <Auth
-      screen={screen}
-      controller={controller}
-      onNavigate={setScreen}
-      onSignUp={() => setScreen("onboarding")}
-      onSignedIn={() => setScreen("app")}
-    />
-  );
+  return <Onboarding controller={controller} onDone={() => setScreen("app")} />;
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
