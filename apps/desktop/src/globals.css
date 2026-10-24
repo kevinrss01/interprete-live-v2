@@ -1387,45 +1387,130 @@ p.call-notice {
   font-size: 20px;
   line-height: 1.55;
 }
+/* Floating call prompt: same dark surface as the translation pill, on a clear window. */
+html.toast-window,
+.toast-window,
+.toast-window #root {
+  background: transparent;
+}
 .toast-window {
-  background: var(--surface);
-  overflow-y: auto;
+  overflow: hidden;
+}
+.toast-window #root {
+  padding: 0;
 }
 .call-toast {
-  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  width: 400px;
+  padding: 14px 16px 12px;
+  border-radius: 16px;
+  background: rgb(36 37 35 / 94%);
+  color: #fafaf9;
+  user-select: none;
 }
 .call-toast-head {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
+}
+.call-toast-head strong {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: -0.01em;
 }
 .call-toast-head .icon-btn {
   margin-left: auto;
-  height: 30px;
-  width: 30px;
+  height: 28px;
+  width: 28px;
+  border-radius: 8px;
+  color: #c5c7c1;
+}
+.call-toast-head .icon-btn:hover:not(:disabled) {
+  background: rgb(255 255 255 / 8%);
+  color: #fafaf9;
+}
+.call-toast-head .icon-btn:focus-visible,
+.call-toast .btn:focus-visible,
+.call-toast [data-slot="checkbox"]:focus-visible {
+  outline-color: #fafaf9;
 }
 .call-toast > p {
-  margin-top: 6px;
+  margin-top: 2px;
+  color: #c5c7c1;
+  font-size: 13px;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 .call-toast .call-actions {
-  margin-top: 14px;
+  margin-top: 4px;
+  padding-top: 12px;
   justify-content: flex-end;
 }
+.call-toast .btn {
+  min-height: 36px;
+  border-color: transparent;
+  background: #41433f;
+  color: #fafaf9;
+}
+.call-toast .btn:hover:not(:disabled) {
+  border-color: transparent;
+  background: #555850;
+}
+.call-toast .call-primary {
+  background: #fafaf9;
+  border-color: #fafaf9;
+  color: #1b1b1a;
+}
+.call-toast .call-primary:hover:not(:disabled) {
+  background: #e7e6e1;
+  border-color: #e7e6e1;
+}
 .call-toast .call-error {
+  margin-top: 8px;
   font-size: 12px;
+  color: #ffb1a8;
 }
 .call-options {
   display: grid;
   gap: 4px;
   margin-top: 12px;
 }
+.call-toast .call-options {
+  gap: 2px;
+  margin-top: 12px;
+}
 .call-toast .call-options .check {
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
   min-height: 0;
-  padding: 6px 0;
+  padding: 7px 0;
+}
+/* 16px box centered on the 16px title line, not the top of a taller line box. */
+.call-toast .call-options .check [data-slot="checkbox"] {
+  margin-top: 0;
+  border-color: rgb(250 250 249 / 38%);
+  background: transparent;
+  color: #1b1b1a;
+}
+.call-toast .call-options .check [data-slot="checkbox"][data-checked] {
+  border-color: #fafaf9;
+  background: #fafaf9;
+  color: #1b1b1a;
+}
+.call-toast .call-options .check strong {
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 16px;
+  color: #fafaf9;
 }
 .call-toast .call-options small {
+  margin-top: 3px;
+  color: #c5c7c1;
   font-size: 12px;
+  line-height: 1.4;
 }
 .call-section .call-options {
   gap: 12px;

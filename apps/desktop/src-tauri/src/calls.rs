@@ -240,8 +240,8 @@ fn publish(app: &tauri::AppHandle) {
                     let area = screen.work_area();
                     let scale = screen.scale_factor();
                     let _ = window.set_position(tauri::PhysicalPosition::new(
-                        area.position.x + area.size.width as i32 - (400.0 * scale) as i32,
-                        area.position.y + (16.0 * scale) as i32,
+                        area.position.x + area.size.width as i32 - (408.0 * scale) as i32,
+                        area.position.y + (8.0 * scale) as i32,
                     ));
                 }
                 let _ = window.set_visible_on_all_workspaces(true);
