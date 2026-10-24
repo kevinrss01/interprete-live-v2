@@ -4,7 +4,7 @@
 
 - L’intégration conserve les écrans de connexion/onboarding et leur contrôleur partagé, avec des routes indépendantes pour les fenêtres `#call-toast` et `#translation-overlay`.
 - `pnpm dev` réutilise l’orchestrateur backend avec l’option `--desktop` : PostgreSQL et les migrations précèdent le démarrage de l’API et de Studio ; l’app Tauri attend le message d’écoute de l’API. Les tests de cycle de vie vérifient le démarrage, l’ordre, l’interruption, la fermeture normale de l’app, les erreurs et la conservation du volume avec des exécutables simulés. Aucun lancement réel de Docker n’a été effectué pour cette intégration.
-- TypeScript, lint serveur, 8 tests de cycle de vie, 13 tests serveur et 34 tests desktop passent. Les builds serveur, Vite et le bundle macOS de développement passent ; 11 tests Rust passent et le test matériel reste ignoré par défaut. Les résultats matériels et natifs de la version locale ci-dessous restent distincts de ces vérifications d’intégration.
+- TypeScript, lint serveur, 8 tests de cycle de vie, 13 tests serveur et 35 tests desktop passent après intégration des contrôles explicites de microphone de `main`. Les builds serveur et Vite ont été revérifiés sur cet ensemble. Le bundle macOS de développement et les 11 tests Rust passent sur le snapshot natif inchangé ; le test matériel reste ignoré par défaut. Les résultats matériels et natifs de la version locale ci-dessous restent distincts de ces vérifications d’intégration.
 
 ## Commande unique et pastille flottante — 24 octobre
 

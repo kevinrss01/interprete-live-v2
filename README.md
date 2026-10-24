@@ -26,7 +26,7 @@ pnpm dev          # PostgreSQL + migrations + API + Studio + app macOS Tauri
 
 Après la première configuration, `pnpm dev` suffit à tout lancer depuis la racine du dépôt. Le backend est accessible sur `http://localhost:3035`, Vite sur `http://localhost:1420` et Studio sur https://local.drizzle.studio. `Ctrl+C` arrête les processus de développement et le conteneur PostgreSQL, en conservant son volume et les données. Les commandes `pnpm dev:server` et `pnpm dev:desktop` restent disponibles pour démarrer chaque partie séparément ; `pnpm --filter @interprete/desktop dev:web` lance uniquement Vite.
 
-Choisir les deux langues, puis utiliser le bouton de la personne qui parle. La traduction commence pendant sa prise de parole, par petits segments, sans attendre l’arrêt du micro. Le micro reste ouvert pendant les pauses et la lecture ; seul le bouton Terminer clôt son tour. Les touches **A**, **B** et **Échap** permettent aussi de piloter la session.
+Choisir les deux langues, puis appuyer sur **Activer le micro** pour la personne qui parle, dans la zone **Traduction en direct**. L’état du micro reste visible au-dessus des commandes. La traduction commence pendant sa prise de parole, par petits segments, sans attendre l’arrêt du micro. Le micro reste ouvert pendant les pauses et la lecture ; **Couper le micro** clôt son tour. Les touches **A**, **B** et **Échap** permettent aussi de piloter la session.
 
 Le bouton d’exemple utilise un enregistrement synthétique pour tester toute la chaîne sans microphone. Il ne sert jamais au clonage. Une pastille ovale à droite de l’écran indique la session en cours et permet de l’arrêter depuis n’importe quelle application. **Appels sur Mac → Tester la pastille** affiche son aperçu sans ouvrir le micro.
 

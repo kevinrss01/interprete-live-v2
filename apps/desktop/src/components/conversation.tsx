@@ -43,7 +43,7 @@ export function Conversation({
       {turns.length === 0 ? (
         <div className="empty">
           <p className="empty-title">
-            Choisissez vos langues, puis appuyez sur Parler.
+            Choisissez vos langues, puis activez le micro.
           </p>
           <p className="empty-text">
             La traduction s’affiche ici et se lit à voix haute. Gardez le son
