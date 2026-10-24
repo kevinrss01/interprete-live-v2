@@ -9,10 +9,11 @@ import {
   Mic,
   MicOff,
   Phone,
+  Plus,
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { signOut } from "../lib/account";
+import { signOut, readAuthToken } from "../lib/account";
 import type { InterpreterController } from "../lib/interpreter";
 import { clearOnboardingAccount } from "../onboarding/onboarding-account";
 import { SpeakerPanel } from "./speaker-panel";
@@ -23,7 +24,11 @@ import {
   type OverlayUpdate,
 } from "../lib/translation-overlay";
 import { desktopAvailable } from "../lib/calls";
+import { discussionInputs, discussionLog, openDiscussion } from "../lib/discussion";
+import { startDiscussionSync } from "../lib/discussion-sync";
+import { useDiscussion } from "../lib/use-discussion";
 import { Conversation } from "./conversation";
+import { HistoryPage } from "./history";
 import { SettingsPage } from "./settings";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 import { Button } from "@interprete/ui/components/button";
@@ -50,6 +55,7 @@ const NAV: { view: View; label: string; icon: typeof Phone }[] = [
 
 type PendingConfirm =
   | { kind: "clear" }
+  | { kind: "clear-call" }
   | { kind: "remove"; id: SpeakerId };
 
 export function Interpreter({
@@ -64,6 +70,13 @@ export function Interpreter({
     controller.getSnapshot,
     controller.getServerSnapshot,
   );
+  const names = { you: state.profiles.a.name, them: state.profiles.b.name };
+  const { state: discussions, messages: conversationMessages } = useDiscussion({
+    kind: "conversation",
+    turns: state.turns,
+    names,
+  });
+  useEffect(() => startDiscussionSync(discussionLog), []);
   const callPanelRef = useRef<CallPanelHandle>(null);
   const previewCaptions = useCallback((visible: boolean) => {
     callPanelRef.current?.previewCaptions(visible);
@@ -165,8 +178,17 @@ export function Interpreter({
   }
   function confirmPending() {
     if (!pending) return;
-    if (pending.kind === "clear") controller.clearConversation();
-    else void controller.removeVoice(pending.id);
+    if (pending.kind === "clear" || pending.kind === "clear-call") {
+      if (pending.kind === "clear") {
+        discussionLog.record("conversation", discussionInputs(state.turns, names));
+        discussionLog.close("conversation");
+        controller.clearConversation();
+        if (view !== "conversation") openView("conversation");
+      } else {
+        callPanelRef.current?.clearDiscussion();
+        discussionLog.close("call");
+      }
+    } else void controller.removeVoice(pending.id);
     setPending(null);
   }
   function leave() {
@@ -233,9 +255,36 @@ export function Interpreter({
       <div className="app panel">
         <header
           className="topbar"
-          hidden={view === "history" || view === "voices" || view === "settings" || (view === "call" && !callBusy)}
+          hidden={view === "voices" || view === "settings" || (view === "call" && !callBusy)}
         >
           <div className="frame topbar-inner">
+            {(view === "conversation" || view === "history") && (
+              <div className="topbar-actions">
+                <button
+                  type="button"
+                  className="topbar-action"
+                  disabled={view === "conversation" && (busy || conversationMessages.length === 0)}
+                  onClick={() => {
+                    const current = openDiscussion(discussions, "conversation");
+                    if (current?.messages.length) setPending({ kind: "clear" });
+                    else openView("conversation");
+                  }}
+                >
+                  <Plus size={13} aria-hidden="true" />
+                  New discussion
+                </button>
+                {view === "conversation" && (
+                  <button
+                    type="button"
+                    className="topbar-action"
+                    disabled={busy}
+                    onClick={() => void controller.start(state.active, true)}
+                  >
+                    Audio sample
+                  </button>
+                )}
+              </div>
+            )}
             <div
               className="status"
               data-phase={callBusy ? "listening" : state.phase}
@@ -291,14 +340,14 @@ export function Interpreter({
           beforeStart={() => controller.cancel()}
           profiles={state.profiles}
           onLanguage={(id, language) => controller.setProfile(id, { language })}
+          onNewDiscussion={() => setPending({ kind: "clear-call" })}
         />
         {view === "conversation" && (
           <Conversation
-            turns={state.turns}
-            profiles={state.profiles}
+            messages={conversationMessages}
+            live={state.turns}
             onPlay={(id) => void controller.replay(id)}
             onDemo={() => void controller.start(state.active, true)}
-            onClear={() => setPending({ kind: "clear" })}
             busy={busy}
           />
         )}
@@ -317,11 +366,9 @@ export function Interpreter({
             captionError={captionError}
           />
         )}
-        {(view === "history" || view === "voices") && (
-          <section
-            className="placeholder"
-            aria-label={NAV.find((n) => n.view === view)?.label}
-          >
+        {view === "history" && <HistoryPage />}
+        {view === "voices" && (
+          <section className="placeholder" aria-label="Voices">
             <p className="empty-title">Coming soon</p>
           </section>
         )}
@@ -419,12 +466,14 @@ export function Interpreter({
             <AlertDialogTitle>
               {pending?.kind === "remove"
                 ? "Delete this voice"
-                : "Clear conversation"}
+                : "Start a new discussion"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pending?.kind === "remove"
                 ? "Permanently delete this voice from the ElevenLabs account?"
-                : "Clear this conversation’s text and audio on this device?"}
+                : readAuthToken()
+                  ? "The text stays in History and on your account. Replay audio from this session is removed."
+                  : "The text stays in History on this device. Replay audio from this session is removed."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -434,7 +483,7 @@ export function Interpreter({
               variant={pending?.kind === "remove" ? "destructive" : "default"}
               onClick={confirmPending}
             >
-              {pending?.kind === "remove" ? "Delete" : "Clear"}
+              {pending?.kind === "remove" ? "Delete" : "Start new"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
