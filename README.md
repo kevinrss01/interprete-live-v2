@@ -130,3 +130,13 @@ Voir [les vérifications effectuées](docs/VALIDATION.md). Les latences de démo
 Le clonage d’une voix réelle nécessite l’accord de cette personne et un échantillon propre. Les deux personnes prennent toujours la parole à tour de rôle ; seule la traduction synthétique chevauche la parole. L’identification automatique des personnes et la séparation de deux voix humaines simultanées ne sont pas prises en charge.
 
 Références : [transcription continue OpenAI](https://developers.openai.com/api/docs/guides/realtime-transcription), [streaming ElevenLabs](https://elevenlabs.io/docs/eleven-api/guides/how-to/websockets/realtime-tts).
+
+## Agents de développement
+
+[AGENTS.md](AGENTS.md) rassemble les règles du projet et les commandes de vérification ;
+[CLAUDE.md](CLAUDE.md) charge ce même guide pour Claude Code.
+Le [catalogue des skills](docs/agent-skills.md) couvre les commits et PR, les revues,
+les builds, les dépendances, l’interface, Rust et les flux audio.
+Le skill [ship-and-merge](.agents/skills/ship-and-merge/SKILL.md), partagé avec Codex et Claude Code,
+se lance explicitement avec `$ship-and-merge` ou `/ship-and-merge` pour publier puis fusionner
+la PR de la tâche après les vérifications. Le déploiement manuel reste une action distincte.
