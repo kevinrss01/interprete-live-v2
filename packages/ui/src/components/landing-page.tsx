@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Download, Languages, Mic, Pause, Play, Zap } from "lucide-react";
+import { ArrowUp, ArrowUpRight, Check, Download, Languages, Mic, Pause, Play, Zap } from "lucide-react";
 import { Button } from "./button";
 
 const logo = new URL("../assets/logo.png", import.meta.url).href;
@@ -8,6 +8,7 @@ const cloudsMedium = new URL("../assets/hero-clouds-1920.jpg", import.meta.url).
 const cloudsSmall = new URL("../assets/hero-clouds-1280.jpg", import.meta.url).href;
 const landscape = new URL("../assets/download-landscape.webp", import.meta.url).href;
 const landscapeSmall = new URL("../assets/download-landscape-1280.webp", import.meta.url).href;
+const DOWNLOAD_URL = "https://github.com/kevinrss01/interprete-live-v2/releases/latest/download/Interprete-macOS-arm64.dmg";
 const EXAMPLES = [
   { code: "en", language: "English", text: "Would you like to grab a coffee?" },
   { code: "es", language: "Spanish", text: "¿Te apetece tomar un café?" },
@@ -144,12 +145,20 @@ export function LandingPage() {
           <div className="landing-download-content">
             <h2 id="download-title">Ready for your<br />next conversation?</h2>
             <div className="landing-download-actions">
-              <Button nativeButton={false} render={<a href="https://github.com/kevinrss01/interprete-live-v2/releases/latest/download/Interprete-macOS-arm64.dmg" />} variant="secondary" className="landing-download-button" aria-label="Download for macOS (Apple Silicon)" title="macOS · Apple Silicon">Download for macOS<Download aria-hidden="true" /></Button>
+              <Button nativeButton={false} render={<a href={DOWNLOAD_URL} />} variant="secondary" className="landing-download-button" aria-label="Download for macOS (Apple Silicon)" title="macOS · Apple Silicon">Download for macOS<Download aria-hidden="true" /></Button>
             </div>
           </div>
         </div>
       </section>
     </main>
-    <footer className="landing-frame landing-footer"><a href="#main" className="landing-wordmark"><img src={logo} alt="Interprète home" width="2172" height="724" loading="lazy" /></a><p>Your voice. In their language.</p><nav aria-label="Footer navigation"><a href="#how-it-works">How it works</a><a href="#download">Download</a></nav></footer>
+    <footer className="landing-footer">
+      <div className="landing-frame">
+        <div className="landing-footer-panel">
+          <div><a href="#home" className="landing-wordmark"><img src={logo} alt="Interprète home" width="2172" height="724" loading="lazy" /></a><p className="landing-footer-copy">© {new Date().getFullYear()} Interprète</p></div>
+          <nav aria-label="Footer navigation"><a href="#features">Features<ArrowUpRight aria-hidden="true" /></a><a href={DOWNLOAD_URL} aria-label="Download for macOS (Apple Silicon)">Download for macOS<ArrowUpRight aria-hidden="true" /></a></nav>
+          <a href="#home" className="landing-footer-top" aria-label="Back to top"><ArrowUp aria-hidden="true" /></a>
+        </div>
+      </div>
+    </footer>
   </div>;
 }
