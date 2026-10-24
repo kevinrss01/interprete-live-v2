@@ -37,6 +37,7 @@ export type Snapshot = {
   outputActive: boolean;
   connection: ConnectionState | null;
   warning: string | null;
+  volume: number;
   services: {
     transcription: boolean;
     voice: boolean;
@@ -56,6 +57,8 @@ type Player = Omit<Pick<
 >, "enqueue"> & {
   enqueue: (input: Uint8Array) => number | null | Promise<number | null>;
   readonly pendingSeconds?: number;
+  sharedContext?: () => AudioContext;
+  setVolume?: (value: number) => void;
 };
 export type InterpreterAdapters = {
   player?: Player;
@@ -134,9 +137,11 @@ const initial: Snapshot = {
   outputActive: false,
   connection: null,
   warning: null,
+  volume: 1,
   services: null,
 };
 const storageKey = "interprete-profiles-v1";
+const volumeKey = "interprete-volume-v1";
 const message = (error: unknown) =>
   error instanceof Error ? error.message : "Une erreur est survenue. Réessaie.";
 
@@ -226,12 +231,26 @@ export class InterpreterController {
       this.setProfile(id, { cloneStatus: "collecting" });
   }
   dismissError = () => this.update({ error: null, warning: null });
+  setVolume(value: number) {
+    const volume = Math.min(1, Math.max(0, value));
+    this.player.setVolume?.(volume);
+    this.update({ volume });
+    try {
+      localStorage.setItem(volumeKey, String(volume));
+    } catch {}
+  }
   init() {
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
       try {
         const result = await call(api.api.status.$get());
         saveSession(result.session);
+        try {
+          const raw = localStorage.getItem(volumeKey);
+          const storedVolume = Number(raw);
+          if (raw !== null && Number.isFinite(storedVolume))
+            this.setVolume(storedVolume);
+        } catch {}
         try {
           const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
           if (saved) {
@@ -392,6 +411,7 @@ export class InterpreterController {
         if (this.isCurrent(r)) void this.collect(speaker, sample.blob, sample.seconds);
       },
       ...(demo ? { demoUrl: `/samples/${profile.language}.wav` } : {}),
+      context: this.player.sharedContext?.(),
     });
     try {
       // The capture starts once. Connections and transcripts roll underneath it.

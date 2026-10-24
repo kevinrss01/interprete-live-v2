@@ -39,6 +39,8 @@ export function makeWav(chunks: Uint8Array[], sampleRate = 24000) {
 }
 export class AudioPlayer {
   private context: AudioContext | null = null;
+  private gain: GainNode | null = null;
+  private volume = 1;
   private nextAt = 0;
   private sources = new Set<AudioBufferSourceNode>();
   private carry: Uint8Array | null = null;
@@ -61,11 +63,37 @@ export class AudioPlayer {
       latencyHint: "interactive",
     });
     if (this.context.state === "suspended") await this.context.resume();
+    this.ensureGain();
+  }
+  setVolume(value: number) {
+    this.volume = Math.min(1, Math.max(0, value));
+    if (this.gain && this.context)
+      this.gain.gain.setValueAtTime(this.volume, this.context.currentTime);
+  }
+  private ensureGain() {
+    if (!this.context) return null;
+    if (!this.gain) {
+      this.gain = this.context.createGain();
+      this.gain.gain.value = this.volume;
+      this.gain.connect(this.context.destination);
+    }
+    return this.gain;
+  }
+  // Capture must reuse this context. A second one stays silent in the desktop webview.
+  sharedContext() {
+    if (!this.context) throw new Error("Audio output is not unlocked.");
+    return this.context;
   }
   enqueue(input: Uint8Array) {
     const ctx = this.context;
-    if (!ctx || ctx.state !== "running")
+    if (!ctx || ctx.state === "closed")
       throw new Error("Clique sur le bouton de lecture pour activer le son.");
+    if (ctx.state === "suspended") {
+      void ctx.resume().then(() => {
+        if (this.context === ctx && ctx.state === "running") this.enqueue(input);
+      });
+      return null;
+    }
     let bytes = input;
     if (this.carry) {
       bytes = new Uint8Array(this.carry.length + input.length);
@@ -88,7 +116,7 @@ export class AudioPlayer {
     }
     const source = ctx.createBufferSource();
     source.buffer = audio;
-    source.connect(ctx.destination);
+    source.connect(this.ensureGain()!);
     const start = Math.max(ctx.currentTime + 0.025, this.nextAt);
     source.start(start);
     this.nextAt = start + audio.duration;
@@ -129,7 +157,7 @@ export class AudioPlayer {
     signal.throwIfAborted();
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    source.connect(this.ensureGain()!);
     this.sources.add(source);
     this.setActive(true);
     source.onended = () => {
@@ -143,6 +171,7 @@ export class AudioPlayer {
     this.stop();
     void this.context?.close();
     this.context = null;
+    this.gain = null;
   }
 }
 
@@ -158,6 +187,7 @@ export type CaptureOptions = {
   demoUrl?: string;
   deviceId?: string;
   echoCancellation?: boolean;
+  context?: AudioContext;
 };
 export class MicrophoneCapture {
   private ctx: AudioContext | null = null;
@@ -175,6 +205,7 @@ export class MicrophoneCapture {
   private outputActive = false;
   private cleanSpeechMs = 0;
   private lastLevelAt = 0;
+  private ownsContext = false;
   constructor(private options: CaptureOptions) {}
   setOutputActive(active: boolean) {
     this.outputActive = active;
@@ -206,10 +237,15 @@ export class MicrophoneCapture {
     }
   }
   async start() {
-    this.ctx = new AudioContext({
-      sampleRate: 24000,
-      latencyHint: "interactive",
-    });
+    if (this.options.context) {
+      this.ctx = this.options.context;
+    } else {
+      this.ctx = new AudioContext({
+        sampleRate: 24000,
+        latencyHint: "interactive",
+      });
+      this.ownsContext = true;
+    }
     await this.ctx.resume();
     if (this.stopped) return;
     await this.ctx.audioWorklet.addModule("/audio-capture.js");
@@ -311,7 +347,8 @@ export class MicrophoneCapture {
     this.source?.disconnect();
     this.node?.disconnect();
     this.stream?.getTracks().forEach((t) => t.stop());
-    await this.ctx?.close();
+    if (this.ownsContext) await this.ctx?.close();
+    this.ctx = null;
     this.options.onLevel(0);
     return sample;
   }
