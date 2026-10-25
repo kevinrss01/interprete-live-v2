@@ -1,12 +1,18 @@
-import WebSocket from "ws";
+import WebSocket, { type ClientOptions } from "ws";
 import { credential, MODELS } from "./config";
 import { AppError } from "./errors";
+type SocketOptions = {
+  connectTimeoutMs?: number;
+  finishTimeoutMs?: number;
+  connect?: (url: string, options: ClientOptions) => WebSocket;
+};
 export async function speechSocket(
   voiceId: string,
   language: string,
   signal: AbortSignal,
   onAudio: (data: string) => void,
   speed = 1,
+  options: SocketOptions = {},
 ) {
   signal.throwIfAborted();
   const query = new URLSearchParams({
@@ -15,32 +21,40 @@ export async function speechSocket(
     language_code: language,
     inactivity_timeout: "30",
   });
-  const ws = new WebSocket(
+  const ws = (options.connect ?? ((url, settings) => new WebSocket(url, settings)))(
     `wss://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream-input?${query}`,
     {
       headers: { "xi-api-key": credential("eleven") },
-      handshakeTimeout: 10000,
+      handshakeTimeout: options.connectTimeoutMs ?? 8000,
     },
   );
   let rejectDone: (e: Error) => void = () => {},
     resolveDone: () => void = () => {},
     settled = false,
     closing = false;
+  let failure: Error | null = null;
   const done = new Promise<void>((resolve, reject) => {
     resolveDone = resolve;
     rejectDone = reject;
   });
   done.catch(() => {});
+  const fail = (error: Error) => {
+    if (settled) return;
+    settled = true;
+    failure = error;
+    rejectDone(error);
+  };
   const abort = () => {
+    fail(new AppError("ABORTED", "Playback was stopped.", 499));
     ws.terminate();
-    rejectDone(new AppError("ABORTED", "Playback was stopped.", 499));
   };
   signal.addEventListener("abort", abort, { once: true });
   ws.on("message", (raw) => {
+    if (signal.aborted || settled) return;
     try {
       const e = JSON.parse(raw.toString());
       if (e.error || e.detail) {
-        rejectDone(
+        fail(
           new AppError(
             "VOICE_ERROR",
             "The voice could not be generated. Try again with a standard voice.",
@@ -56,11 +70,11 @@ export async function speechSocket(
         resolveDone();
       }
     } catch {
-      rejectDone(new Error("VOICE_STREAM"));
+      fail(new AppError("VOICE_STREAM", "The voice stream was interrupted.", 502));
     }
   });
   ws.on("error", () =>
-    rejectDone(
+    fail(
       new AppError(
         "VOICE_NETWORK",
         "The connection to ElevenLabs was interrupted.",
@@ -70,7 +84,7 @@ export async function speechSocket(
   );
   ws.on("close", () => {
     if (!settled && !signal.aborted)
-      rejectDone(
+      fail(
         new AppError(
           "VOICE_CLOSED",
           "Speech synthesis was interrupted. Try again.",
@@ -78,17 +92,35 @@ export async function speechSocket(
         ),
       );
   });
-  await new Promise<void>((resolve, reject) => {
-    const onError = () =>
-      reject(
-        new AppError("VOICE_NETWORK", "Can’t reach ElevenLabs.", 502),
-      );
-    ws.once("error", onError);
-    ws.once("open", () => {
-      ws.removeListener("error", onError);
-      resolve();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        ws.removeListener("open", opened);
+        ws.removeListener("error", stopped);
+        ws.removeListener("close", stopped);
+        signal.removeEventListener("abort", stopped);
+      };
+      const stopped = () => {
+        cleanup();
+        reject(failure ?? new AppError("VOICE_NETWORK", "Can’t reach ElevenLabs.", 502));
+      };
+      const opened = () => { cleanup(); resolve(); };
+      const timer = setTimeout(() => {
+        fail(new AppError("VOICE_TIMEOUT", "The voice connection timed out.", 504));
+        stopped();
+      }, options.connectTimeoutMs ?? 8000);
+      ws.once("error", stopped);
+      ws.once("close", stopped);
+      ws.once("open", opened);
+      signal.addEventListener("abort", stopped, { once: true });
+      if (signal.aborted) stopped();
     });
-  });
+  } catch (error) {
+    signal.removeEventListener("abort", abort);
+    ws.terminate();
+    throw error;
+  }
   if (signal.aborted) {
     abort();
     throw signal.reason;
@@ -107,6 +139,7 @@ export async function speechSocket(
   );
   return {
     send(text: string) {
+      if (failure) throw failure;
       if (ws.readyState !== WebSocket.OPEN)
         throw new AppError(
           "VOICE_CLOSED",
@@ -117,9 +150,10 @@ export async function speechSocket(
     },
     async finish() {
       closing = true;
-      ws.send(JSON.stringify({ text: "" }));
       let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
+        if (failure) throw failure;
+        ws.send(JSON.stringify({ text: "" }));
         await Promise.race([
           done,
           new Promise<never>((_, reject) => {
@@ -132,7 +166,7 @@ export async function speechSocket(
                     504,
                   ),
                 ),
-              20000,
+              options.finishTimeoutMs ?? 10_000,
             );
           }),
         ]);

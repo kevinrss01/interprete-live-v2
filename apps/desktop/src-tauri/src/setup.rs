@@ -11,6 +11,7 @@ pub struct SetupStatus {
     supported: bool,
     microphone: String,
     accessibility: bool,
+    bundled: bool,
     #[serde(default)]
     driver_installed: bool,
     #[serde(default)]
@@ -76,6 +77,7 @@ pub enum SetupAction {
     Audio,
     VirtualMicrophone,
     InstallDriver,
+    RevealAccessibilityApp,
 }
 
 fn install_driver(directory: std::path::PathBuf) -> Result<(), String> {
@@ -182,6 +184,25 @@ pub async fn mac_setup_action(
                 })
             }
             SetupAction::InstallDriver => install_driver(directory),
+            SetupAction::RevealAccessibilityApp => {
+                // Reveal this process, never a similarly named installed or previous build.
+                let executable = std::env::current_exe()
+                    .map_err(|_| "Unable to locate the running app.".to_string())?;
+                let target = executable
+                    .ancestors()
+                    .find(|path| path.extension().is_some_and(|extension| extension == "app"))
+                    .unwrap_or(&executable);
+                let result = std::process::Command::new("/usr/bin/open")
+                    .arg("-R")
+                    .arg(target)
+                    .status()
+                    .map_err(|_| "Unable to show the running app in Finder.".to_string())?;
+                if result.success() {
+                    Ok(())
+                } else {
+                    Err("Unable to show the running app in Finder.".into())
+                }
+            }
         })
         .await
         .map_err(|error| error.to_string())?

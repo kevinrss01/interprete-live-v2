@@ -5,11 +5,12 @@ export type MacSetupStatus = {
   supported: boolean;
   microphone: "granted" | "not-determined" | "denied" | "restricted" | "unknown";
   accessibility: boolean;
+  bundled: boolean;
   driverInstalled: boolean;
   driverReady: boolean;
   virtualMicrophone: boolean;
 };
-export type SetupAction = "microphone" | "audio" | "virtual-microphone" | "install-driver" | "accessibility" | "audio-settings" | "microphone-settings";
+export type SetupAction = "microphone" | "audio" | "virtual-microphone" | "install-driver" | "reveal-accessibility-app" | "accessibility" | "audio-settings" | "microphone-settings";
 export type AudioEvidence = "confirmed" | "verified" | null;
 type SetupDecision = "ready" | "later";
 const decisionKey = "interprete-mac-setup-v1";

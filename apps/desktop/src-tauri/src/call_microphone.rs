@@ -109,7 +109,7 @@ pub async fn call_microphone_state(
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     #[test]
-    #[ignore = "read-only Accessibility inspection of an open Meet call; no capture or UI actions"]
+    #[ignore = "requires Accessibility and an open Meet call; read-only, no capture or UI actions"]
     fn read_meet_microphone_without_recording() {
         unsafe extern "C" {
             fn interprete_meet_microphone(
@@ -125,14 +125,14 @@ mod tests {
         unsafe { free(ptr.cast()) };
         println!("Meet mute inspection: {state:?}");
         assert!(state.supported);
-        if state.permission_required {
-            assert!(state.muted.is_none());
-        } else {
-            assert!(
-                state.muted.is_some(),
-                "No unique Meet microphone control found"
-            );
-        }
+        assert!(
+            !state.permission_required,
+            "Accessibility is required for this live check"
+        );
+        assert!(
+            state.muted.is_some(),
+            "No unique Meet microphone control found"
+        );
     }
     #[test]
     fn own_microphone_controls_are_distinct_from_other_mute_buttons() {

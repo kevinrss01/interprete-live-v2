@@ -56,6 +56,27 @@ pub fn run() {
             audio_route::audio_route_status,
         ])
         .setup(|app| {
+            #[cfg(all(debug_assertions, target_os = "macos"))]
+            if let Some(parent) = std::env::var("INTERPRETE_DEV_RUNNER_PID")
+                .ok()
+                .and_then(|value| value.parse::<i32>().ok())
+                .filter(|pid| *pid > 1)
+            {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || loop {
+                    unsafe extern "C" {
+                        fn kill(pid: i32, signal: i32) -> i32;
+                    }
+                    // Signal zero only checks liveness; it never signals the parent.
+                    if unsafe { kill(parent, 0) } != 0
+                        && std::io::Error::last_os_error().raw_os_error() == Some(3)
+                    {
+                        handle.exit(0);
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                });
+            }
             app.state::<audio_route::AudioRoute>().configure(app.path().app_data_dir()?.join("microphone-restore.json"))?;
             #[cfg(unix)] {
                 let handle = app.handle().clone();

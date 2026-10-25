@@ -43,7 +43,12 @@ export function MacSetupView({ state, audio, onAction, onConfirmAudio, onRefresh
       <SetupRow title="Follow Meet’s mute button" detail="Pause your outgoing translation when you mute yourself in Meet." ready={status?.accessibility ?? false}
         state={!status ? "Checking…" : status.accessibility ? "Allowed" : "Accessibility needed"}
         action={status?.accessibility ? undefined : action("accessibility", "Open Settings")}>
-        {!status?.accessibility && state.lastAction === "accessibility" && <p className="mac-setup-help">Enable Interprète in Privacy & Security → Accessibility, then return here.</p>}
+        {status && !status.accessibility && <div className="mac-setup-help">
+          <p>{status.bundled
+            ? "Enable this copy of Interprete in Privacy & Security → Accessibility. If it is already enabled, remove it from the list and add this copy again, then check again."
+            : "This local build needs its own Accessibility permission. The installed Interprete app has a separate permission. Show the running app, then drag the selected interprete file into the Accessibility list and enable it. After a rebuild, you may need to remove and add it again."}</p>
+          {action("reveal-accessibility-app", "Show running app")}
+        </div>}
       </SetupRow>
       <SetupRow title="Virtual microphone" detail="Send your translated voice to Meet, Zoom or Teams." ready={status?.virtualMicrophone && status.driverReady || false}
         state={!status ? "Checking…" : status.virtualMicrophone && status.driverReady ? "Ready" : status.driverInstalled && !status.driverReady ? "Restart required" : status.driverReady ? "Ready to configure" : "Installation needed"}

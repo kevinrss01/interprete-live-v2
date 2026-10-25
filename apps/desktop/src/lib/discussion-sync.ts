@@ -126,6 +126,16 @@ export function startDiscussionSync(log: DiscussionLog) {
   let stopped = false;
   const pending = new Set<string>();
   const removed = new Set<string>();
+  const forbidden = new Set<string>();
+  let forbiddenToken = readAuthToken();
+  const currentToken = () => {
+    const token = readAuthToken();
+    if (token !== forbiddenToken) {
+      forbidden.clear();
+      forbiddenToken = token;
+    }
+    return token;
+  };
   const syncedMessages = new Map<string, number>();
   const syncedHeaders = new Map<string, string>();
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -137,12 +147,14 @@ export function startDiscussionSync(log: DiscussionLog) {
     timer = setTimeout(() => void flush(), delay);
   };
   const queue = (id: string) => {
+    currentToken();
+    if (forbidden.has(id)) return;
     pending.add(id);
     schedule(600);
   };
 
   async function flush() {
-    if (stopped || !readAuthToken()) return;
+    if (stopped || !currentToken()) return;
     if (flushing) {
       again = true;
       return;
@@ -155,6 +167,7 @@ export function startDiscussionSync(log: DiscussionLog) {
     try {
       for (const id of deletions) await rpc.discussions.remove({ id });
       for (const id of saves) {
+        if (forbidden.has(id)) continue;
         const discussion = log.getSnapshot().discussions.find((item) => item.id === id);
         if (!discussion) continue;
         const dirty = new Set(
@@ -163,14 +176,22 @@ export function startDiscussionSync(log: DiscussionLog) {
             .map((message) => message.id),
         );
         if (!dirty.size && syncedHeaders.get(id) === headerKey(discussion)) continue;
-        for (const batch of discussionSaves(discussion, dirty))
-          await rpc.discussions.save(batch);
+        try {
+          for (const batch of discussionSaves(discussion, dirty))
+            await rpc.discussions.save(batch);
+        } catch (error) {
+          // A local discussion from another account must remain local. Retrying
+          // cannot change ownership and must not block the other discussions.
+          if (errorCode(error) !== "FORBIDDEN") throw error;
+          forbidden.add(id);
+          continue;
+        }
         for (const message of discussion.messages) syncedMessages.set(message.id, message.updatedAt);
         syncedHeaders.set(id, headerKey(discussion));
       }
     } catch (error) {
       for (const id of deletions) removed.add(id);
-      for (const id of saves) pending.add(id);
+      for (const id of saves) if (!forbidden.has(id)) pending.add(id);
       if (!stopped && errorCode(error) !== "UNAUTHORIZED") schedule(5000);
     } finally {
       flushing = false;

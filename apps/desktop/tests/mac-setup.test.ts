@@ -1,9 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import React, { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MacSetupView } from "../src/onboarding/mac-setup";
 import { MacSetupMonitor, missingSetup, type MacSetupStatus } from "../src/lib/mac-setup";
 
-const ready: MacSetupStatus = { supported: true, microphone: "granted", accessibility: true, driverInstalled: true, driverReady: true, virtualMicrophone: true };
+const ready: MacSetupStatus = { supported: true, microphone: "granted", accessibility: true, bundled: true, driverInstalled: true, driverReady: true, virtualMicrophone: true };
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test("setup identifies the running local build and keeps Continue locked until macOS grants access", () => {
+  // tsx compiles the shared UI package with classic JSX (it has no app tsconfig).
+  Object.assign(globalThis, { React });
+  const render = (status: MacSetupStatus) => renderToStaticMarkup(createElement(MacSetupView, {
+    state: { status, checking: false, pending: null, lastAction: null, audioRequested: false, error: null },
+    audio: "confirmed", onAction() {}, onConfirmAudio() {}, onRefresh() {}, onContinue() {}, onLater() {},
+  }));
+  const local = render({ ...ready, bundled: false, accessibility: false });
+  assert.match(local, /local build needs its own Accessibility permission/);
+  assert.match(local, /Show running app/);
+  assert.match(local, /<button[^>]*disabled=""[^>]*>Continue/);
+  const installed = render({ ...ready, accessibility: false });
+  assert.match(installed, /Enable this copy of Interprete/);
+  const granted = render({ ...ready, bundled: false });
+  assert.doesNotMatch(granted, /Show running app/);
+  assert.doesNotMatch(granted, /<button[^>]*disabled=""[^>]*>Continue/);
+});
 
 test("all setup checks must pass; opening a permission panel is not audio confirmation", () => {
   assert.deepEqual(missingSetup(ready, null), ["Call audio access"]);

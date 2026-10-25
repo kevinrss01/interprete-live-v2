@@ -19,6 +19,7 @@ char *interprete_setup_status(void) {
       @"supported": supported ? @YES : @NO,
       @"microphone": microphone,
       @"accessibility": AXIsProcessTrusted() ? @YES : @NO,
+      @"bundled": [NSBundle.mainBundle.bundlePath.pathExtension isEqualToString:@"app"] ? @YES : @NO,
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:status options:0 error:nil];
     return strdup([[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding].UTF8String);

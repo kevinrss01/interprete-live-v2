@@ -99,7 +99,17 @@ char *interprete_meet_microphone(const char *prefixes_json) {
             }
           }
         }
-        NSArray *windows = attribute(root, kAXWindowsAttribute);
+        id listedWindows = attribute(root, kAXWindowsAttribute);
+        NSMutableArray *windows = [NSMutableArray array];
+        // Chrome can expose a focused window while AXWindows is temporarily
+        // empty. Use the live AX reference, never a cached mute state.
+        for (id window in @[attribute(root, kAXFocusedWindowAttribute) ?: NSNull.null,
+                            attribute(root, kAXMainWindowAttribute) ?: NSNull.null]) {
+          if (CFGetTypeID((__bridge CFTypeRef)window) == AXUIElementGetTypeID() && ![windows containsObject:window])
+            [windows addObject:window];
+        }
+        if ([listedWindows isKindOfClass:NSArray.class]) for (id window in listedWindows)
+          if (![windows containsObject:window]) [windows addObject:window];
         if ([windows isKindOfClass:NSArray.class]) for (id window in windows) {
           NSMutableArray *queue = [NSMutableArray arrayWithObject:window];
           NSMutableArray *floatingDocuments = [NSMutableArray array];

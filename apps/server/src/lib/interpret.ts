@@ -29,7 +29,7 @@ export function interpretResponse(
   requestSignal: AbortSignal,
 ) {
   const abort = new AbortController();
-  const deadline = AbortSignal.timeout(45000);
+  const deadline = AbortSignal.timeout(25000);
   const signal = AbortSignal.any([requestSignal, abort.signal, deadline]);
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

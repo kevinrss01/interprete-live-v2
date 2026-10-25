@@ -6,7 +6,8 @@ import {
   type CaptureOptions,
 } from "./audio";
 import { readAuthToken, rpc } from "./account";
-import { api, call, readSession, saveSession, streamInterpretation } from "./api";
+import { api, call, readSession, saveSession, streamInterpretation, interpretationTimeouts, type InterpretationTimeouts } from "./api";
+import { abortable } from "./abortable";
 import { savedMicrophone } from "./call-preferences";
 import { ContinuousTranscription, type ConnectionState, type StreamTiming, type Transcript } from "./transcription";
 import type {
@@ -72,7 +73,10 @@ export type InterpreterAdapters = {
   capture?: (options: CaptureOptions) => Capture;
   timing?: Partial<StreamTiming>;
   speech?: (speaker: SpeakerId) => SpeechChoice | Promise<SpeechChoice>;
+  translationLimits?: Partial<TranslationLimits>;
 };
+export type TranslationLimits = InterpretationTimeouts & { backlogMs: number; maxQueuedBlocks: number; maxRetries: number };
+const translationLimits: TranslationLimits = { ...interpretationTimeouts, backlogMs: 20_000, maxQueuedBlocks: 12, maxRetries: 1 };
 type Block = {
   id: string;
   sequence: number;
@@ -93,6 +97,7 @@ type Block = {
   emptyAttempt: string;
   // When the transcript text last changed; a quiet transcript has complete words.
   updatedAt: number;
+  progressAt: number;
 };
 type Flight = {
   block: Block;
@@ -115,10 +120,13 @@ type Runtime = {
   transcriber: ContinuousTranscription | null;
   abort: AbortController;
   segmentTimer: ReturnType<typeof setTimeout> | null;
+  queueTimer: ReturnType<typeof setInterval> | null;
   inFlight: Promise<void> | null;
   // The fragment in flight while it can still be withdrawn: no audio has been played yet.
   flight: Flight | null;
   blocks: Block[];
+  settledThrough: number;
+  settledSequences: Set<number>;
   previousSource: string;
   previousTranslation: string;
   lastSegmentAt: number;
@@ -196,6 +204,7 @@ export class InterpreterController {
   private player: Player;
   private captureFactory: (options: CaptureOptions) => Capture;
   private timing?: Partial<StreamTiming>;
+  private translationLimits: TranslationLimits;
   private speech?: InterpreterAdapters["speech"];
   private outputTail: ReturnType<typeof setTimeout> | null = null;
   private initPromise: Promise<void> | null = null;
@@ -217,6 +226,7 @@ export class InterpreterController {
       })));
     }
     this.timing = adapters.timing;
+    this.translationLimits = { ...translationLimits, ...adapters.translationLimits };
     this.speech = adapters.speech;
     this.captureFactory =
       adapters.capture ?? ((options) => new MicrophoneCapture(options));
@@ -427,12 +437,18 @@ export class InterpreterController {
     const r: Runtime = {
       id, speaker, profile, target, demo,
       capture: null, startup: null, transcriber: null,
-      abort: new AbortController(), segmentTimer: null, inFlight: null, flight: null,
+      abort: new AbortController(), segmentTimer: null, queueTimer: null, inFlight: null, flight: null,
       blocks: [this.newBlock(id, 0, clickedAt)],
+      settledThrough: -1, settledSequences: new Set(),
       previousSource: "", previousTranslation: "",
       lastSegmentAt: 0, retryAt: 0, retries: 0, hadSpeech: false, finishing: false,
     };
     this.runtime = r;
+    r.queueTimer = setInterval(() => {
+      if (!this.isCurrent(r) || r.finishing) return;
+      this.trimQueue(r);
+      this.scheduleSegment(r);
+    }, Math.min(1000, this.translationLimits.backlogMs));
     this.diagnostic({ type: "session", sessionId: id, at: performance.now(), startedAt: clickedAt, source: profile.language, target: target.language, models: this.models });
     this.addTurn(r, r.blocks[0]);
     this.update({
@@ -506,7 +522,7 @@ export class InterpreterController {
       id, sequence, startedAt, text: "", translation: "", sourceCommitted: "",
       consumed: 0, rejectedThrough: 0, lastAttempt: "", pcm: [], pcmBytes: 0,
       metrics: {}, firstPlaybackAt: null, final: false, reconcile: false, replaying: false, emptyAttempt: "",
-      updatedAt: startedAt,
+      updatedAt: startedAt, progressAt: startedAt,
     };
   }
   private addTurn(r: Runtime, block: Block) {
@@ -521,6 +537,8 @@ export class InterpreterController {
   }
   private transcript(r: Runtime, item: Transcript) {
     if (!this.isCurrent(r)) return;
+    // A late ASR final/replay must never resurrect a completed or expired passage.
+    if (item.sequence <= r.settledThrough || r.settledSequences.has(item.sequence)) return;
     let block = r.blocks.find((entry) => entry.id === item.id);
     if (!block) {
       block = this.newBlock(item.id, item.sequence, item.startedAt);
@@ -534,6 +552,7 @@ export class InterpreterController {
       type: "transcript", sessionId: r.id, at: performance.now(),
       transcript: { id: item.id, text: item.text, final: item.final, revised: item.revised, replaying: item.replaying },
     });
+    if (!block.text.trim() && item.text.trim()) block.progressAt = performance.now();
     block.text = item.text;
     const flight = r.flight;
     // An unspoken fragment can still be wrong: the ASR may revise its words or keep extending
@@ -554,14 +573,22 @@ export class InterpreterController {
       this.addTurn(r, block);
     this.turn(block.id, { source: block.text, status: item.final ? "working" : "draft" });
     }
-    // Even a prolonged provider outage cannot grow retained transcripts forever.
-    if (r.blocks.length > 60) {
-      const index = r.inFlight ? 1 : 0;
-      const [lost] = r.blocks.splice(index, 1);
-      this.turn(lost.id, { status: "error", error: "Translation unavailable during an extended interruption." });
-      this.update({ warning: "The translation fell too far behind. Some passages could not be played; the microphone stays on." });
-    }
+    this.trimQueue(r);
     if (!r.finishing) this.scheduleSegment(r);
+  }
+  private trimQueue(r: Runtime) {
+    const error = new Error("This passage waited too long for translation. Newer speech continues.");
+    for (const block of [...r.blocks]) {
+      if ((!block.text.trim() && block === r.blocks.at(-1)) ||
+          performance.now() - block.progressAt < this.translationLimits.backlogMs) continue;
+      if (r.flight?.block === block) r.flight.abort.abort(error);
+      else this.completeBlock(r, block, error.message);
+    }
+    while (r.blocks.length > this.translationLimits.maxQueuedBlocks) {
+      const block = r.blocks.find(entry => entry !== r.flight?.block);
+      if (!block) break;
+      this.completeBlock(r, block, "The translation fell behind. This queued passage was skipped.");
+    }
   }
   private scheduleSegment(r: Runtime) {
     if (!this.isCurrent(r) || r.finishing || r.inFlight || r.segmentTimer) return;
@@ -616,17 +643,31 @@ export class InterpreterController {
     if (!block.final && attempt === block.lastAttempt) return;
     block.lastAttempt = attempt;
     r.lastSegmentAt = performance.now();
+    const consumedBefore = block.consumed;
     try {
       await this.translateSegment(r, block, candidate);
       r.retries = 0;
       r.retryAt = 0;
+      if (this.isCurrent(r) && this.state.connection !== "reconnecting") this.update({ warning: null });
     } catch (error) {
       if (!this.isCurrent(r)) return;
       if (r.finishing) throw error;
-      // Translation/provider errors must not tear down microphone capture.
-      block.lastAttempt = "";
-      r.retryAt = performance.now() + Math.min(5000, 500 * 2 ** Math.min(r.retries++, 4));
-      this.update({ warning: "The translation is reconnecting. Listening continues and pending passages are kept." });
+      const { code, status } = (error ?? {}) as { code?: string; status?: number };
+      if (["SESSION", "ORIGIN", "PROVIDER_ACCESS", "PROVIDER_CREDITS", "VOICE_ERROR"].includes(code ?? "") ||
+          [400, 401, 403, 404, 422].includes(status ?? 0)) {
+        this.fail(r, error);
+        return;
+      }
+      if (block.consumed > consumedBefore || r.retries >= this.translationLimits.maxRetries ||
+          performance.now() - block.progressAt >= this.translationLimits.backlogMs) {
+        this.completeBlock(r, block, message(error));
+        this.update({ warning: "A passage could not be translated. Listening continues with the next passage." });
+      } else {
+        // Translation/provider errors must not tear down microphone capture.
+        block.lastAttempt = "";
+        r.retryAt = performance.now() + Math.min(5000, 500 * 2 ** Math.min(r.retries++, 4));
+        this.update({ warning: `The translation is reconnecting. ${message(error)} Listening continues and pending passages are kept.` });
+      }
     }
     if (this.isCurrent(r) && !r.finishing)
       setTimeout(() => this.scheduleSegment(r), 0);
@@ -659,6 +700,7 @@ export class InterpreterController {
       flight.prefix = null;
       block.consumed = candidate.endUnits;
       block.rejectedThrough = block.consumed;
+      block.progressAt = performance.now();
     };
     const context = this.context();
     const precedingSource = appendTranslation(r.previousSource, block.sourceCommitted, r.profile.language);
@@ -678,7 +720,7 @@ export class InterpreterController {
         // Translated speech still waiting to play lets the server voice this fragment faster.
         ...(speak ? { queued: Math.round(100 * (this.player.pendingSeconds ?? 0)) / 100 } : {}),
       }, AbortSignal.any([r.abort.signal, flight.abort.signal]), async (event) => {
-        if (!this.isCurrent(r)) return;
+        if (!this.isCurrent(r) || flight.abort.signal.aborted) return;
         const display = () => {
           if (trace && translation && trace.displayedAt === undefined) { trace.displayedAt = performance.now(); report(); }
           this.turn(block.id, { translation: appendTranslation(previous, translation, r.target.language) });
@@ -710,7 +752,7 @@ export class InterpreterController {
           if (block.pcmBytes <= 90 * 48_000) block.pcm.push(bytes);
           else block.pcm = [];
           const at = await this.player.enqueue(bytes);
-          if (!this.isCurrent(r)) return;
+          if (!this.isCurrent(r) || flight.abort.signal.aborted) return;
           if (trace && trace.playbackAt === undefined && at !== null) { trace.playbackAt = at; report(); }
           if (block.firstPlaybackAt === null && at !== null) {
             block.firstPlaybackAt = at;
@@ -737,7 +779,8 @@ export class InterpreterController {
           block.metrics.gateMs ??= event.metrics.gateMs;
           block.metrics.ttsFirstMs ??= event.metrics.ttsFirstMs;
         }
-      });
+      }, { ...this.translationLimits, requestMs: Math.min(this.translationLimits.requestMs,
+        Math.max(1, this.translationLimits.backlogMs - (performance.now() - block.progressAt))) });
     } catch (error) {
       if (trace) {
         trace.outcome = flight.superseded && !accepted ? "superseded" : r.abort.signal.aborted ? "cancelled" : "error";
@@ -746,6 +789,7 @@ export class InterpreterController {
       if (!flight.superseded || accepted) throw error;
       block.lastAttempt = "";
     } finally {
+      flight.abort.abort();
       if (trace) { trace.finishedAt = performance.now(); if (trace.outcome === "running") trace.outcome = "cancelled"; report(); }
       if (r.flight === flight) r.flight = null;
       // Once audio was played, never replay this source prefix on a network retry.
@@ -756,10 +800,10 @@ export class InterpreterController {
       this.turn(block.id, { translation: block.translation, metrics: block.metrics });
     }
   }
-  private completeBlock(r: Runtime, block: Block) {
+  private completeBlock(r: Runtime, block: Block, error?: string) {
     if (block.text.trim()) {
       this.turn(block.id, {
-        translation: block.translation, status: "done", metrics: block.metrics,
+        translation: block.translation, status: error ? "error" : "done", error, metrics: block.metrics,
         ...(block.pcm.length ? { audioUrl: URL.createObjectURL(makeWav(block.pcm)) } : {}),
       });
       r.previousSource = appendTranslation(r.previousSource, block.sourceCommitted, r.profile.language).slice(-1500);
@@ -771,6 +815,11 @@ export class InterpreterController {
       }
     } else this.update({ turns: this.state.turns.filter((turn) => turn.id !== block.id) });
     block.pcm = [];
+    r.settledSequences ??= new Set();
+    r.settledSequences.add(block.sequence);
+    r.settledThrough ??= -1;
+    while (r.settledSequences.delete(r.settledThrough + 1)) r.settledThrough++;
+    if (r.blocks[0] === block) { r.retries = 0; r.retryAt = 0; }
     r.blocks = r.blocks.filter((entry) => entry !== block);
   }
   async stop() {
@@ -778,18 +827,22 @@ export class InterpreterController {
     if (!r || r.finishing) return;
     r.finishing = true;
     if (r.segmentTimer) clearTimeout(r.segmentTimer);
+    if (r.queueTimer) clearInterval(r.queueTimer);
+    const finishTimer = setTimeout(() => {
+      if (this.isCurrent(r)) this.fail(r, new Error("Finishing the translation timed out. Pending passages were stopped."));
+    }, this.translationLimits.backlogMs);
     this.update({ phase: "finishing", level: 0 });
     try {
       // Do not wait for a disconnected ASR socket before releasing the microphone.
-      const sample = await r.capture?.stop();
+      const sample = await abortable(Promise.resolve(r.capture?.stop()), r.abort.signal);
       r.capture = null;
       if (!this.isCurrent(r)) return;
       if (sample && sample.seconds >= 1) void this.collect(r.speaker, sample.blob, sample.seconds);
-      await r.transcriber?.finish();
+      await abortable(Promise.resolve(r.transcriber?.finish()), r.abort.signal);
       if (!this.isCurrent(r)) return;
       for (const block of r.blocks) { block.final = true; block.replaying = false; block.reconcile = true; }
       this.update({ phase: "translating", connection: null });
-      await r.inFlight;
+      await abortable(Promise.resolve(r.inFlight), r.abort.signal);
       if (!r.hadSpeech) throw new Error("No speech detected. Move closer to the microphone and try again.");
       while (this.isCurrent(r) && r.blocks.length) {
         if ((this.player.pendingSeconds ?? 0) > 6) {
@@ -798,18 +851,19 @@ export class InterpreterController {
         }
         const first = r.blocks[0];
         const before = first.consumed;
-        await this.pumpSegment(r);
+        await abortable(this.pumpSegment(r), r.abort.signal);
         if (r.blocks[0] === first && first.consumed <= before)
           throw new Error("The translation returned no audio. Try again.");
       }
-      await this.player.idle(r.abort.signal);
+      if (!this.isCurrent(r)) return;
+      await abortable(this.player.idle(r.abort.signal), r.abort.signal);
       if (!this.isCurrent(r)) return;
       this.diagnostic({ type: "end", sessionId: r.id, at: performance.now(), outcome: "done" });
       this.runtime = null;
       this.update({ phase: "idle", sessionId: null, input: null, connection: null, active: r.speaker === "a" ? "b" : "a", level: 0, outputActive: false });
     } catch (error) {
       if (this.isCurrent(r)) this.fail(r, error);
-    }
+    } finally { clearTimeout(finishTimer); }
   }
   private fail(r: Runtime, error: unknown) {
     if (!this.isCurrent(r)) return;
@@ -834,9 +888,14 @@ export class InterpreterController {
       this.diagnostic({ type: "end", sessionId: r.id, at: performance.now(), outcome: "cancelled" });
       r.abort.abort();
       if (r.segmentTimer) clearTimeout(r.segmentTimer);
+      if (r.queueTimer) clearInterval(r.queueTimer);
       r.transcriber?.close();
       if (r.capture) this.stoppingCapture = Promise.allSettled([this.stoppingCapture, r.capture.stop()]);
-      for (const block of r.blocks) this.turn(block.id, { status: "error", error: "Prise de parole interrompue" });
+      for (const block of [...r.blocks]) {
+        const remainder = block.text?.trim() && nextSegment(block.text, block.consumed, true, r.profile.language);
+        if (block.translation?.trim() && !remainder) this.completeBlock(r, block);
+        else this.turn(block.id, { status: "error", error: "Translation stopped before this passage finished." });
+      }
     }
     this.player.stop();
     if (this.outputTail) clearTimeout(this.outputTail);

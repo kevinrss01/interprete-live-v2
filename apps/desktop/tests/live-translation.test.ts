@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { NativePcmPlayer } from "../src/lib/calls";
-import { InterpreterController, type SpeechChoice } from "../src/lib/interpreter";
+import { InterpreterController, type SpeechChoice, type TranslationLimits } from "../src/lib/interpreter";
+import type { Transcript } from "../src/lib/transcription";
 import {
   nextSegment,
   appendTranslation,
@@ -27,6 +28,7 @@ function harness(
   audio = "ABQAFA==",
   speech?: () => SpeechChoice | Promise<SpeechChoice>,
   translate: (text: string) => string = (text) => "translation " + text,
+  translationLimits?: Partial<TranslationLimits>,
 ) {
   const originalFetch = globalThis.fetch,
     originalSocket = globalThis.WebSocket;
@@ -167,6 +169,7 @@ function harness(
       return capture;
     },
     speech,
+    translationLimits,
   });
   return {
     gate,
@@ -187,6 +190,185 @@ function harness(
     },
   };
 }
+
+async function passage(h: ReturnType<typeof harness>, text: string) {
+  h.options.onAudio(new Uint8Array(4800));
+  h.socket.delta(text);
+  h.options.onBoundary?.();
+  await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+test("a stalled passage times out and releases the following passage without stopping capture", async () => {
+  const h = harness(undefined, undefined, true, undefined, "ABQAFA==", undefined, undefined,
+    { firstEventMs: 20, idleMs: 20, requestMs: 100, maxRetries: 0 });
+  const fetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => {
+    if (String(url) === "/api/interpret" && JSON.parse(String(init?.body)).text === "Premier.")
+      return new Promise<Response>(() => {});
+    return fetch(url, init);
+  };
+  try {
+    await h.controller.start("a");
+    await passage(h, "Premier.");
+    await passage(h, "Deuxième.");
+    await waitFor(() => h.controller.getSnapshot().turns.at(-1)?.status === "done");
+    const turns = h.controller.getSnapshot().turns;
+    assert.equal(turns[0].status, "error");
+    assert.match(turns[0].error!, /timed out/);
+    assert.equal(turns[1].translation, "translation Deuxième.");
+    assert.equal(h.capture.stopped, false);
+  } finally { h.cleanup(); }
+});
+
+test("a permanently failing passage exhausts its retry budget and cannot block newer speech", async () => {
+  const h = harness(undefined, undefined, true, undefined, "ABQAFA==", undefined,
+    text => { if (text === "Premier.") throw new Error("Temporary provider failure"); return text; },
+    { maxRetries: 1 });
+  try {
+    await h.controller.start("a");
+    await passage(h, "Premier.");
+    await passage(h, "Deuxième.");
+    await waitFor(() => h.controller.getSnapshot().turns.at(-1)?.status === "done");
+    assert.equal(h.requests.filter(request => request.text === "Premier.").length, 2);
+    assert.equal(h.controller.getSnapshot().turns[0].status, "error");
+    assert.equal(h.controller.getSnapshot().warning, null);
+    assert.equal(h.capture.stopped, false);
+  } finally { h.cleanup(); }
+});
+
+test("queue limits expire excess passages and late ASR updates cannot resurrect them", async () => {
+  const h = harness(undefined, undefined, true, undefined, "ABQAFA==", undefined, undefined,
+    { firstEventMs: 1000, requestMs: 1000, maxQueuedBlocks: 3 });
+  const fetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => String(url) === "/api/interpret"
+    ? new Promise<Response>(() => {}) : fetch(url, init);
+  try {
+    await h.controller.start("a");
+    for (let index = 0; index < 6; index++) await passage(h, `Passage ${index}.`);
+    const internal = h.controller as unknown as {
+      runtime: { blocks: unknown[] };
+      transcript: (runtime: unknown, item: Transcript) => void;
+    };
+    assert.ok(internal.runtime.blocks.length <= 3);
+    const dropped = h.controller.getSnapshot().turns.find(turn => turn.status === "error")!;
+    const sequence = Number(dropped.source.match(/\d+/)![0]);
+    internal.transcript(internal.runtime, { id: dropped.id, sequence, text: "Late final revision.",
+      startedAt: 0, final: true, revised: true, replaying: false });
+    assert.equal(h.controller.getSnapshot().turns.find(turn => turn.id === dropped.id)?.status, "error");
+    assert.ok(internal.runtime.blocks.length <= 3);
+  } finally { h.cleanup(); }
+});
+
+test("backlog age bounds loading states even while playback applies backpressure", async () => {
+  const h = harness(undefined, undefined, true, undefined, "ABQAFA==", undefined, undefined, { backlogMs: 60 });
+  Object.defineProperty(h.player, "pendingSeconds", { get: () => 10 });
+  try {
+    await h.controller.start("a");
+    await passage(h, "Premier.");
+    await passage(h, "Deuxième.");
+    await waitFor(() => h.controller.getSnapshot().turns.every(turn => turn.status === "error"));
+    assert.equal(h.capture.stopped, false);
+  } finally { h.cleanup(); }
+});
+
+test("terminal SSE events let a burst finish without waiting for HTTP sockets to close", async () => {
+  const h = harness();
+  const fetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const response = await fetch(url, init);
+    if (String(url) !== "/api/interpret") return response;
+    const bytes = await response.text();
+    return new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(bytes)); } }),
+      { headers: { "Content-Type": "text/event-stream" } });
+  };
+  try {
+    await h.controller.start("a");
+    for (let index = 0; index < 3; index++) await passage(h, `Passage ${index}.`);
+    await waitFor(() => h.controller.getSnapshot().turns.length === 3 && h.controller.getSnapshot().turns.every(turn => turn.status === "done"));
+    assert.equal(h.player.chunks, 3);
+    assert.equal(h.capture.stopped, false);
+  } finally { h.cleanup(); }
+});
+
+test("stopping has a total deadline even if the playback drain never settles", async () => {
+  const h = harness(undefined, undefined, true, undefined, "ABQAFA==", undefined, undefined, { backlogMs: 80 });
+  h.player.idle = () => new Promise<void>(() => {});
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Bonjour.");
+    await h.controller.stop();
+    assert.equal(h.controller.getSnapshot().phase, "idle");
+    assert.match(h.controller.getSnapshot().error!, /Finishing.*timed out/);
+    assert.equal(h.capture.stopped, true);
+  } finally { h.cleanup(); }
+});
+
+test("stopping does not mark a fully committed passage as interrupted", async () => {
+  const h = harness();
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Bonjour, ");
+    await waitFor(() => h.player.chunks === 1);
+    h.controller.cancel();
+    assert.equal(h.controller.getSnapshot().turns[0].status, "done");
+    assert.equal(h.controller.getSnapshot().turns[0].error, undefined);
+  } finally { h.cleanup(); }
+});
+
+test("a late playback callback cannot complete or replay a passage after its deadline", async () => {
+  const h = harness(undefined, undefined, true, undefined, "ABQAFA==", undefined, undefined,
+    { firstEventMs: 100, idleMs: 100, requestMs: 60 });
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let chunks = 0;
+  Object.assign(h.player, { enqueue: async () => { if (++chunks === 1) await pending; return performance.now(); } });
+  try {
+    await h.controller.start("a");
+    await passage(h, "Premier.");
+    await passage(h, "Deuxième.");
+    await waitFor(() => h.controller.getSnapshot().turns.at(-1)?.status === "done");
+    assert.equal(h.controller.getSnapshot().turns[0].status, "error");
+    assert.equal(h.requests.filter(request => request.text === "Premier.").length, 1);
+    release();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(h.controller.getSnapshot().turns[0].status, "error");
+    assert.equal(chunks, 2);
+  } finally { release(); h.cleanup(); }
+});
+
+test("permanent authorization errors stop capture instead of retrying every passage", async () => {
+  const h = harness();
+  const fetch = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = async (url, init) => {
+    if (String(url) !== "/api/interpret") return fetch(url, init);
+    attempts++;
+    return Response.json({ code: "SESSION", error: "Reload the page to start a new session." }, { status: 401 });
+  };
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Bonjour.");
+    await waitFor(() => h.controller.getSnapshot().phase === "idle");
+    assert.equal(attempts, 1);
+    assert.equal(h.capture.stopped, true);
+    assert.match(h.controller.getSnapshot().error!, /Reload/);
+    assert.ok(h.controller.getSnapshot().turns.every(turn => turn.status !== "working"));
+  } finally { h.cleanup(); }
+});
+
+test("a translation failure exposes its cause while capture stays running for retry", async () => {
+  const h = harness(undefined, undefined, true, undefined, "ABQAFA==", undefined, () => {
+    throw new Error("The voice connection is closed.");
+  });
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Bonjour, ");
+    await waitFor(() => !!h.controller.getSnapshot().warning);
+    assert.match(h.controller.getSnapshot().warning!, /The voice connection is closed/);
+    assert.equal(h.capture.stopped, false);
+    assert.equal(h.controller.getSnapshot().phase, "listening");
+  } finally { h.cleanup(); }
+});
 
 test("translation audio is delivered while capture is still running, and finalization never repeats it", async () => {
   const h = harness();

@@ -102,3 +102,41 @@ test("SSE waits for asynchronous audio delivery before advancing the stream", as
     globalThis.fetch = original;
   }
 });
+
+test("done releases a stream that never closes, even when cancellation never settles", async (t) => {
+  let cancelled = false;
+  t.mock.method(globalThis, "fetch", async () => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode('data: {"type":"done","text":"Hello","spoken":false,"metrics":{}}\n\n')); },
+    cancel() { cancelled = true; return new Promise(() => {}); },
+  }), { headers: { "Content-Type": "text/event-stream" } }));
+  await streamInterpretation(body, new AbortController().signal, () => {}, { firstEventMs: 100, idleMs: 100, requestMs: 200 });
+  assert.equal(cancelled, true);
+});
+
+test("an unresponsive fetch, silent body, and blocked audio delivery all have deadlines", async (t) => {
+  for (const mode of ["fetch", "body", "playback"] as const) {
+    let requestSignal!: AbortSignal;
+    t.mock.method(globalThis, "fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init!.signal as AbortSignal;
+      if (mode === "fetch") return new Promise<Response>(() => {});
+      return new Response(new ReadableStream({ start(controller) {
+        if (mode === "playback") controller.enqueue(new TextEncoder().encode('data: {"type":"audio","audio":"AAE=","sampleRate":24000}\n\n'));
+      } }), { headers: { "Content-Type": "text/event-stream" } });
+    });
+    await assert.rejects(streamInterpretation(body, new AbortController().signal,
+      () => mode === "playback" ? new Promise<void>(() => {}) : undefined,
+      { firstEventMs: 15, idleMs: 15, requestMs: 50 }), { code: "TRANSLATION_TIMEOUT" });
+    assert.equal(requestSignal.aborted, true, mode);
+    t.mock.restoreAll();
+  }
+});
+
+test("caller cancellation releases a blocked stream and preserves structured provider failures", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(new ReadableStream(), { headers: { "Content-Type": "text/event-stream" } }));
+  const abort = new AbortController();
+  const pending = streamInterpretation(body, abort.signal, () => {});
+  abort.abort(new Error("Cancelled by the user"));
+  await assert.rejects(pending, /Cancelled by the user/);
+  t.mock.method(globalThis, "fetch", async () => Response.json({ code: "PROVIDER_ACCESS", error: "Access unavailable" }, { status: 503 }));
+  await assert.rejects(streamInterpretation(body, new AbortController().signal, () => {}), { code: "PROVIDER_ACCESS", status: 503 });
+});

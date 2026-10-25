@@ -1,5 +1,51 @@
 # Vérifications de l’app — 24 octobre 2026
 
+## Bounded translation queue — 25 October 2026
+
+The controller now bounds both request lifetime and queue age. Terminal SSE events
+release the head immediately; HTTP closure is no longer required. First-event and
+network inactivity limits are 8 seconds, total request and finish limits 20 seconds,
+the pending queue cap 12 passages, and transient failures get one retry. An expired
+passage is visibly failed while capture and newer speech continue. Late replies and
+ASR revisions cannot recreate retired passages. Already committed audio is not retried.
+
+Regressions cover a response body and cancel operation that never settle, fetch/read/
+playback deadlines, a stalled head followed by a successful passage, retry exhaustion,
+queue overflow, late ASR/playback replies, playback backpressure, permanent auth errors,
+bounded stop, and preservation of an already translated passage on cancellation.
+WebSocket tests cover close/abort before open, handshake and finalization deadlines,
+and ignoring late audio. Synthetic UI verification rendered a timed-out card followed
+by a completed card, without a remaining loading indicator or any microphone/playback.
+
+Three live-provider runs of the same 4.226-second synthetic French fixture completed
+before and after the change, always producing scheduled audio before input ended.
+First scheduled non-silent audio was 2262/1995/1728 ms before (median 1995 ms), and
+2277/1960/2237 ms after (median 2237 ms). This small sample does not demonstrate an
+improvement in provider latency. The verified improvement is releasing stalled work
+and bounding accumulated delay; no model or provider configuration was changed.
+Playback was simulated and silent, so these numbers are not acoustic measurements.
+
+## Local Meet mute regression — 25 October 2026
+
+The live, read-only native check reproduced `muted: null` with Accessibility granted
+and an unmuted Meet call. Chrome returned an empty `AXWindows` array while exposing
+the actual call through `AXFocusedWindow`. Reading focused/main windows as well as
+the window list, with duplicate references removed, made the same check return
+`muted: false`. Existing domain, leave-call, unique-control and deadline checks remain.
+The live test now fails when Accessibility is missing instead of reporting success.
+
+Current verification: the read-only check against the existing Meet call passed;
+the branded virtual microphone opened, delivered frames and accepted digital silence
+without changing default devices; both synthetic French-to-English and English-to-French
+controller runs completed through live transcription, translation and synthesis.
+Returned audio arrived before synthetic input ended in both runs and was discarded
+by the silent player. No physical microphone, call recording or audible playback was
+used. These checks do not establish acoustic behavior in a real meeting.
+
+Typecheck, server lint, app tests, server/static UI builds, Rust check/tests and Clippy
+passed. Repository-wide Rust formatting still reports pre-existing formatting in
+`system_microphone.rs`; the changed Rust file passes formatting.
+
 ## Verb, compound and agreement trial — 25 October 2026
 
 The next user-authorized trial refines the current Jev instructions to hold ambiguous
