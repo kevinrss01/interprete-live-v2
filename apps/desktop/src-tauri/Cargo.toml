@@ -1,6 +1,6 @@
 [package]
 name = "interprete"
-version = "0.1.0"
+version = "0.1.1"
 description = "Interprète, traduction vocale en direct"
 authors = ["Impulse Lab"]
 edition = "2024"

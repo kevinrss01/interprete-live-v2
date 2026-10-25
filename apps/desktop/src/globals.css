@@ -1579,6 +1579,7 @@ html.toast-window,
 /* A compact native status control, independent of the main conversation window. */
 .translation-overlay-window,
 .translation-overlay-window #root {
+  height: 100%;
   background: transparent;
   overflow: hidden;
   color-scheme: dark;
@@ -1588,19 +1589,44 @@ html.toast-window,
 }
 .translation-pill {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  width: 232px;
-  height: 56px;
-  padding: 6px 8px 6px 18px;
-  border-radius: 999px;
+  position: relative;
+  width: 360px;
+  min-height: 88px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 14px;
   background: #242523;
   color: #fafaf9;
   box-shadow: 0 3px 7px rgb(0 0 0 / 18%);
   font-size: 12px;
   user-select: none;
 }
+.translation-pill-content { min-width: 0; }
+.translation-pill-menu {
+  flex-basis: 100%;
+  border-top: 1px solid #41433f;
+  padding-top: 6px;
+  margin-top: -6px;
+}
+.translation-pill-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #fafaf9;
+  text-align: left;
+  font-size: 12px;
+}
+.translation-pill-menu button:hover:not(:disabled) { background: #41433f; }
+.translation-pill-menu button:focus-visible { outline-color: #fafaf9; }
 .translation-pill-status {
   display: flex;
   align-items: center;
@@ -1626,9 +1652,38 @@ html.toast-window,
   align-items: center;
   gap: 6px;
   color: #cbcdc8;
-  font-size: 11px;
-  line-height: 16px;
-  letter-spacing: 0.02em;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.translation-pill-languages svg { flex-shrink: 0; }
+.translation-pill-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 -6px 17px;
+  min-height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #cbcdc8;
+  font-size: 12px;
+}
+.translation-pill-options:hover:not(:disabled) { background: #41433f; color: #fafaf9; }
+.translation-pill-options:focus-visible { outline-color: #fafaf9; }
+.translation-pill-error {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 8px;
+  background: #242523;
+  color: #fafaf9;
+  font-size: 10px;
 }
 .translation-pill-stop {
   display: grid;
@@ -1800,9 +1855,10 @@ html.toast-window,
   position: fixed;
   z-index: 60;
   right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
+  bottom: max(16px, env(safe-area-inset-bottom));
+  max-width: calc(100vw - 32px);
 }
+.translation-overlay-browser .translation-pill { max-width: 100%; }
 @layer base {
   /* In the base layer: shadcn fields opt out with outline-none and only darken their border. */
   :focus-visible {

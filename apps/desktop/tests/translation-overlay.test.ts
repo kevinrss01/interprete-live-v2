@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { TranslationPill } from "../src/windows/translation-overlay";
 import {
   OverlayPublisher,
   idleOverlay,
@@ -15,6 +18,23 @@ const live: OverlayUpdate = {
   target: "en",
   test: false,
 };
+test("the card exposes full language names, both directions and options while stopping", () => {
+  const html = renderToStaticMarkup(createElement(TranslationPill, {
+    session: { ...live, bidirectional: true },
+    stopping: true,
+    onStop: () => {},
+    onOptions: () => {},
+    onExpand: () => {},
+    expanded: true,
+  }));
+  assert.match(html, /French/);
+  assert.match(html, /English/);
+  assert.match(html, /to and from/);
+  assert.match(html, /Stopping…/);
+  assert.match(html, /aria-expanded="true" aria-label="Translation options"/);
+  assert.match(html, /All translation settings/);
+  assert.match(html, /disabled="" aria-label="Stop live translation"/);
+});
 test("overlay state updates remain ordered when a stop follows a pending show", async () => {
   let release!: () => void;
   const blocked = new Promise<void>((resolve) => {

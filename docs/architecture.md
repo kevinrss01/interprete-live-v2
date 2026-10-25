@@ -310,3 +310,9 @@ Completed history and reduced motion show all text immediately. The accessible t
 updates only with upstream content. This presentation does not delay the controllers,
 audio, persistence or gate decisions; benchmark timestamps measure controller text
 availability, not painted words.
+
+### Floating translation card
+
+`translation_overlay.rs` owns the session-scoped status card, positioned at the bottom right of the main window’s monitor work area. It stays above other apps through the existing non-activating macOS panel. The snapshot includes full language codes and whether both call directions are active. The UI resolves the language names from the shared catalog.
+
+Expanding **Options** updates native snapshot state and resizes the window upward. Expansion survives status updates for the same session and resets for the next session. Both expansion and opening the main window validate the current session id. Opening settings emits a scoped event, restores and focuses the main window, and reveals the call controls without using the navigation path that stops a call. Stopping still uses the existing session-scoped stop flow. No audio, provider calls or persistent preferences are added.

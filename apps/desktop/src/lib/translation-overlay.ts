@@ -9,10 +9,12 @@ export type OverlayUpdate = {
   source: string;
   target: string;
   test: boolean;
+  bidirectional?: boolean;
 };
 export type OverlaySnapshot = OverlayUpdate & {
   revision: number;
   stopRequested: boolean;
+  expanded?: boolean;
 };
 export const idleOverlay: OverlayUpdate = {
   sessionId: null,
@@ -43,6 +45,10 @@ export const getOverlay = () =>
   invoke<OverlaySnapshot>("translation_overlay_snapshot");
 export const stopOverlay = (sessionId: string) =>
   invoke<OverlaySnapshot>("stop_translation_overlay", { sessionId });
+export const expandOverlayOptions = (sessionId: string, expanded: boolean) =>
+  invoke<OverlaySnapshot>("expand_translation_options", { sessionId, expanded });
+export const openOverlaySettings = (sessionId: string) =>
+  invoke<void>("open_translation_options", { sessionId });
 export const onOverlay = (listener: (state: OverlaySnapshot) => void) =>
   listen<OverlaySnapshot>("translation-overlay-state", (event) =>
     listener(event.payload),
@@ -58,24 +64,26 @@ export function useTranslationOverlay(
   update: OverlayUpdate | null,
   onStop: (sessionId: string) => void,
   onError: (message: string | null) => void,
+  onOptions: (sessionId: string) => void,
 ) {
   const [publisher] = useState(() => new OverlayPublisher());
   const native = isTauri();
-  const latest = useRef({ sessionId: update?.sessionId, onStop });
-  latest.current = { sessionId: update?.sessionId, onStop };
+  const latest = useRef({ sessionId: update?.sessionId, onStop, onOptions });
+  latest.current = { sessionId: update?.sessionId, onStop, onOptions };
   const sessionId = update?.sessionId ?? null;
   const phase = update?.phase ?? "idle";
   const source = update?.source ?? "";
   const target = update?.target ?? "";
   const test = update?.test ?? false;
+  const bidirectional = update?.bidirectional ?? false;
   useEffect(() => {
     if (!native) return;
-    void publisher.publish({ sessionId, phase, source, target, test }).then(
+    void publisher.publish({ sessionId, phase, source, target, test, bidirectional }).then(
       () => onError(null),
       (error: unknown) =>
         onError(`The pill could not be shown: ${String(error)}`),
     );
-  }, [native, publisher, sessionId, phase, source, target, test, onError]);
+  }, [native, publisher, sessionId, phase, source, target, test, bidirectional, onError]);
   useEffect(() => {
     if (!native) return;
     let active = true;
@@ -83,12 +91,17 @@ export function useTranslationOverlay(
       if (active && event.payload === latest.current.sessionId)
         latest.current.onStop(event.payload);
     });
+    const optionsSubscription = listen<string>("translation-overlay-options", (event) => {
+      if (active && event.payload === latest.current.sessionId)
+        latest.current.onOptions(event.payload);
+    });
     return () => {
       active = false;
       void subscription.then(
         (off) => off(),
         () => {},
       );
+      void optionsSubscription.then((off) => off(), () => {});
     };
   }, [native]);
   useEffect(

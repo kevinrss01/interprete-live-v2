@@ -91,6 +91,7 @@ export type CallPanelHandle = {
   stopAll: () => void;
   previewCaptions: (visible: boolean) => void;
   clearDiscussion: () => void;
+  openOptions: () => void;
 };
 
 export function CallPanel({
@@ -318,6 +319,13 @@ export function CallPanel({
     ref,
     () => ({
       stopAll: () => { stop(); stopCaptionsPreview(); setLingering(null); },
+      openOptions: () => {
+        const panel = document.querySelector<HTMLElement>(".call-panel");
+        const advanced = panel?.querySelector<HTMLDetailsElement>(".call-advanced");
+        if (advanced) advanced.open = true;
+        panel?.scrollIntoView({ block: "start" });
+        panel?.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
+      },
       stop: (sessionId: string) => {
         // The parent/native snapshot may still describe the previous session.
         if (overlayId.current === sessionId) stop();
@@ -348,6 +356,7 @@ export function CallPanel({
                 : phase,
             source: busy ? profiles.a.language : profiles.b.language,
             target: busy ? profiles.b.language : profiles.a.language,
+            bidirectional: busy && listenBusy,
             test: busy
               ? session?.mode === "local" || !!session?.demo
               : listen.demo,
@@ -357,6 +366,7 @@ export function CallPanel({
   }, [
     busy,
     anyBusy,
+    listenBusy,
     overlayPreview,
     state.phase,
     incoming.phase,
@@ -762,7 +772,7 @@ export function CallPanel({
       aria-labelledby="calls-title"
     >
       <div className="call-intro">
-        <h1 id="calls-title">{benchmark ? "Benchmark" : "Understand and be understood."}</h1>
+        <h1 id="calls-title" tabIndex={-1}>{benchmark ? "Benchmark" : "Understand and be understood."}</h1>
         <p>
           {benchmark ? "Replay recordings, inspect delays and compare results with the same translation engine used in calls." : "Caption or listen to the other participants in your language, and send your translated voice to Meet, Zoom, or Teams."}
         </p>
@@ -1237,14 +1247,14 @@ export function CallPanel({
           </div>
           <div className="call-test-item">
             <div>
-              <h3>Preview the floating stop control</h3>
-              <p>Show the small status window and its stop button. It does not listen or translate. Use the square in that window to close it.</p>
+              <h3>Preview the floating translation card</h3>
+              <p>Show the languages, options and stop button at the bottom of the screen. No audio is captured or played. Use the square to close it.</p>
             </div>
             <button type="button" className="btn" disabled={anyBusy} onClick={() => {
               if (overlayPreview) setOverlayPreview(false);
               else { overlayId.current = crypto.randomUUID(); setOverlayPreview(true); }
             }}>
-              {overlayPreview ? "Close control preview" : "Show stop control"}
+              {overlayPreview ? "Close control preview" : "Show translation card"}
             </button>
           </div>
           <div className="call-test-item">

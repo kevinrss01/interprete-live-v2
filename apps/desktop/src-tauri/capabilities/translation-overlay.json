@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "translation-overlay",
-  "description": "Listen to translation status and request a session-scoped stop; no microphone, audio routing, or frontend emit permissions.",
+  "description": "Listen to translation status, open the main window options and request a session-scoped stop; no microphone, audio routing, or frontend emit permissions.",
   "windows": [
     "translation-overlay"
   ],
