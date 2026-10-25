@@ -1798,28 +1798,29 @@ html.toast-window,
   gap: 4px;
   max-height: var(--caption-lines, 148px);
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
-  mask-size: 100% var(--caption-lines, 148px);
-  mask-position: bottom;
-  mask-repeat: no-repeat;
 }
 .caption-line {
   flex-shrink: 0;
-  font-size: calc(var(--caption-font, 26px) * 0.77);
-  font-weight: 450;
+  display: grid;
+  align-items: start;
+  gap: 12px;
+  font-size: var(--caption-font, 26px);
+  font-weight: 500;
   line-height: 1.38;
   letter-spacing: -0.01em;
   color: inherit;
-  text-wrap: pretty;
+  text-wrap: wrap;
   overflow-wrap: anywhere;
-  transition: color 300ms var(--ease);
 }
-.caption-line[data-latest="true"] {
-  font-size: var(--caption-font, 26px);
-  font-weight: 500;
-  color: inherit;
+.caption-text {
+  min-width: 0;
+  display: grid;
+  align-content: end;
+  max-height: var(--caption-lines, 148px);
+  overflow: hidden;
 }
 .caption-waiting {
+  display: block;
   font-size: 18px;
   color: inherit;
 }
@@ -1874,11 +1875,8 @@ html.toast-window,
 }
 .settings-row .settings-row-control > .caption-color { width: 52px; height: 44px; padding: 4px; cursor: pointer; }
 @media (max-width: 640px) {
-  .caption-line[data-latest="true"] {
-    font-size: min(var(--caption-font, 26px), 26px);
-  }
   .caption-line {
-    font-size: 17px;
+    font-size: min(var(--caption-font, 26px), 26px);
   }
 }
 .translation-overlay-browser {

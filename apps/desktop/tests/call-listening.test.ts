@@ -353,28 +353,24 @@ test("incoming English demos use the NASA clip; French demos keep their syntheti
   }
 });
 
-test("the three-voice sample is selectable without opening system capture or cloning", async () => {
+test("selected multilingual recordings stay local, silent and out of voice cloning", async () => {
   const h = fakeListening({ match: async () => assert.fail("captions need no voice") });
   try {
-    await h.listening.start({ profiles, options: { captions: true, voice: false }, demo: true, sample: "group" });
-    const sample = h.sample("/samples/en.wav");
-    assert.equal(sample.demoUrl, "/samples/nasa-three-speakers-en.wav");
-    assert.equal(sample.recordSample, false);
-    assert.equal(sample.demoAudible, false);
+    for (const [language, recording] of [["en", "esa-ice-en.wav"], ["fr", "esa-agency-fr.wav"], ["es", "esa-solar-es.wav"], ["de", "esa-greenhouse-de.wav"]] as const) {
+      await h.listening.start({ profiles: { a: { ...profiles.a, language: language === "fr" ? "en" : "fr" }, b: { ...profiles.b, language } }, options: { captions: true, voice: false }, demo: true, recording });
+      const sample = h.sample(`/samples/${language}.wav`);
+      assert.equal(sample.demoUrl, `/samples/${recording}`);
+      assert.equal(sample.recordSample, false);
+      assert.equal(sample.demoAudible, false);
+      h.listening.stop();
+    }
+    await assert.rejects(h.listening.start({ profiles, options: { captions: true, voice: false }, demo: true, recording: "esa-solar-es.wav" }), /source language/);
+    await assert.rejects(h.listening.start({ profiles, options: { captions: true, voice: false }, recording: "esa-ice-en.wav" }), /source language/);
     assert.equal(h.captured.length, 0);
-    await h.listening.start({ profiles, options: { captions: true, voice: false }, demo: true });
-    assert.equal(h.sample("/samples/en.wav").demoUrl, "/samples/nasa-en.wav", "the default sample is restored");
-    await h.listening.start({
-      profiles: { a: { ...profiles.a, language: "en" }, b: { ...profiles.b, language: "fr" } },
-      options: { captions: true, voice: false }, demo: true, sample: "group",
-    });
-    assert.equal(h.sample("/samples/fr.wav").demoUrl, "/samples/fr.wav", "English audio never replaces a French input");
-  } finally {
-    h.listening.dispose();
-  }
+  } finally { h.listening.dispose(); }
 });
 
-for (const [file, maximum] of [["nasa-en.wav", 25], ["nasa-three-speakers-en.wav", 30]] as const) {
+for (const [file, maximum] of [["nasa-en.wav", 25], ["esa-ice-en.wav", 245], ["esa-agency-fr.wav", 219], ["esa-solar-es.wav", 319], ["esa-greenhouse-de.wav", 294]] as const) {
   test(`${file} contains 20–${maximum} seconds of mono 24 kHz PCM speech`, () => {
     const wav = readFileSync(new URL(`../public/samples/${file}`, import.meta.url));
     assert.equal(wav.toString("ascii", 0, 4), "RIFF");

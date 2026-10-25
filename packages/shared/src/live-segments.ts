@@ -22,7 +22,7 @@ export type LiveSegment = {
 const weakEndings: Record<string, Set<string>> = Object.fromEntries(
   Object.entries({
     fr: "de du des à au aux pour avec sans un une le la les ce cette ces que si et ou mais",
-    en: "a an the to for from with without of at in on by and or but if that",
+    en: "a an the to for from with without of at in on by and or but if that can could will would shall should may might must",
     es: "un una el la los las de del a para por con sin y o si que",
     de: "der die das ein eine einen einem des dem den zu zum zur mit ohne von für und oder wenn dass",
     it: "un una il lo la i gli le di del a per con senza e o se che",
@@ -55,6 +55,20 @@ export function usablePrefix(
   if (!last) return false;
   const tail = text.slice(last.start, last.end).toLocaleLowerCase();
   if (weakEndings[language]?.has(tail) && !/(?:[^.]\.|[!?。！？])$/u.test(text)) return false;
+  // An English possessive or contracted auxiliary ("Earth's", "we're") awaits its noun or verb.
+  if (language === "en" && /['’](s|re|m|ve|ll|d)$/u.test(tail) && !/[.!?。！？]$/u.test(text)) return false;
+  // A capitalized word followed by another one mid-sentence is an unfinished multiword name
+  // ("International Space" + "Station"). German capitalizes every noun, so it is excluded.
+  if (
+    language !== "de" &&
+    !/[.!?。！？]$/u.test(text) &&
+    /^\p{Lu}/u.test(text.slice(last.start)) &&
+    /^\p{Lu}\p{Ll}/u.test(following.trimStart())
+  )
+    return false;
+  // Splitting a place expression ("up there", "over here") can change a verb's meaning.
+  if (language === "en" && !/[.!?。！？]$/u.test(text) &&
+    /^(up|down|over|out|in)$/u.test(tail) && /^(here|there)\b/iu.test(following.trimStart())) return false;
   // A hyphenated compound ("soixante-dix", "Est-ce") is one unit of meaning.
   if (!/[.!?。！？]$/u.test(text) && /^-\p{L}/u.test(following)) return false;
   if (
@@ -137,15 +151,17 @@ export function nextSegment(
     }
   }
   // The last word may still be arriving. Don't speak a partial lexical token.
-  const endUnits = Math.min(limit, units.length - (lastWordSettled || /\s$/u.test(text) ? 0 : 1));
-  if (endUnits <= rejectedThrough || endUnits - consumed < 2) return null;
-  const end = units[endUnits - 1].end;
-  return {
-    text: text.slice(start, end).trim(),
-    followingText: text.slice(end).trim().slice(0, 512),
-    endUnits,
-    end,
-  };
+  const latest = Math.min(limit, units.length - (lastWordSettled || /\s$/u.test(text) ? 0 : 1));
+  // An unfinished tail must not hide an earlier usable prefix. The model still decides
+  // whether that prefix is safe, using only the look-ahead already received from ASR.
+  for (let endUnits = latest; endUnits > rejectedThrough && endUnits - consumed >= 2; endUnits--) {
+    const end = units[endUnits - 1].end;
+    const fragment = text.slice(start, end).trim();
+    const followingText = text.slice(end).trim().slice(0, 512);
+    if (usablePrefix(fragment, followingText, language))
+      return { text: fragment, followingText, endUnits, end };
+  }
+  return null;
 }
 
 // Match the already spoken source to a revised final ASR prefix. Punctuation,

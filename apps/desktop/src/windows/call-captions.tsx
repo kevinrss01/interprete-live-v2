@@ -13,10 +13,12 @@ import {
   type CaptionsUpdate,
 } from "../lib/call-captions";
 
-function Caption({ line, latest, language }: { line: CaptionLine; latest: boolean; language: string }) {
+function Caption({ line, language }: { line: CaptionLine; language: string }) {
   return (
-    <p className="caption-line" data-latest={latest} data-live={line.live} lang={language} dir="auto">
-      <LiveText text={line.text} language={language} live={line.live} />
+    <p className="caption-line" data-live={line.live}>
+      <span className="caption-text" lang={language} dir="auto">
+        <LiveText text={line.text} language={language} live={line.live} />
+      </span>
     </p>
   );
 }
@@ -69,11 +71,10 @@ export function CaptionsView({ captions, preferences, onHidden }: { captions: Ca
               : "Captions ready. They will appear as soon as someone speaks."}
           </p>
         ) : (
-          captions.lines.map((line, index) => (
+          captions.lines.map((line) => (
             <Caption
               key={`${captions.sessionId}:${line.id}`}
               line={line}
-              latest={index === captions.lines.length - 1}
               language={captions.target}
             />
           ))

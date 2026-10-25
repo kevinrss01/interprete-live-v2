@@ -332,14 +332,14 @@ test("rejected prefixes grow with new speech instead of being spoken or blocking
 });
 
 test("a pause completes the last word without waiting for the next one", async () => {
-  const h = harness();
+  const h = harness(text => text === "Bonjour tout");
   try {
     await h.controller.start("a");
     const spokeAt = performance.now();
     h.socket.delta("Bonjour tout le monde");
     await waitFor(() => h.player.chunks === 1);
     assert.ok(performance.now() - spokeAt >= 240, "fluent speech keeps the last word as look-ahead");
-    assert.deepEqual(h.requests.map((r) => [r.text, r.followingText]), [["Bonjour tout le monde", ""]]);
+    assert.deepEqual(h.requests.map((r) => [r.text, r.followingText]), [["Bonjour tout", "le monde"], ["Bonjour tout le monde", ""]]);
     await h.controller.stop();
   } finally {
     h.cleanup();
@@ -370,17 +370,17 @@ function holdInterpretation(h: ReturnType<typeof harness>, held: (text: string) 
 }
 
 test("a fragment cut inside a word is withdrawn before it is spoken", async () => {
-  const h = harness();
+  const h = harness(text => text === "Je réserve");
   const withdrawn = holdInterpretation(h, (text) => text.endsWith(" cham"));
   try {
     await h.controller.start("a");
     // The ASR paused inside "chambre" long enough for "cham" to look complete.
     h.socket.delta("Je réserve une cham");
-    await waitFor(() => h.requests.length === 1);
+    await waitFor(() => h.requests.some(r => r.text === "Je réserve une cham"));
     h.socket.delta("bre");
     await waitFor(() => h.player.chunks === 1);
     assert.deepEqual(withdrawn, ["Je réserve une cham"]);
-    assert.deepEqual(h.requests.map((r) => r.text), ["Je réserve une cham", "Je réserve une chambre"]);
+    assert.deepEqual(h.requests.map((r) => r.text), ["Je réserve", "Je réserve une cham", "Je réserve une chambre"]);
     assert.equal(h.controller.getSnapshot().warning, null);
     await h.controller.stop();
     assert.equal(h.controller.getSnapshot().turns[0].translation, "translation Je réserve une chambre");
@@ -463,19 +463,19 @@ test("a fragment that cannot be spoken yet does not hide a later one that can", 
 });
 
 test("a last word held back after a pause is spoken once punctuation ends its sentence", async () => {
-  const h = harness((text) => text === "Je voudrais une table");
+  const h = harness((text) => text === "Je voudrais" || text === "Je voudrais une table");
   try {
     await h.controller.start("a");
     h.socket.delta("Je voudrais une table");
-    await waitFor(() => h.requests.length === 1);
+    await waitFor(() => h.requests.some(r => r.text === "Je voudrais une table"));
     await new Promise((r) => setTimeout(r, 20));
     assert.equal(h.player.chunks, 0);
     // The ASR adds the period late, after the pause.
     h.socket.delta(".");
     await waitFor(() => h.player.chunks === 1);
-    assert.deepEqual(h.requests.map((r) => r.text), ["Je voudrais une table", "Je voudrais une table."]);
+    assert.deepEqual(h.requests.map((r) => r.text), ["Je voudrais", "Je voudrais une table", "Je voudrais une table."]);
     await h.controller.stop();
-    assert.equal(h.requests.length, 2);
+    assert.equal(h.requests.length, 3);
   } finally {
     h.cleanup();
   }
@@ -607,6 +607,26 @@ test("early output still waits for dangling prepositions, known negation and unf
   assert.equal(usablePrefix("One.", "Two. Three.", "en"), true);
   assert.equal(usablePrefix("All done.", "-Next item.", "en"), true);
   assert.equal(usablePrefix("Bonjour.", "pas de problème", "fr"), true);
+});
+
+// Observed in the NASA EN→FR benchmark: fragments the readiness gate approved at a cut that
+// lost "Earth" ("de la" + "gravité."), split "we're" from its verb, kept "International Space"
+// in English and finished a sentence with "can".
+test("early output waits for English possessives, contractions, modals and unfinished names", () => {
+  assert.equal(usablePrefix("but we're still under the influence of Earth's", "gravity", "en"), false);
+  assert.equal(usablePrefix("but we're still under the influence of Earth\u2019s", "gravity", "en"), false);
+  assert.equal(usablePrefix("Now, the very microgravity that we're", "trying to study", "en"), false);
+  assert.equal(usablePrefix("I'll", "be there", "en"), false);
+  assert.equal(usablePrefix("up there can", "make experiments", "en"), false);
+  assert.equal(usablePrefix("when astronauts do experiments on the International Space", "Station,", "en"), false);
+  assert.equal(usablePrefix("Nous allons à la Station", "Spatiale internationale", "fr"), false);
+  // Complete names, a pronoun "I", sentence ends and German nouns are not held.
+  assert.equal(usablePrefix("when astronauts do experiments on the International Space Station", "for instance", "en"), true);
+  assert.equal(usablePrefix("I talked to John", "I think", "en"), true);
+  assert.equal(usablePrefix("That's what it's for!", "Next", "en"), true);
+  assert.equal(usablePrefix("Yes we can.", "Thank you.", "en"), true);
+  assert.equal(usablePrefix("Ich sehe das Haus", "Peter gehört", "de"), true);
+  assert.equal(usablePrefix("Nous sommes toujours sous l'influence de la gravité", "terrestre", "fr"), true);
 });
 
 test("virtual-mic translation of the next segment overlaps five seconds already queued", async () => {
@@ -746,6 +766,11 @@ test("optional benchmark observers trace real capture and playback without chang
     assert.equal(s.outcome, "done");
     assert.equal(s.gateProbability, .99);
     assert.equal(s.gateUnavailable, false);
+    assert.equal(s.followingText, "");
+    assert.equal(s.precedingSpeech, "");
+    assert.equal(s.sourceStart, 0);
+    assert.equal(s.sourceEnd, "Bonjour,".length);
+    assert.ok(events.some(e => e.type === "transcript" && e.transcript && e.transcript.id === s.blockId && e.transcript.text === "Bonjour, "));
     assert.equal(h.player.chunks, 1);
     h.options.onEnded();
     await waitFor(() => events.some(e => e.type === "end"));
@@ -796,5 +821,41 @@ test("completed sentences can end with a word that would otherwise be dangling",
     assert.equal(h.requests[0].text, "What are you looking for?");
     assert.equal(h.requests[0].isFinal, false, "sentence punctuation must release the live prefix without ending the turn");
     assert.equal(h.controller.getSnapshot().phase, "listening");
+  } finally { h.cleanup(); }
+});
+
+test("an unfinished tail releases a usable prefix without consuming its look-ahead", () => {
+  const text = "when astronauts do experiments on the";
+  const first = nextSegment(text, 0, false, "en");
+  assert.equal(first?.text, "when astronauts do experiments");
+  assert.equal(first?.followingText, "on the");
+  assert.equal(first?.endUnits, 4);
+  assert.equal(nextSegment(text, 0, false, "en", 4), null, "do not retry a rejected shorter prefix");
+  const rest = nextSegment(text + " station.", first!.endUnits, true, "en");
+  assert.equal(rest?.text, "on the station.");
+  assert.equal(nextSegment("I would like a coffee", 0, false, "en")?.text, "I would like");
+  assert.equal(nextSegment("I do not", 0, false, "en"), null, "never expose known negation");
+});
+
+
+test("place expressions stay together when selecting a shorter prefix", () => {
+  assert.equal(usablePrefix("Please come over", "here", "en"), false);
+  assert.equal(usablePrefix("Please come over here", "now", "en"), true);
+  assert.equal(usablePrefix("Look up", "there", "en"), false);
+  assert.equal(usablePrefix("Look up.", "There is a bird", "en"), true);
+  assert.equal(nextSegment("We study up there", 0, false, "en")?.text, "We study");
+  assert.equal(nextSegment("We study up there", 0, false, "en", 0, true)?.text, "We study up there");
+});
+
+test("an accepted shorter prefix leaves its entire remainder for finalization", async () => {
+  const h = harness();
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Je voudrais réserver une table pour demain");
+    await waitFor(() => h.player.chunks === 1);
+    assert.equal(h.requests[0].text, "Je voudrais réserver une table");
+    assert.equal(h.requests[0].followingText, "pour demain");
+    await h.controller.stop();
+    assert.deepEqual(h.requests.map(r => r.text), ["Je voudrais réserver une table", "pour demain"]);
   } finally { h.cleanup(); }
 });

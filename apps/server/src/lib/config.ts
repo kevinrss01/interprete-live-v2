@@ -1,7 +1,8 @@
 export const MODELS = {
   transcription: "gpt-live-transcribe",
   translation: "gpt-5.4-mini",
-  decision: "typesafe-ai/jev-1.14.0",
+  decision: "perplexity/pplx-decider-v1.2",
+  voiceMatching: "typesafe-ai/jev-1.14.0",
   speech: "eleven_flash_v2_5",
 } as const;
 export function credential(name: "openai" | "eleven" | "gateway" | "session") {

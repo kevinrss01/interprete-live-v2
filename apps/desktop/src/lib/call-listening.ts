@@ -1,3 +1,4 @@
+import { BENCHMARK_RECORDINGS } from "./benchmark-recordings";
 import type {
   Profile,
   SpeakerId,
@@ -125,24 +126,26 @@ export class CallListening {
     app = null,
     callId = null,
     demo = false,
-    sample = "solo",
+    recording,
   }: {
     profiles: Record<SpeakerId, Profile>;
     options: ListenOptions;
     app?: string | null;
     callId?: string | null;
     demo?: boolean;
-    sample?: "solo" | "group";
+    recording?: string;
   }) {
     if (!options.captions && !options.voice) return;
+    const selected = BENCHMARK_RECORDINGS.find(r => r.file === recording && r.language === profiles.b.language);
+    if (recording && (!demo || !selected)) throw new Error("Choose a recording in the source language for the benchmark.");
     this.stop();
     const generation = ++this.generation;
     this.profiler = new VoiceProfiler();
     this.matching = null;
     this.choosing = null;
     this.targetLanguage = profiles.a.language;
-    this.sampleUrl = profiles.b.language === "en"
-      ? sample === "group" ? "/samples/nasa-three-speakers-en.wav" : "/samples/nasa-en.wav"
+    this.sampleUrl = selected ? `/samples/${selected.file}` : profiles.b.language === "en"
+      ? "/samples/nasa-en.wav"
       : "";
     // In the desktop app, their voice plays natively so a whole-system tap can exclude it.
     this.player.configure(options.voice && this.adapters.native ? SYSTEM_OUTPUT : null);
@@ -160,7 +163,7 @@ export class CallListening {
       this.controller.clearConversation();
       for (const id of ["a", "b"] as const) this.controller.setProfile(id, profiles[id]);
       // Speaker B is the other participant: their language is the source, the user's the target.
-      await this.controller.start("b", demo);
+      await this.controller.start("b", demo, demo ? this.sampleUrl || undefined : undefined);
       if (generation !== this.generation) return;
       const snapshot = this.controller.getSnapshot();
       if (snapshot.phase === "idle" && !this.started) {

@@ -4,6 +4,11 @@ export type SegmentTrace = {
   id: string;
   text: string;
   translation: string;
+  blockId?: string;
+  sourceStart?: number;
+  sourceEnd?: number;
+  followingText?: string;
+  precedingSpeech?: string;
   observedAt: number;
   startedAt: number;
   requestedAt?: number;
@@ -22,11 +27,18 @@ export type SegmentTrace = {
   outcome: "running" | "done" | "held" | "superseded" | "cancelled" | "error";
   error?: string;
 };
+export type TranscriptTrace = {
+  id: string;
+  text: string;
+  final: boolean;
+  revised: boolean;
+  replaying: boolean;
+};
 export type DiagnosticEvent = { sessionId: string; at: number } & (
   | { type: "session"; startedAt: number; source: string; target: string; models: Record<string, string> }
   | { type: "input"; seconds: number; queued: number }
   | { type: "input-end" }
-  | { type: "transcript" }
+  | { type: "transcript"; transcript?: TranscriptTrace }
   | { type: "segment"; segment: SegmentTrace }
   | { type: "end"; outcome: "done" | "cancelled" | "error"; error?: string }
 );
@@ -53,6 +65,7 @@ export type BenchmarkRun = {
   inputSeconds: number;
   models: Record<string, string>;
   segments: SegmentTrace[];
+  transcripts?: (TranscriptTrace & { at: number })[];
   queue: { at: number; seconds: number }[];
   outcome: "running" | "done" | "cancelled" | "error";
   error?: string;
@@ -61,7 +74,12 @@ export type BenchmarkRun = {
   note?: string;
 };
 const KEY = "interprete-benchmarks-v1";
-const MAX_RUNS = 12, MAX_SEGMENTS = 500, MAX_POINTS = 2400;
+const MAX_RUNS = 12, MAX_SEGMENTS = 1200, MAX_POINTS = 6000;
+const MAX_TRANSCRIPTS = 2400, MAX_TRANSCRIPT_CHARS = 4000;
+function validTranscript(t: TranscriptTrace & { at: number }) {
+  return t && typeof t.id === "string" && typeof t.text === "string" && t.text.length <= MAX_TRANSCRIPT_CHARS &&
+    Number.isFinite(t.at) && [t.final, t.revised, t.replaying].every(v => typeof v === "boolean");
+}
 export function percentile(values: number[], fraction: number) {
   const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
   return sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1))] : null;
@@ -89,6 +107,28 @@ export function runSummary(run: BenchmarkRun) {
     gateUnknown: run.segments.filter(s => s.gate !== undefined && gateSource(s) === "unknown").length,
     revised: run.segments.filter(s => s.outcome === "superseded").length,
     errors: run.segments.filter(s => s.outcome === "error").length,
+  };
+}
+export function cadenceSummary(run: BenchmarkRun) {
+  const summarize = (values: number[]) => ({ count: values.length, median: percentile(values, .5), p90: percentile(values, .9), max: percentile(values, 1) });
+  const gaps = (times: number[]) => {
+    const sorted = [...times].sort((a, b) => a - b);
+    return sorted.slice(1).map((time, index) => time - sorted[index]);
+  };
+  const previous = new Map<string, string>();
+  const updates = (run.transcripts ?? []).filter(t => {
+    const changed = t.text.trim() && t.text !== previous.get(t.id);
+    previous.set(t.id, t.text);
+    return changed;
+  });
+  const published = run.segments.filter(s => s.outcome === "done" && s.displayedAt !== undefined);
+  const differences = (end: "textAt" | "gateAt", start: "requestedAt" | "textAt") =>
+    published.flatMap(s => s[end] === undefined || s[start] === undefined ? [] : [Math.max(0, s[end]! - s[start]!)]);
+  return {
+    asr: summarize(gaps(updates.map(t => t.at))),
+    publications: summarize(gaps(published.map(s => s.displayedAt!))),
+    translation: summarize(differences("textAt", "requestedAt")),
+    gateWait: summarize(differences("gateAt", "textAt")),
   };
 }
 export function comparable(a: BenchmarkRun, b: BenchmarkRun) {
@@ -122,8 +162,11 @@ export class BenchmarkRecorder {
         ["done", "cancelled", "error"].includes(r.outcome) && Array.isArray(r.segments) && Array.isArray(r.queue) && r.models &&
         Object.values(r.models).every(v => typeof v === "string") &&
         r.segments.length <= MAX_SEGMENTS && r.queue.length <= MAX_POINTS &&
+        (r.transcripts === undefined || (Array.isArray(r.transcripts) && r.transcripts.length <= MAX_TRANSCRIPTS && r.transcripts.every(validTranscript))) &&
         r.segments.every((s: SegmentTrace) => s && typeof s.id === "string" && Number.isFinite(s.startedAt) && Number.isFinite(s.observedAt) &&
           typeof s.text === "string" && typeof s.translation === "string" && Number.isFinite(s.queued) &&
+          [s.blockId, s.followingText, s.precedingSpeech].every(v => v === undefined || typeof v === "string") &&
+          [s.sourceStart, s.sourceEnd].every(v => v === undefined || (Number.isInteger(v) && v >= 0)) &&
           ["running", "done", "held", "superseded", "cancelled", "error"].includes(s.outcome) &&
           [s.requestedAt, s.textAt, s.displayedAt, s.audioAt, s.playbackAt, s.finishedAt, s.gateAt].every(v => v === undefined || Number.isFinite(v)) &&
           (s.gate === undefined || ["ready", "wait", "final"].includes(s.gate)) &&
@@ -147,7 +190,7 @@ export class BenchmarkRecorder {
   }
   begin(config: BenchmarkConfig) {
     this.finish("cancelled");
-    this.active = { id: crypto.randomUUID(), date: new Date().toISOString(), config: { ...config }, startedAt: performance.now(), inputSeconds: 0, models: {}, segments: [], queue: [], outcome: "running", truncated: false };
+    this.active = { id: crypto.randomUUID(), date: new Date().toISOString(), config: { ...config }, startedAt: performance.now(), inputSeconds: 0, models: {}, segments: [], transcripts: [], queue: [], outcome: "running", truncated: false };
     this.publish();
     return this.active.id;
   }
@@ -162,9 +205,20 @@ export class BenchmarkRecorder {
       run.inputAt ??= event.at; run.inputSeconds = event.seconds;
       if (run.queue.length < MAX_POINTS) run.queue.push({ at: event.at, seconds: event.queued }); else run.truncated = true;
     } else if (event.type === "input-end") run.inputEndAt ??= event.at;
-    else if (event.type === "transcript") run.transcriptAt ??= event.at;
+    else if (event.type === "transcript") {
+      if (event.transcript?.text.trim() || !event.transcript) run.transcriptAt ??= event.at;
+      if (event.transcript) {
+        const transcripts = run.transcripts ??= [];
+        if (transcripts.length < MAX_TRANSCRIPTS) {
+          if (event.transcript.text.length > MAX_TRANSCRIPT_CHARS) run.truncated = true;
+          transcripts.push({ ...event.transcript, at: event.at, text: event.transcript.text.slice(0, MAX_TRANSCRIPT_CHARS) });
+        } else run.truncated = true;
+      }
+    }
     else if (event.type === "segment") {
       const s = { ...event.segment, text: event.segment.text.slice(0, 4000), translation: event.segment.translation.slice(0, 6000) };
+      if (s.followingText !== undefined) s.followingText = s.followingText.slice(0, 512);
+      if (s.precedingSpeech !== undefined) s.precedingSpeech = s.precedingSpeech.slice(-1500);
       // A custom voice authorization is a credential, not report metadata.
       if (s.voice && !/^[a-z0-9_-]{1,60}$/i.test(s.voice)) s.voice = "custom voice";
       const at = run.segments.findIndex(previous => previous.id === s.id);

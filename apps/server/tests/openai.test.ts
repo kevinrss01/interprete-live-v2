@@ -50,7 +50,7 @@ test("translation deltas survive network chunk boundaries", async () => {
   }
 });
 
-test("Jev unavailable never authorizes speculative speech", async () => {
+test("An unavailable readiness model never authorizes speculative speech", async () => {
   const original = globalThis.fetch;
   try {
     globalThis.fetch = async () =>
@@ -61,8 +61,10 @@ test("Jev unavailable never authorizes speculative speech", async () => {
     );
     assert.equal(result.unavailable, true);
     assert.equal(result.probability, null);
-    globalThis.fetch = async () =>
-      Response.json({ answers: { ready: { probability: 0.98 } } });
+    globalThis.fetch = async (_url, init) => {
+      assert.equal(JSON.parse(String(init?.body)).model, "perplexity/pplx-decider-v1.2");
+      return Response.json({ answers: { ready: { probability: 0.98 } } });
+    };
     const ready = await evaluateReadiness(
       "A complete sentence.",
       new AbortController().signal,

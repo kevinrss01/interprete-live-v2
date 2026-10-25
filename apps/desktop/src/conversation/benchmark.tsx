@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Download, Trash2 } from "lucide-react";
-import { BenchmarkRecorder, comparable, gateSource, runSummary, type BenchmarkRun, type SegmentTrace } from "../lib/benchmark";
+import { BenchmarkRecorder, cadenceSummary, comparable, gateSource, runSummary, type BenchmarkRun, type SegmentTrace } from "../lib/benchmark";
 
 const duration = (ms: number | null | undefined) => ms == null ? "—" : ms > 0 && ms < 10 ? `${ms.toFixed(1)} ms` : `${(ms / 1000).toFixed(2)} s`;
 const elapsed = (end?: number, start?: number) => end === undefined || start === undefined ? null : Math.max(0, end - start);
@@ -40,20 +40,20 @@ function SegmentDetails({ segment: s, origin }: { segment: SegmentTrace; origin:
     {s.error && <p role="alert" className="call-error">{s.error}</p>}
     <dl className="benchmark-timings">
       <div><dt>Gate decision</dt><dd>{s.gate ?? "Not received"}</dd></div>
-      <div><dt>Jev status</dt><dd>{gateLabels[gateSource(s)]}</dd></div>
-      <div><dt>Jev readiness score</dt><dd>{gateScore(s)}</dd></div>
+      <div><dt>Gate status</dt><dd>{gateLabels[gateSource(s)]}</dd></div>
+      <div><dt>Gate readiness score</dt><dd>{gateScore(s)}</dd></div>
     </dl>
     <p className="note">The score estimates whether this fragment is ready to translate, not translation quality. An unavailable evaluation also holds the fragment; it may mean a request failure or an invalid response.</p>
     <dl className="benchmark-timings">{points.map(([label, at]) => <div key={label}><dt>{label}</dt><dd>{duration(at === undefined ? null : at - origin)}</dd></div>)}</dl>
     <p className="note">Times above share the browser clock. Native output does not expose the audible playback timestamp yet; a dash means unavailable, not zero.</p>
     <dl className="benchmark-timings">
       <div><dt>Voice selection / preparation</dt><dd>{duration(elapsed(s.requestedAt, s.startedAt))}</dd></div>
-      <div><dt>Server Jev evaluation</dt><dd>{duration(s.metrics?.gateMs)}</dd></div>
+      <div><dt>Server gate evaluation</dt><dd>{duration(s.metrics?.gateMs)}</dd></div>
       <div><dt>Server request → first translation token</dt><dd>{duration(s.metrics?.translationMs)}</dd></div>
       <div><dt>Server request → first audio</dt><dd>{duration(s.metrics?.ttsFirstMs)}</dd></div>
       <div><dt>Audio received → scheduled playback</dt><dd>{duration(elapsed(s.playbackAt, s.audioAt))}</dd></div>
     </dl>
-    <p className="note">Caption timings measure controller text availability, not painted words or the progressive reveal. Server durations overlap: do not add them. “First audio” includes the translation and gate; it is not synthesis time alone. Local decisions do not call Jev.</p>
+    <p className="note">Caption timings measure controller text availability, not painted words or the progressive reveal. Server durations overlap: do not add them. “First audio” includes the translation and gate; it is not synthesis time alone. Local decisions do not call the readiness model.</p>
   </div>;
 }
 
@@ -67,6 +67,7 @@ export function BenchmarkResults({ recorder }: { recorder: BenchmarkRecorder }) 
   const run = runs.find(r => r.id === selected) ?? runs[0];
   const other = runs.find(r => r.id === baseline && r.id !== run?.id);
   const summary = run && runSummary(run);
+  const cadence = run && cadenceSummary(run);
   const base = other && runSummary(other);
   const matching = run && other && comparable(run, other);
   const active = runs.some(r => r.outcome === "running");
@@ -99,10 +100,22 @@ export function BenchmarkResults({ recorder }: { recorder: BenchmarkRecorder }) 
         <div><span>Peak audio queue</span><strong>{summary.maxQueue.toFixed(2)} s</strong></div>
       </div>
       <p className="note">Input starts at the first captured frame, including any opening silence. Exact source-word → translated-word delay is not available: these recordings have no verified word timestamps. This is not an acoustic measurement.</p>
+      {cadence && <details className="benchmark-config"><summary>Where does the wait happen?</summary>
+        <div className="benchmark-table"><table><thead><tr><th scope="col">Measurement</th><th scope="col">Median</th><th scope="col">P90</th><th scope="col">Maximum</th><th scope="col">Samples</th></tr></thead>
+          <tbody>{([
+            ["Between transcript updates", cadence.asr],
+            ["Between published fragments", cadence.publications],
+            ["Request → first translated text", cadence.translation],
+            ["Text waiting for the gate", cadence.gateWait],
+          ] as const).map(([label, values]) => <tr key={label}><th scope="row">{label}</th><td>{duration(values.median)}</td><td>{duration(values.p90)}</td><td>{duration(values.max)}</td><td>{values.count}</td></tr>)}</tbody></table></div>
+        <p className="note">P90: 90% of measurements are at or below this value. Small samples are unreliable. Transcript gaps include silence and music; they are not speech recognition delay. Unchanged finalization events are excluded.</p>
+        <p className="note">Translation and gate times overlap: do not add them. Translation and publication metrics use completed, published fragments only; refusals remain in the timeline below. Publication means text available to the controller, before word animation. Older runs may lack transcript updates; a dash means unavailable. No word-aligned or acoustic latency is measured.</p>
+        {run.truncated && <p className="note">This run has an incomplete trace. These measurements cover only the retained events.</p>}
+      </details>}
       <QueueChart run={run} />
       <p>Held attempts: {summary.held} · Withdrawn after revisions: {summary.revised} · Failed: {summary.errors}</p>
-      <p>Jev wait decisions: {summary.jevWait} · Jev unavailable: {summary.jevUnavailable}</p>
-      {summary.gateUnknown > 0 && <p className="note">Jev details were not recorded for {summary.gateUnknown} fragments. These counts cannot distinguish refusals from evaluation failures for those fragments.</p>}
+      <p>Gate wait decisions: {summary.jevWait} · Gate unavailable: {summary.jevUnavailable}</p>
+      {summary.gateUnknown > 0 && <p className="note">Gate details were not recorded for {summary.gateUnknown} fragments. These counts cannot distinguish refusals from evaluation failures for those fragments.</p>}
       <p className="note">Request → first audio: median {duration(summary.requestAudioP50)}, P90 {duration(summary.requestAudioP90)} across this run’s audio-producing fragments. This excludes held and failed fragments; small samples are not a reliable tail-latency estimate.</p>
       {other && base && <div className="benchmark-comparison">
         <p>{matching ? "Same recorded configuration; both runs completed." : "Different or incomplete configurations: this is not a controlled speed comparison."}</p>
@@ -123,7 +136,7 @@ export function BenchmarkResults({ recorder }: { recorder: BenchmarkRecorder }) 
         <p className="note">The API reports model names, not its deployed commit. Voice matching and provider load can vary. The test does not exercise native capture from another app. A 23-second recording cannot establish long-call stability.</p>
       </details>
       <h3>Fragment timeline</h3><p className="note">Select a fragment to inspect its source, translation, waits and provider timings. Read source and translation together to spot omissions, repeats or changed meaning.</p>
-      <div className="benchmark-table"><table><thead><tr><th scope="col">Fragment</th><th scope="col">Result</th><th scope="col">Jev score / status</th><th scope="col">Request → text</th><th scope="col">Request → audio</th><th scope="col">Queued at request</th></tr></thead><tbody>{run.segments.map((s, i) => <tr key={s.id} data-selected={fragment === s.id}><th scope="row"><button type="button" onClick={() => setFragment(fragment === s.id ? null : s.id)} aria-expanded={fragment === s.id}>{i + 1}. {s.text.slice(0, 85)}{s.text.length > 85 ? "…" : ""}</button></th><td>{labels[s.outcome]}</td><td>{gateScore(s)}</td><td>{duration(elapsed(s.textAt, s.requestedAt))}</td><td>{duration(elapsed(s.audioAt, s.requestedAt))}</td><td>{s.queued.toFixed(2)} s</td></tr>)}</tbody></table></div>
+      <div className="benchmark-table"><table><thead><tr><th scope="col">Fragment</th><th scope="col">Result</th><th scope="col">Gate score / status</th><th scope="col">Request → text</th><th scope="col">Request → audio</th><th scope="col">Queued at request</th></tr></thead><tbody>{run.segments.map((s, i) => <tr key={s.id} data-selected={fragment === s.id}><th scope="row"><button type="button" onClick={() => setFragment(fragment === s.id ? null : s.id)} aria-expanded={fragment === s.id}>{i + 1}. {s.text.slice(0, 85)}{s.text.length > 85 ? "…" : ""}</button></th><td>{labels[s.outcome]}</td><td>{gateScore(s)}</td><td>{duration(elapsed(s.textAt, s.requestedAt))}</td><td>{duration(elapsed(s.audioAt, s.requestedAt))}</td><td>{s.queued.toFixed(2)} s</td></tr>)}</tbody></table></div>
       {run.segments.find(s => s.id === fragment) && <SegmentDetails segment={run.segments.find(s => s.id === fragment)!} origin={run.inputAt ?? run.startedAt} />}
       <fieldset className="benchmark-review" disabled={run.outcome === "running"}><legend>Meaning and clarity — manual review</legend>
         <label className="field"><span id="benchmark-assessment-label">Assessment</span><select aria-labelledby="benchmark-assessment-label" value={run.review ?? "unreviewed"} onChange={e => recorder.review(run.id, e.target.value as NonNullable<BenchmarkRun["review"]>, run.note ?? "")}><option value="unreviewed">Not reviewed</option><option value="pass">No issue noticed</option><option value="issues">Issues noticed</option></select></label>

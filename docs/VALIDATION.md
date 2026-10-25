@@ -224,7 +224,7 @@ Les sous-titres et la pastille deviennent, comme le toast, des panneaux macOS no
 - Six tests Rust de sous-titres passent, dont la conversion aller-retour d’un déplacement sans dérive sur écrans Retina et à origine négative. Les tests de préférences couvrent aussi la validation et la persistance du moniteur. Typecheck, lint serveur, 13 tests de scripts, 18 tests serveur, 66 tests desktop, builds serveur/Vite, bundle macOS debug et Clippy passent. `cargo fmt --check` global retrouve les différences historiques de `audio_route.rs` et `system_microphone.rs`, laissées intactes.
 - Le bundle macOS a été lancé sans modifier l’authentification ni l’onboarding : les commandes natives d’aperçu ont confirmé une fenêtre visible et dimensionnée, puis masquée. Les préférences antérieures ont été restaurées et l’instance de diagnostic fermée. Ce contrôle ne valide pas le geste physique de glisser-déposer ni le passage entre écrans/Spaces ; les interactions et la persistance de déplacement ont été vérifiées avec IPC simulée.
 
-## Deuxième extrait, trois voix — 24 octobre
+## Historique — extrait trois voix retiré le 25 octobre
 
 - Ajout de `nasa-three-speakers-en.wav` : échange NASA anglais continu de 24 s (00:24–00:48 du téléchargement officiel), avec Suni Williams, Houston et Bill Nelson. Source YouTube, téléchargement et reproduction dans [samples/README.md](../apps/desktop/public/samples/README.md). Sélection **Three voices · 24 seconds** sous **Choose a recording**, pour l’entrée anglaise uniquement, sans ajouter de bouton de lancement.
 - Le scénario conserve le flux entrant commun, les sous-titres et les options son original/voix traduite. Il n’ajoute ni diarisation ni voix de synthèse par personne. La capture micro, la capture système et le clonage restent exclus des exemples.
@@ -400,3 +400,161 @@ Benchmark remain text-availability measurements, not painted reveal measurements
 - Synthetic browser verification covered missing permissions, audio confirmation, denied/restart-required states, deferral and successful continuation. The compact 420 px viewport has no horizontal overflow; setup starts below the header, scrolls to its actions and uses at least 44 px buttons. The temporary UI fixture/tab were removed and the viewport restored. Browser Get started still opens the voice reading step with three steps, without requesting microphone access.
 - After restarting the packaged debug binary to replace an older running instance, native Get started opened the new four-step onboarding. The actual IPC snapshot showed microphone/audio/Accessibility access still needed and the virtual microphone ready. No microphone, real call recording, playback, paid provider operation, permission grant, administrator install or reboot was performed. The app was left open on setup.
 - `git diff --check` and rustfmt on task Rust files passed. The existing unrelated `system_microphone.rs` global formatting exception remains. User approval of native dialogs and a full fresh-Mac install/reboot remain manual validation boundaries. No commit, push, release or deployment was performed for this onboarding change.
+### Return to single-speaker benchmarks — 2026-10-25
+
+Removed the AssemblyAI/Deepgram adapters, provider selection, token endpoints,
+experimental scripts/tests and three-speaker NASA fixture. OpenAI, NASA solo,
+French/outgoing synthetic samples, benchmark history/export and progressive captions
+remain. Speaker badges/transport were removed; uniform caption font size and weight
+from the design work were preserved. Local experimental credentials were removed.
+Historical experiment entries above are retained as evidence, not current features.
+
+Validation: typecheck, server lint, 154 tests (13 tooling, 29 server, 112 desktop),
+17 benchmark/tooling tests, server and desktop static builds, and diff checks passed.
+Silent mocked browser checks covered removed selectors/badges, recording completion,
+caption/audio diagnostics, export, cancellation/navigation and compact layout. No
+paid provider, microphone or audible playback was used. Native behavior was not
+retested; Rust caption transport is restored to the previously committed version.
+
+### OpenAI solo baseline after experiment removal — 2026-10-25
+
+Five consecutive live runs used the current app, NASA solo (22.723 s), English→French,
+`gpt-live-transcribe`, `gpt-5.4-mini` and Jev 1.14.0. Browser capture was replaced with
+real-time fixture PCM feeding; transcription and translation providers were live.
+Translated voice was disabled, no microphone was opened and no audio was played.
+This is controller caption availability, not native paint or acoustic latency.
+
+All five runs completed without browser errors. First caption ranged from 2.016 to
+4.854 s (median 2.195 s). However, the first individual translated fragment containing
+at least five whitespace-separated words arrived at 4.789–5.168 s (median 4.854 s).
+That simple length proxy distinguishes introductory text from larger fragments; it
+is not a semantic quality score. Largest inter-caption gaps were 4.278, 4.568, 4.632,
+3.899 and 4.557 s. Final captions arrived at 23.969–24.027 s, around 1.24–1.30 s after
+input ended. This trailing delay does not imply constant lag throughout the recording.
+
+Jev held 177 of 239 attempts (74.1%); no unavailable evaluations were recorded. These
+are repeated fragment evaluations, not 239 unique phrases or a translation accuracy
+measure. Manual review found variable literal wording, grammatical agreement errors
+and an omitted Earth qualifier in one run. No changes to prompts, segmentation or
+runtime were made during this baseline. TTS and native acoustic behavior remain
+unmeasured. T3 snapshots timed out twice; the existing silent Playwright harness was
+used. Detailed run artifacts remain local under /tmp, outside Git.
+
+### Deterministic English cut rules after the solo baseline — 2026-10-25
+
+Baseline artifacts showed Jev approving, at 0.60–0.83, fragments that the local rule
+could have refused: `…of Earth's` (run 3, the translation then lost "Earth"),
+`…that we're` (runs 2, 3, 5), and `…on the International Space` with "Station" as
+look-ahead (runs 1–3; run 2 kept the name in English and repeated "Station"). The
+same text scored 0.49–0.83 across runs, so a borderline fragment sampled every
+transcript delta eventually passes on noise. `usablePrefix` now also waits on English
+modals, possessives/contracted auxiliaries, and on a capitalized word followed by
+another capitalized word (German excluded). It applies on the client and in the
+server's local decision. Regression tests cover the observed cuts and non-regressions
+(complete names, "I", sentence ends, German nouns, French).
+
+Five live runs with the same harness, fixture and models (artifacts under a separate
+/tmp prefix; the baseline was not replaced), captions only, no microphone or audio:
+
+| Metric (median of 5) | Baseline | After |
+| --- | --- | --- |
+| First caption | 2.195 s | 2.274 s |
+| First fragment with ≥ 5 words | 4.854 s | 5.091 s |
+| Largest inter-caption gap | 4.557 s | 3.863 s |
+| Last caption | 23.989 s | 24.056 s |
+| Jev held / attempts | 177 / 239 | 153 / 217 |
+
+"Earth" was preserved and "International Space Station" translated as a complete
+name in 5/5 runs (baseline 4/5 and 3/5); no fragment ended on an auxiliary. The
+first-caption and five-word metrics overlap the baseline ranges and are not a
+measured change. Not fixed, translator-level: "the very microgravity" rendered with
+"très" (4/5 after, 2/5 before; the fragment is now longer), one dropped "different"
+in `of different reasons.`, and one run emitted a Hebrew token for "different" in an
+otherwise French caption. The 3.5–4.3 s hold on `up there can make … reasons` remains:
+Jev scored every sub-prefix of that clause 0.06–0.57 in all ten runs, so re-offering
+shorter prefixes at the same threshold would not have released it earlier. Typecheck,
+server lint, tests (13 tooling, 29 server, 113 desktop), server bundle and desktop
+static build passed. T3 preview was not used; the existing Playwright harness was.
+
+
+## Decider readiness trial — 2026-10-25
+
+- Switched the readiness model to `perplexity/pplx-decider-v1.2` through the existing AI Gateway evaluation endpoint. Prompt, 0.6 threshold, timeout, local guards and translation/audio scheduling are unchanged. Voice matching remains on Jev under its own model configuration.
+- Benchmark labels now use “Gate” so old Jev and new Decider runs are described accurately; each run still records the actual decision model.
+- Verified: typecheck, server lint, all app tests, server bundle and static desktop build. The running local API on port 3035 reports the Decider decision model after automatic reload. The existing voice-matching regression still checks Jev; readiness regression checks Decider.
+- No new live audio benchmark, native visual verification, commit, push or deployment. The earlier isolated 24-case model comparison does not establish an end-to-end latency improvement.
+
+## Report-driven prefix and readiness fixes — 2026-10-25
+
+Implemented bounded, locally stored ASR snapshots and exact readiness context in
+benchmark exports; shorter usable prefixes remain subject to Decider approval.
+Source ranges are diagnostic character offsets, not revision-proof consumption IDs.
+English place expressions with known here/there continuations stay together. Readiness
+instructions now retain unresolved causative constructions; translation instructions
+distinguish idiomatic emphasis from degree. No editable-caption/three-tick policy,
+parallel multi-prefix evaluation, or forced publication timeout was introduced.
+
+Verification: typecheck, server lint, 13 tooling + 29 server + 118 desktop tests,
+17 benchmark-tool tests, server bundle, static desktop build, and git diff --check.
+Regressions cover snapshot persistence/bounds, controller context/ranges, shorter-prefix
+remainder consumption, negation, place expressions, and existing cancellation/finalization.
+T3 preview snapshots timed out twice; silent Playwright exercised the recording/benchmark
+UI and its final 1280px screenshot was inspected. No native/acoustic verification.
+
+Controlled comparison: five baseline replays and five final replays of the same complete
+recorded NASA ASR stream, preserving text/revision/final events and their relative timings.
+Capture/playback/ASR were mocked; real Decider and OpenAI translation requests ran through
+the local API. All ten measured runs completed without controller or browser errors.
+The first-fragment >=5 words metric is a coarse proxy, not aligned translation latency.
+Maximum gap means time between first displays of successive fragments, not every painted
+word or every streamed update. Medians across five runs (milliseconds):
+
+| Metric | Before | Final |
+| --- | ---: | ---: |
+| First caption | 2634 | 2578 |
+| First fragment with >=5 translated words | 4776 | 4034 |
+| Largest gap between fragment starts | 2243 | 2419 |
+| Last caption | 23931 | 23956 |
+| Held attempts | 16 | 19 |
+
+The first substantial fragment appeared earlier in the median, but ranges overlap
+(before 3884–4799 ms, final 3789–4323 ms); this is not evidence of a universal speedup.
+The longest-gap median increased by 176 ms: preserving the causative meaning requires
+waiting for its complement. Agent review found the create/cause mistranslation in 5/5
+baseline runs and 0/5 final runs; literal degree translation of the emphasis in 3/5 before
+and 0/5 final. Both improved expressions were correct in all five final runs. This is not
+a blind quality score: awkward discourse markers, an incorrect causal rendering in one
+run, and omitted nuance in some final phrases remain. No claim of globally perfect French.
+
+An intermediate shorter-prefix trial split a place expression and introduced unsupported
+modifiers; it was corrected before the final five runs. Initial live ASR capture had two
+successful runs then a network-error run, retained separately; a later launch raced the
+server reload and failed before any transcript. Neither is included in the controlled
+replay results. Local artifacts: /tmp/prefix-replay-before-{1..5}.json,
+/tmp/prefix-replay-validated-{1..5}.json, /tmp/report-fix-validated-summary.json,
+and /tmp/prefix-replay-bench.mjs. These are uncommitted local provider artifacts.
+
+Only one English-to-French recording was evaluated. Native voice latency, other languages,
+long-call behavior, and word-aligned delay remain unverified. Existing unrelated edits
+were preserved; no commit, push, or deployment.
+
+### 2026-10-25 — Longer multilingual benchmark recordings
+
+- Downloaded four complete ESA videos from official copies of their YouTube publications and extracted mono 24 kHz PCM WAV: English 244.715 s, French 218.964 s, Spanish 318.346 s, German 293.059 s. Sources, reproduction commands and SHA-256 values are in the samples README.
+- Added a source-language-filtered Recording selector; selected filenames are saved in benchmark configurations. NASA and synthetic French remain available. Recording/language mismatches and use outside demo mode are rejected. Trace bounds increased to 1200 segments, 6000 queue points and 2400 ASR snapshots for longer runs.
+- Passed typecheck, server lint, tests (13 tooling, 29 server, 126 desktop), 17 benchmark-tool tests, server bundle, desktop static build and diff whitespace check. Existing large-bundle warning remains.
+- Silent Playwright QA passed all four fixture selections, local WAV decoding/durations, mocked start/completion, recorded fixture identity and disabled sample collection. Desktop 1280 px and compact 390 px screenshots captured; no horizontal overflow, browser errors or microphone requests. Provider/ASR/capture boundaries were mocked; no paid full-duration benchmark, audible playback or native capture verified. Initial rapid selector automation raced popup transitions; allowing the close transition completed the same flow successfully.
+
+### 2026-10-25 — Adaptive subtitle flow
+
+- Replaced fixed word delays with a queue: 180 ms reserve on refill, smoothly adjusted 48–160 ms cadence, existing 200 ms opacity fade. Finalizing a live passage drains the queue; loaded history and reduced motion remain immediate. Upstream pauses longer than the reserve can still be visible. No provider, controller, audio or segmentation changes.
+- Passed six word-reveal regressions (burst ordering, gradual acceleration, uninterrupted deadlines, revisions, late timers and reduced motion), full tests (13 tooling, 29 server, 126 desktop), typecheck, server lint, server bundle, desktop static build and scoped diff whitespace check. The first full test run caught a concurrently changed benchmark trace-limit assertion; its owning thread fixed it, and the full rerun passed.
+- Silent browser checks used the actual LiveText and CaptionsView components at 390 and 1280 px. Verified one word per update, finalization without a bulk reveal, stable mounted prefixes, immediate loaded history, mocked reduced-motion preference, cancellation, uniform 26 px captions and no horizontal overflow. One synthetic seven-word run mounted words from 185 to 854 ms; this is presentation timing, not provider latency.
+- The collaborative snapshot failed with “Preview automation snapshot timed out after 15000ms.” A static render of the synthetic DOM with its computed styles was inspected separately. Native rendering, screen-reader announcements and real provider/audio behavior remain unverified. No microphone, speaker output or new local server was started.
+
+### 2026-10-25 — Benchmark wait breakdown and cleaned delivery
+
+- Added median/P90/maximum/count for changed ASR updates, completed fragment publications, request-to-first-text and text waiting for its gate. Unchanged item-final events, held attempts and missing legacy timestamps are handled explicitly. The UI explains silence/music, overlapping durations, pre-animation publication and incomplete traces.
+- Removed rejected optimization scripts and their standalone tests. Retained current validated segmentation/readiness safeguards, direct GPT Mini translation, adaptive captions and the multilingual recording selector. No alternative translator, speculative cut selection, provisional translation, look-ahead translation or grouping experiment is enabled.
+- Rebased on current main, preserving incoming-call audio/mute handling, Mac setup and floating-card changes. Typecheck, server lint, tests (15 tooling, 3 landing, 29 server, 136 desktop), 19 benchmark-tool tests, server bundle, desktop and landing static builds passed. Existing bundle-size/directive warnings remain.
+- Silent mocked browser QA passed all four recording selections, decoded durations, start/completion, fixture identity and no-cloning checks. New diagnostic rows were inspected at 1280 and 390 px; no page overflow, browser errors or microphone requests. Native acoustics, packaging and a new paid provider run were not verified in this delivery.

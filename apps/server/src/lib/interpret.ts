@@ -7,7 +7,7 @@ import { AppError } from "./errors";
 import { SilenceTrimmer } from "./pcm";
 import type { interpretSchema } from "./validation";
 type Interpretation = z.infer<typeof interpretSchema>;
-// Jev is only asked when its answer can change the decision: a final remainder is always
+// The readiness model is only asked when its answer can change the decision: a final remainder is always
 // spoken, an unusable prefix never is, and a finished sentence needs no estimate.
 function localDecision(data: Interpretation) {
   if (data.isFinal) return "final";

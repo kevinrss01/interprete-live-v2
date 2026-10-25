@@ -19,7 +19,7 @@ export async function matchVoice(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: MODELS.decision,
+        model: MODELS.voiceMatching,
         state: {
           task: "Live interpretation of a remote call participant into a synthetic voice.",
           speaker: {

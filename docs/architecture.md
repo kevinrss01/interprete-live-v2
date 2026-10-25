@@ -40,7 +40,7 @@ flowchart LR
   subgraph Fournisseurs["Fournisseurs"]
     RT["OpenAI Realtime<br/>gpt-live-transcribe"]
     LLM["OpenAI Chat<br/>gpt-5.4-mini"]
-    Jev["AI Gateway<br/>Jev (prêt à traduire ? voix proche)"]
+    Jev["AI Gateway<br/>Decider (prêt à traduire ?) · Jev (voix proche)"]
     EL["ElevenLabs<br/>TTS Flash v2.5, clonage"]
   end
 
@@ -216,7 +216,7 @@ sequenceDiagram
   participant RT as OpenAI Realtime
   participant API as API Hono
   participant LLM as OpenAI Chat
-  participant Jev as AI Gateway (Jev)
+  participant Jev as AI Gateway (Decider)
   participant EL as ElevenLabs
 
   App->>API: POST /api/session
@@ -245,10 +245,10 @@ sequenceDiagram
 ```
 
 - **Lecture pendant la parole** : le micro reste ouvert pendant la lecture. L'annulation d'écho du navigateur limite le retour du haut-parleur.
-- **Découpage** : tant que la personne parle, le dernier mot attend le début du suivant : il peut être incomplet, et il donne à Jev un mot d'anticipation. Après 250 ms sans nouveau mot, il est considéré comme complet, pour ne pas retenir une phrase dont l'ASR ajoute la ponctuation tard. Tant qu'aucun son d'un fragment n'a été lu, il est retiré puis reproposé si l'ASR révise ses mots ou prolonge son dernier mot, ou si les mots suivants annoncent une négation ou la suite d'un montant. Un fragment refusé après une pause est reproposé dès qu'une ponctuation forte le termine.
-- **Feu vert** : un segment est prononcé si Jev l'estime prêt (probabilité ≥ 0,6) ou s'il se termine par une ponctuation forte. Jev n'est pas appelé quand la règle locale suffit : portion finale, ponctuation forte, ou fin inutilisable (préposition, article, mot composé coupé, négation ou nombre annoncés par la suite). Un fragment refusé arrête aussitôt sa traduction et sa synthèse, ce qui libère la requête suivante. Si Jev ne répond pas, on attend la fin de la phrase.
-- **Contexte du feu vert** : seul un élément `continuation` du même sens de traduction constitue le préfixe source déjà traduit du locuteur actuel ; la dernière réplique d'un autre tour ne doit pas être présentée à Jev comme la phrase en cours. Une vraie fin de phrase libère aussi les mots qui seraient incomplets sans ponctuation, comme « for? » en anglais ; une virgule ou une ellipse ne suffit pas.
-- **Consigne Jev en essai** : un sujet complet peut être traduit avant son verbe, y compris au début d'une proposition introduite par « when ». La consigne distingue ces débuts stables des adjectifs sans nom, des verbes dont le sens dépend du complément et des noms ou mots composés incomplets. Le seuil reste 0,6. Il s'agit de consignes probabilistes, pas de garanties : les essais et leurs limites sont consignés dans `VALIDATION.md`.
+- **Découpage** : tant que la personne parle, le dernier mot attend le début du suivant : il peut être incomplet, et il donne à Decider un mot d'anticipation. Après 250 ms sans nouveau mot, il est considéré comme complet, pour ne pas retenir une phrase dont l'ASR ajoute la ponctuation tard. Tant qu'aucun son d'un fragment n'a été lu, il est retiré puis reproposé si l'ASR révise ses mots ou prolonge son dernier mot, ou si les mots suivants annoncent une négation ou la suite d'un montant. Un fragment refusé après une pause est reproposé dès qu'une ponctuation forte le termine.
+- **Feu vert** : un segment est prononcé si Decider l'estime prêt (probabilité ≥ 0,6) ou s'il se termine par une ponctuation forte. Decider n'est pas appelé quand la règle locale suffit : portion finale, ponctuation forte, ou fin inutilisable (préposition, article, modal, possessif ou auxiliaire contracté anglais comme « Earth's »/« we're », nom propre multi-mots coupé comme « International Space » suivi de « Station », mot composé coupé, négation ou nombre annoncés par la suite). Un fragment refusé arrête aussitôt sa traduction et sa synthèse, ce qui libère la requête suivante. Si Decider ne répond pas, on attend la fin de la phrase.
+- **Contexte du feu vert** : seul un élément `continuation` du même sens de traduction constitue le préfixe source déjà traduit du locuteur actuel ; la dernière réplique d'un autre tour ne doit pas être présentée à Decider comme la phrase en cours. Une vraie fin de phrase libère aussi les mots qui seraient incomplets sans ponctuation, comme « for? » en anglais ; une virgule ou une ellipse ne suffit pas.
+- **Consigne Decider en essai** : un sujet complet peut être traduit avant son verbe, y compris au début d'une proposition introduite par « when ». La consigne distingue ces débuts stables des adjectifs sans nom, des verbes dont le sens dépend du complément et des noms ou mots composés incomplets. Le seuil reste 0,6. Il s'agit de consignes probabilistes, pas de garanties : les essais et leurs limites sont consignés dans `VALIDATION.md`.
 - **Traduction** : le modèle reçoit le fragment et ce qui a déjà été prononcé (source et traduction entendue), mais pas les mots suivants : les petits modèles les traduisaient en avance, puis une seconde fois dans le fragment suivant. La consigne interdit de retraduire l'ancien préfixe source, tout en conservant une répétition effectivement présente dans le nouveau fragment ; une interdiction générale de répéter des mots déjà traduits supprimait parfois un sujet réintroduit par le locuteur.
 - **Voix** : les silences ajoutés par ElevenLabs autour de chaque fragment sont retirés (20 ms gardés avant, 60 ms après), sans jamais retarder un échantillon audible ; une pause livrée en retard n'est pas rejouée après le trou qu'elle a déjà laissé dans la lecture. L'app indique avec chaque fragment la durée de traduction qui attend encore d'être lue (`queued`) : le serveur accélère alors légèrement la voix (de 1 à 1,2, la limite d'ElevenLabs) pour rattraper la personne ; une traduction à jour garde le débit naturel de la voix.
 - **Accent** : les voix prédéfinies ElevenLabs sont anglaises et gardent cet accent dans une autre langue. Quand la langue cible a des voix natives (aujourd’hui le français, dans `packages/shared/src/languages.ts`), le serveur remplace une voix prédéfinie par la voix native du même genre et de hauteur la plus proche. Une voix clonée reste celle de son propriétaire.
@@ -291,7 +291,7 @@ flowchart LR
 | --- | --- | --- |
 | `apps/server/.env.local` | `INTERPRETER_OPENAI_API_KEY` | Transcription et traduction |
 | | `ELEVENLABS_API_KEY` | Synthèse, clonage et suppression des voix |
-| | `AI_GATEWAY_API_KEY` | Jev ; optionnel, la traduction finale fonctionne sans |
+| | `AI_GATEWAY_API_KEY` | Decider pour le feu vert, Jev pour les voix ; optionnel, la traduction finale fonctionne sans |
 | | `SESSION_SECRET` | Signature des sessions et des autorisations de voix |
 | | `DATABASE_URL` | PostgreSQL pour les comptes et préférences |
 | | `BETTER_AUTH_URL` | URL publique de l’API |
@@ -320,11 +320,14 @@ criteria and measurement limits are described in [BENCHMARK.md](BENCHMARK.md).
 
 ## Live text presentation
 
-Conversation transcripts and floating captions share `LiveText`: complete word segments
-fade in over 200 ms, normally 35 ms apart, with each batch starting within 240 ms.
-`Intl.Segmenter` preserves punctuation, spacing and unspaced languages. Revisions
-replace the obsolete suffix; session changes and unmount remove its CSS animations.
-Completed history and reduced motion show all text immediately. The accessible text
+Conversation transcripts and floating captions share `LiveText`: a 180 ms reserve
+starts each refill of an empty queue, then words fade in over 200 ms one at a time.
+The interval adapts smoothly between 48 and 160 ms to the number and age of queued
+words. New tokens preserve the pending deadline; finalizing a passage lets its queue
+finish instead of displaying the rest at once. Long upstream pauses can still exhaust
+the reserve. `Intl.Segmenter` preserves punctuation, spacing and unspaced languages.
+Revisions replace the obsolete suffix; session changes and unmount cancel pending reveals.
+Loaded history and reduced motion show all text immediately. The accessible text
 updates only with upstream content. This presentation does not delay the controllers,
 audio, persistence or gate decisions; benchmark timestamps measure controller text
 availability, not painted words.
@@ -334,3 +337,22 @@ availability, not painted words.
 `translation_overlay.rs` owns the session-scoped status card, positioned at the bottom right of the main window’s monitor work area. It stays above other apps through the existing non-activating macOS panel. The snapshot includes full language codes and whether both call directions are active. The UI resolves the language names from the shared catalog.
 
 Expanding **Options** updates native snapshot state and resizes the window upward. Expansion survives status updates for the same session and resets for the next session. Both expansion and opening the main window validate the current session id. Opening settings emits a scoped event, restores and focuses the main window, and reveals the call controls without using the navigation path that stops a call. Stopping still uses the existing session-scoped stop flow. No audio, provider calls or persistent preferences are added.
+
+### Shorter usable prefixes (2026-10-25)
+
+When the current unpunctuated candidate ends on a locally unusable word, segmentation
+backs up to the longest usable prefix beyond the last rejected boundary. The retained
+tail becomes look-ahead; Decider must still authorize the prefix. This does not consume
+the tail or bypass the model, cancellation, or final-remainder reconciliation. English
+place expressions such as “up there” and “over here” are kept together when the second
+word is known. Missing future words still cannot be predicted with certainty.
+
+The readiness instruction now distinguishes a causative verb's object from its required
+complement; an object or trailing adverb alone need not resolve create/cause ambiguity.
+Translation instructions distinguish idiomatic emphasis from literal degree. Both remain
+probabilistic instructions, not guarantees. Benchmark snapshots and exact readiness
+context support timed replays; results and limits are recorded in VALIDATION.md.
+
+## Multilingual benchmark recordings
+
+The incoming benchmark selects a fixed local fixture from `benchmark-recordings.ts`, filtered by the source language. `CallListening` validates the filename/language pair and forwards its demo URL to the controller. Four complete ESA videos in English, French, Spanish and German complement NASA and the synthetic French sample. Demo capture never records a cloning sample. The run configuration records the selected filename so different recordings cannot be treated as a controlled comparison. See `apps/desktop/public/samples/README.md` for sources and reproduction.

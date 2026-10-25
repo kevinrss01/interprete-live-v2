@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BenchmarkRecorder, comparable, gateSource, runSummary, type BenchmarkConfig, type SegmentTrace } from "../src/lib/benchmark";
+import { BenchmarkRecorder, cadenceSummary, comparable, gateSource, runSummary, type BenchmarkConfig, type SegmentTrace } from "../src/lib/benchmark";
 const config: BenchmarkConfig = { fixture: "synthetic.wav", direction: "incoming", source: "en", target: "fr", voice: true, originalAudible: false, output: "mock", api: "mock" };
 const segment: SegmentTrace = { id: "fragment", text: "Hello", translation: "Bonjour", observedAt: 500, startedAt: 600, requestedAt: 700, textAt: 800, displayedAt: 900, audioAt: 1000, playbackAt: 1200, finishedAt: 1300, queued: .2, outcome: "done" };
 function setup() {
@@ -63,10 +63,10 @@ test("corrupt storage cannot crash measurement rendering; unfinished runs are no
 });
 test("trace bounds mark incomplete measurements without losing cancellation", () => {
   const { recorder, begin } = setup(); begin();
-  for (let i = 0; i < 510; i++) recorder.observe({ type: "segment", sessionId: "session", at: 1300, segment: { ...segment, id: String(i) } });
+  for (let i = 0; i < 1210; i++) recorder.observe({ type: "segment", sessionId: "session", at: 1300, segment: { ...segment, id: String(i) } });
   recorder.finish("done");
   const run = recorder.getSnapshot()[0];
-  assert.equal(run.segments.length, 500); assert.equal(run.truncated, true);
+  assert.equal(run.segments.length, 1200); assert.equal(run.truncated, true);
   assert.equal(comparable(run, run), false);
 });
 test("storage write failure keeps the report exportable and visibly warns", () => {
@@ -110,4 +110,56 @@ test("invalid persisted Jev scores and availability flags are rejected", () => {
     storage.setItem("", JSON.stringify(saved));
     assert.equal(new BenchmarkRecorder(storage).getSnapshot().length, 0);
   }
+});
+
+test("benchmark exports the decision context and ordered ASR revisions for replay", () => {
+  const { recorder, storage, begin } = setup(); begin();
+  recorder.observe({ type: "transcript", sessionId: "session", at: 510,
+    transcript: { id: "block", text: "when astronauts", final: false, revised: false, replaying: false } });
+  recorder.observe({ type: "transcript", sessionId: "session", at: 550,
+    transcript: { id: "block", text: "when astronauts do experiments", final: true, revised: true, replaying: false } });
+  recorder.observe({ type: "segment", sessionId: "session", at: 1300, segment: {
+    ...segment, blockId: "block", sourceStart: 0, sourceEnd: 15,
+    followingText: "do experiments", precedingSpeech: "Actually,",
+  } });
+  recorder.finish("done");
+  const run = new BenchmarkRecorder(storage).getSnapshot()[0];
+  assert.deepEqual(run.transcripts?.map(t => [t.at, t.final, t.revised]), [[510, false, false], [550, true, true]]);
+  assert.equal(run.segments[0].precedingSpeech, "Actually,");
+  assert.equal(run.segments[0].followingText, "do experiments");
+  assert.equal(run.segments[0].blockId, "block");
+  assert.equal(run.segments[0].sourceEnd, 15);
+  const saved = JSON.parse(storage.getItem());
+  saved[0].transcripts[0].at = "invalid";
+  storage.setItem("", JSON.stringify(saved));
+  assert.equal(new BenchmarkRecorder(storage).getSnapshot().length, 0);
+});
+
+test("ASR replay traces are bounded and explicitly mark incomplete recordings", () => {
+  const { recorder, begin } = setup(); begin();
+  for (let i = 0; i < 2402; i++) recorder.observe({ type: "transcript", sessionId: "session", at: i,
+    transcript: { id: "block", text: "x".repeat(4001), final: false, revised: false, replaying: false } });
+  recorder.finish("done");
+  const run = recorder.getSnapshot()[0];
+  assert.equal(run.transcripts?.length, 2400);
+  assert.equal(run.transcripts?.[0].text.length, 4000);
+  assert.equal(run.truncated, true);
+  assert.equal(comparable(run, structuredClone(run)), false);
+});
+
+test("cadence excludes duplicate finalization and rejected text, and measures overlapping gate wait", () => {
+  const { recorder, begin } = setup(); begin();
+  for (const [at, id, text, final] of [[100, "a", "one", false], [200, "a", "one", true], [300, "b", "two", false], [400, "a", "one", true], [600, "b", "two three", false]] as const)
+    recorder.observe({ type: "transcript", sessionId: "session", at, transcript: { id, text, final, revised: false, replaying: false } });
+  recorder.observe({ type: "segment", sessionId: "session", at: 1000, segment: { ...segment, gateAt: 750 } });
+  recorder.observe({ type: "segment", sessionId: "session", at: 1700, segment: { ...segment, id: "second", requestedAt: 1000, textAt: 1100, gateAt: 1300, displayedAt: 1300 } });
+  recorder.observe({ type: "segment", sessionId: "session", at: 1800, segment: { ...segment, id: "held", outcome: "held" } });
+  recorder.finish("done");
+  const run = recorder.getSnapshot()[0], result = cadenceSummary(run);
+  assert.deepEqual(result.asr, { count: 2, median: 200, p90: 300, max: 300 });
+  assert.deepEqual(result.publications, { count: 1, median: 400, p90: 400, max: 400 });
+  assert.equal(result.translation.count, 2);
+  assert.equal(result.gateWait.median, 0);
+  assert.equal(result.gateWait.max, 200);
+  assert.equal(cadenceSummary({ ...run, transcripts: undefined }).asr.median, null);
 });

@@ -1,3 +1,4 @@
+import { BENCHMARK_RECORDINGS } from "../lib/benchmark-recordings";
 import { BenchmarkResults } from "./benchmark";
 import { BenchmarkRecorder } from "../lib/benchmark";
 import {
@@ -161,7 +162,9 @@ export function CallPanel({
   const [callOptions, setCallOptions] = useState<CallOptions>(loadCallOptions);
   const [listening] = useState(() => new CallListening({ native }));
   const [sampleAudible, setSampleAudible] = useState(false);
-  const [sample, setSample] = useState<"solo" | "group">("solo");
+  const [recordingFile, setRecordingFile] = useState("");
+  const recordings = BENCHMARK_RECORDINGS.filter(r => r.language === profiles.b.language);
+  const recording = recordings.find(r => r.file === recordingFile) ?? recordings[0];
   const listen = useSyncExternalStore(
     listening.subscribe,
     listening.getSnapshot,
@@ -521,10 +524,12 @@ export function CallPanel({
     call,
     demo = false,
     options = callOptions,
+    recordingFile,
   }: {
     call?: DetectedCall;
     demo?: boolean;
     options?: CallOptions;
+    recordingFile?: string;
   }) {
     const preparation = ++listenPreparation.current;
     setError(null);
@@ -563,7 +568,7 @@ export function CallPanel({
       app: current?.app ?? null,
       callId: current?.id ?? null,
       demo,
-      sample,
+      recording: recordingFile,
     });
   }
   async function runBenchmark(direction: "incoming" | "outgoing") {
@@ -571,9 +576,8 @@ export function CallPanel({
     const incomingTest = direction === "incoming";
     const source = profiles[incomingTest ? "b" : "a"].language;
     const target = profiles[incomingTest ? "a" : "b"].language;
-    const fixture = incomingTest && source === "en"
-      ? sample === "group" ? "nasa-three-speakers-en.wav" : "nasa-en.wav"
-      : `${source}.wav`;
+    if (incomingTest && !recording) return;
+    const fixture = incomingTest ? recording!.file : `${source}.wav`;
     let api = "Same-origin API";
     try { api = new URL(import.meta.env.VITE_API_URL || window.location.origin).origin; } catch {}
     const runId = recorder.begin({ fixture, direction, source, target,
@@ -583,7 +587,7 @@ export function CallPanel({
       api,
     });
     if (incomingTest) {
-      await startListening({ demo: true, options: { ...callOptions, captions: true, voice: benchmarkVoice } });
+      await startListening({ demo: true, recordingFile: recording!.file, options: { ...callOptions, captions: true, voice: benchmarkVoice } });
       if (recorder.getSnapshot()[0]?.id === runId && listening.controller.getSnapshot().phase === "idle") recorder.finish("error", listening.controller.getSnapshot().error || "The recording did not start.");
     } else {
       await start(true);
@@ -1210,35 +1214,16 @@ export function CallPanel({
           <div>
             <h3>Translate a recording</h3>
             <p>
-              {profiles.b.language === "en"
-                ? sample === "group"
-                  ? "A 24-second English conversation with three voices from NASA"
-                  : "A 23-second English recording from NASA"
-                : profiles.b.language === "fr"
-                  ? "A short French recording"
-                  : "A recording"}{" "}
-              takes the place of the person speaking to you. Its {languageName(profiles.a.language)} translation
+              The selected recording takes the place of the person speaking to you. Its {languageName(profiles.a.language)} translation
               appears in the floating captions. Your microphone stays off.
             </p>
           </div>
-          {profiles.b.language === "en" && (
-            <div>
-              <CallSelect
-                id="call-test-recording"
-                label="Choose a recording"
-                value={sample}
-                options={[
-                  { value: "solo", label: "One voice · 23 seconds" },
-                  { value: "group", label: "Three voices · 24 seconds" },
-                ]}
-                disabled={anyBusy}
-                onChange={(next) => setSample(next === "group" ? "group" : "solo")}
-              />
-              {sample === "group" && (
-                <p className="note">An astronaut, Mission Control and a NASA host take turns. Play the original audio to follow speaker changes. Captions do not name speakers; translated speech uses one voice.</p>
-              )}
-            </div>
-          )}
+          {recording && <>
+            <CallSelect id="benchmark-recording" label="Recording" value={recording.file}
+              options={recordings.map(r => ({ value: r.file, label: `${r.title} · ${r.duration}` }))}
+              disabled={anyBusy} onChange={setRecordingFile} />
+            {recording.source && <p className="note"><a href={recording.source} target="_blank" rel="noreferrer">Watch the source video on YouTube</a></p>}
+          </>}
           <label className="check">
             <Checkbox
               checked={sampleAudible}
@@ -1267,7 +1252,7 @@ export function CallPanel({
           <button
             type="button"
             className={`btn ${listenBusy && listen.demo ? "call-stop" : "call-primary"}`}
-            disabled={busy || (listenBusy && !listen.demo) || !["en", "fr"].includes(profiles.b.language)}
+            disabled={busy || (listenBusy && !listen.demo) || !recording}
             onClick={() => listenBusy && listen.demo
               ? stop()
               : void runBenchmark("incoming")}
@@ -1277,8 +1262,8 @@ export function CallPanel({
               : <Captions size={15} aria-hidden="true" />}
             {listenBusy && listen.demo ? "Stop the recording test" : "Start the recording test"}
           </button>
-          {!["en", "fr"].includes(profiles.b.language) ? (
-            <p className="note">Choose English or French under “They speak” to use a test recording.</p>
+          {!recording ? (
+            <p className="note">Choose English, French, Spanish or German under “They speak” to use a test recording.</p>
           ) : listenBusy && !listen.demo ? (
             <p className="note">Stop the current translation before starting a recording test.</p>
           ) : (

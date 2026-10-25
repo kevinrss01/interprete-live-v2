@@ -19,27 +19,48 @@ ffmpeg -ss 5.438 \
   -t 22.723 -vn -ac 1 -ar 24000 -c:a pcm_s16le nasa-en.wav
 ```
 
-## Three voices · 24 seconds
-
-`nasa-three-speakers-en.wav` is a continuous 24-second English excerpt of **NASA Astronauts Discuss Life In Space With NASA Administrator, Deputy Administrator - Jan. 8, 2025**, published by NASA Video.
-
-- [YouTube video](https://www.youtube.com/watch?v=_frvcTLLdaU)
-- [Official downloadable recording](https://images.nasa.gov/details/iss072m260081831-Expedition72_Astronauts_talk_to_NASA_Leaders_BillNelson_PamMelroy_010825_2116772)
-- [NASA event](https://plus.nasa.gov/scheduled-video/astronauts-talk-to-nasa-leaders/)
-- Credit: NASA. The excerpt contains Suni Williams, Mission Control Houston and Bill Nelson taking turns during the opening voice check, with Williams speaking again at the end. No overlapping dialogue is introduced.
-- Excerpt in the downloadable recording: 00:24.000–00:48.000. Mono, 24 kHz, signed 16-bit PCM WAV. The YouTube livestream and downloadable recording can have different time offsets.
-- This fixture tests changing voices in the incoming translation stream. It does not add speaker diarization, per-person caption labels or multiple translated voices. All participants use the selected incoming language; the app still has profiles A/B and one incoming translated voice per session. No voice cloning or microphone capture.
-
-Reproduce from NASA's downloadable copy:
-
-```sh
-ffmpeg -ss 24 \
-  -i 'https://images-assets.nasa.gov/video/iss072m260081831-Expedition72_Astronauts_talk_to_NASA_Leaders_BillNelson_PamMelroy_010825_2116772/iss072m260081831-Expedition72_Astronauts_talk_to_NASA_Leaders_BillNelson_PamMelroy_010825_2116772~small.mp4' \
-  -t 24 -vn -ac 1 -ar 24000 -c:a pcm_s16le nasa-three-speakers-en.wav
-```
-
 ## Use in the app
 
-Open **Benchmark → You speak: Français → They speak: English**. Under **Choose a recording**, select **One voice · 23 seconds** or **Three voices · 24 seconds**, then **Start the recording test**. The choice is locked while the test runs; stop it before switching recordings. The three-voice recording is only offered for English input; French keeps its existing synthetic sample.
+Open **Benchmark → You speak: Français → They speak: English**, then **Start the recording test** to use the NASA solo recording. The Recording selector lists the fixtures available for the selected source language. Choose a different target language under You speak.
 
 Captions are always enabled for this test. Use **Play the original English audio** to choose whether the original sound is audible. This setting is locked during a run to keep its recorded configuration consistent. It is off by default. Leave both that option and **Also read the French translation aloud** unchecked for silent verification. Headphones are recommended for audible tests. Captions appear progressively without a word highlight. The samples exercise transcription, translation and caption publishing; they do not exercise the native system-audio tap. Provider-free previews and other tools are under **Other checks**, each with its own explanation.
+
+## Longer multilingual fixtures
+
+Complete ESA educational videos published on YouTube, extracted from their official downloadable copies. Credit: ESA. Source pages carry ESA Standard Licence terms. Narration includes music; these are not spontaneous conversations. Converted without trimming or normalization to mono 24 kHz signed 16-bit PCM. Only used as demo input, never as a voice-cloning sample. Total additional uncompressed audio: approximately 52 MB.
+
+### `esa-ice-en.wav` (en, 244.715 seconds)
+
+- [YouTube](https://www.youtube.com/watch?v=ntI0n6zUNJE) · [Official source and credits](https://www.esa.int/esatv/Videos/2024/12/Paxi_explores_ice)
+- SHA-256: `0e18068a9dfe6f4973a5c52cff1a5441053e144f30ea66734a7da94eb1de0796`
+
+```sh
+ffmpeg -i 'https://dlmultimedia.esa.int/download/public/videos/2024/12/024/2412_024_AR_EN.mp4' -vn -ac 1 -ar 24000 -c:a pcm_s16le esa-ice-en.wav
+```
+
+### `esa-agency-fr.wav` (fr, 218.964 seconds)
+
+- [YouTube](https://www.youtube.com/watch?v=mASffpwnr60) · [Official source and credits](https://www.esa.int/esatv/Videos/2026/06/Paxi_and_the_European_Space_Agency/(lang)/fr)
+- SHA-256: `c301d6fff083ac7040166913c924190662d4b0c632c59d1d19208a9dd7ab5b85`
+
+```sh
+ffmpeg -i 'https://dlmultimedia.esa.int/download/public/videos/2026/06/037/2606_037_AR_FR.mp4' -vn -ac 1 -ar 24000 -c:a pcm_s16le esa-agency-fr.wav
+```
+
+### `esa-greenhouse-de.wav` (de, 293.059 seconds)
+
+- [YouTube](https://www.youtube.com/watch?v=7tEODAlOIZY) · [Official source and credits](https://www.esa.int/esatv/Videos/2018/05/Paxi_-_The_Greenhouse_Effect/(lang)/de)
+- SHA-256: `217117bd8f97611fb9df6d29301ec4d1d238d74049eeaeda4f48a1cedf04eb7f`
+
+```sh
+ffmpeg -i 'https://dlmultimedia.esa.int/download/public/videos/2018/05/021/1805_021_AR_DE.mp4' -vn -ac 1 -ar 24000 -c:a pcm_s16le esa-greenhouse-de.wav
+```
+
+### `esa-solar-es.wav` (es, 318.346 seconds)
+
+- [YouTube](https://www.youtube.com/watch?v=vQIsQK4m7Qk) · [Official source and credits](https://www.esa.int/esatv/Videos/2015/01/Paxi_-_The_Solar_System/(lang)/es)
+- SHA-256: `ace0f69b2a41c28bbf16c84882bd74d2c93e35139296d86e1bb5e401d911d12f`
+
+```sh
+ffmpeg -i 'https://dlmultimedia.esa.int/download/public/videos/2015/01/014/1501_014_AR_ES.mp4' -vn -ac 1 -ar 24000 -c:a pcm_s16le esa-solar-es.wav
+```

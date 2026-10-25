@@ -368,7 +368,7 @@ export class InterpreterController {
   private isCurrent(r: Runtime) {
     return this.runtime === r && !r.abort.signal.aborted;
   }
-  async start(speaker: SpeakerId, demo = false) {
+  async start(speaker: SpeakerId, demo = false, demoUrl?: string) {
     const clickedAt = performance.now();
     if (this.runtime) {
       if (
@@ -416,7 +416,7 @@ export class InterpreterController {
       this.update({ error: "Choose two different languages to start." });
       return;
     }
-    if (demo && !["fr", "en"].includes(profile.language)) {
+    if (demo && !demoUrl && !["fr", "en"].includes(profile.language)) {
       this.update({
         error:
           "The audio sample is available in French and English. Use the microphone for this language.",
@@ -482,7 +482,7 @@ export class InterpreterController {
         if (this.isCurrent(r)) void this.collect(speaker, sample.blob, sample.seconds);
       },
       ...(demo
-        ? { demoUrl: `/samples/${profile.language}.wav` }
+        ? { demoUrl: demoUrl || `/samples/${profile.language}.wav` }
         : { preferredDeviceId: savedMicrophone() }),
       context: this.player.sharedContext?.(),
     });
@@ -529,8 +529,11 @@ export class InterpreterController {
     }
     if (block.text !== item.text) {
       block.updatedAt = performance.now();
-      if (item.text.trim()) this.diagnostic({ type: "transcript", sessionId: r.id, at: block.updatedAt });
     }
+    if (this.diagnosticListeners.size) this.diagnostic({
+      type: "transcript", sessionId: r.id, at: performance.now(),
+      transcript: { id: item.id, text: item.text, final: item.final, revised: item.revised, replaying: item.replaying },
+    });
     block.text = item.text;
     const flight = r.flight;
     // An unspoken fragment can still be wrong: the ASR may revise its words or keep extending
@@ -631,6 +634,8 @@ export class InterpreterController {
   private async translateSegment(r: Runtime, block: Block, candidate: LiveSegment) {
     const trace: SegmentTrace | null = this.diagnosticListeners.size ? {
       id: crypto.randomUUID(), text: candidate.text, translation: "", observedAt: block.updatedAt,
+      blockId: block.id, sourceStart: block.text.slice(0, candidate.end).trimEnd().length - candidate.text.length, sourceEnd: candidate.end,
+      followingText: candidate.followingText,
       startedAt: performance.now(), queued: this.pendingAudioSeconds, outcome: "running",
     } : null;
     const report = () => { if (trace) this.diagnostic({ type: "segment", sessionId: r.id, at: performance.now(), segment: { ...trace } }); };
@@ -657,6 +662,7 @@ export class InterpreterController {
     };
     const context = this.context();
     const precedingSource = appendTranslation(r.previousSource, block.sourceCommitted, r.profile.language);
+    if (trace) trace.precedingSpeech = precedingSource.slice(-1500);
     if (precedingSource) context.push({
       source: precedingSource.slice(-1500),
       translation: appendTranslation(r.previousTranslation, previous, r.target.language).slice(-1500),
