@@ -4,8 +4,9 @@ import { AudioPlayer, bytesToBase64 } from "./audio";
 import { APP_MICROPHONE_NAME } from "./call-preferences";
 
 export type DetectedCall = { id: string; app: string; simulated: boolean };
-// Their speech as captions and/or a translated voice on this Mac; the user's microphone into the call.
-export type CallOptions = { captions: boolean; voice: boolean; microphone: boolean };
+// Their speech as captions and/or a translated voice on this Mac; the user's translated
+// microphone and/or captions on their video, into the call.
+export type CallOptions = { captions: boolean; voice: boolean; microphone: boolean; camera: boolean };
 export type AcceptedCall = DetectedCall & { options: CallOptions };
 const optionsKey = "interprete-call-options-v1";
 // Captions start enabled. The microphone route stays on for people who already configured it.
@@ -14,13 +15,19 @@ export function loadCallOptions(): CallOptions {
     captions: true,
     voice: false,
     microphone: Boolean(storedPreference("interprete-call-input-label")),
+    camera: false,
   };
   try {
     const saved = JSON.parse(localStorage.getItem(optionsKey) || "null");
     if (!saved || typeof saved !== "object") return fallback;
     const read = (key: keyof CallOptions) =>
       typeof saved[key] === "boolean" ? saved[key] : fallback[key];
-    return { captions: read("captions"), voice: read("voice"), microphone: read("microphone") };
+    return {
+      captions: read("captions"),
+      voice: read("voice"),
+      microphone: read("microphone"),
+      camera: read("camera"),
+    };
   } catch {
     return fallback;
   }
@@ -99,6 +106,13 @@ export function physicalMicrophones(
       ),
   );
 }
+// The name System Settings shows: browsers may add a "Default - " prefix, "(Built-in)" or a USB vendor:product id.
+export function microphoneName(label: string) {
+  return label
+    .replace(/^(default|communications)\s*-\s*/i, "")
+    .replace(/\s*\(([0-9a-f]{4}:[0-9a-f]{4}|built-in)\)$/i, "")
+    .trim();
+}
 export function requirePhysicalMicrophone(
   devices: MediaDeviceInfo[],
   id: string,
@@ -106,7 +120,7 @@ export function requirePhysicalMicrophone(
 ) {
   if (!physicalMicrophones(devices, nativeNames).some((d) => d.deviceId === id))
     throw new Error(
-      "Choisissez votre microphone physique. Actualisez et autorisez le micro si la liste est vide.",
+      "Choose your physical microphone. Refresh and allow microphone access if the list is empty.",
     );
 }
 
@@ -140,7 +154,7 @@ export class NativePcmPlayer {
     this.activity = fn;
   }
   private get label() {
-    return this.name === SYSTEM_OUTPUT ? "La sortie audio du Mac" : "La sortie virtuelle";
+    return this.name === SYSTEM_OUTPUT ? "The Mac audio output" : "The virtual output";
   }
   get pendingSeconds() {
     return Math.max(0, (this.endAt - performance.now()) / 1000);
@@ -166,7 +180,7 @@ export class NativePcmPlayer {
     const id = this.id;
     if (this.failure) return Promise.reject(this.failure);
     if (!id)
-      return Promise.reject(new Error(`${this.label} n’est pas prête.`));
+      return Promise.reject(new Error(`${this.label} is not ready.`));
     let bytes = input;
     if (this.carry) {
       bytes = new Uint8Array(this.carry.length + input.length);
@@ -191,7 +205,7 @@ export class NativePcmPlayer {
                 { id },
               );
               if (status.failed)
-                throw new Error(`${this.label} a été déconnectée.`);
+                throw new Error(`${this.label} was disconnected.`);
               this.endAt = performance.now() + status.pendingSeconds * 1000;
               if (status.pendingSeconds <= 5.5) break;
               await new Promise((resolve) => setTimeout(resolve, 40));
@@ -238,7 +252,7 @@ export class NativePcmPlayer {
         id,
       });
       if (status.failed)
-        throw new Error(`${this.label} a été déconnectée.`);
+        throw new Error(`${this.label} was disconnected.`);
       if (status.pendingSeconds === 0) {
         this.endAt = 0;
         this.setActive(false);
@@ -250,7 +264,7 @@ export class NativePcmPlayer {
   }
   async activateSystemMicrophone() {
     const id = this.id;
-    if (!id) throw new Error("La sortie de traduction est arrêtée.");
+    if (!id) throw new Error("The translation output is stopped.");
     await this.call("audio_route_activate", { id });
   }
   stop() {
@@ -278,7 +292,7 @@ export class NativePcmPlayer {
   }
   async play(_url: string, _signal: AbortSignal): Promise<void> {
     throw new Error(
-      "La réécoute est disponible dans le mode conversation, sur les haut-parleurs.",
+      "Replay is available in conversation mode, on the speakers.",
     );
   }
 }

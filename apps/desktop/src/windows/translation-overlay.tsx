@@ -23,19 +23,19 @@ export function TranslationPill({
   const preview = session.phase === "preview";
   const connecting = session.phase === "connecting";
   const label = stopping
-    ? "Arrêt…"
+    ? "Stopping…"
     : preview
-      ? "Aperçu"
+      ? "Preview"
       : connecting
-        ? "Connexion…"
+        ? "Connecting…"
         : session.test
-          ? "Test en cours"
-          : "Traduction active";
+          ? "Testing"
+          : "Translation on";
   return (
     <div
       className="translation-pill"
       role="region"
-      aria-label="Traduction instantanée"
+      aria-label="Live translation"
     >
       <div className="translation-pill-status" role="status" aria-live="polite">
         {connecting || stopping ? (
@@ -59,10 +59,10 @@ export function TranslationPill({
         disabled={stopping}
         aria-label={
           preview
-            ? "Fermer l’aperçu de la pastille"
-            : "Arrêter la traduction instantanée"
+            ? "Close the pill preview"
+            : "Stop live translation"
         }
-        title={error || (preview ? "Fermer l’aperçu" : "Arrêter la traduction")}
+        title={error || (preview ? "Close preview" : "Stop translation")}
       >
         <Square size={13} fill="currentColor" aria-hidden="true" />
       </button>

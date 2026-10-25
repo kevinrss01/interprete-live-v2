@@ -87,7 +87,7 @@ export class AudioPlayer {
   enqueue(input: Uint8Array) {
     const ctx = this.context;
     if (!ctx || ctx.state === "closed")
-      throw new Error("Clique sur le bouton de lecture pour activer le son.");
+      throw new Error("Click the play button to turn on sound.");
     if (ctx.state === "suspended") {
       void ctx.resume().then(() => {
         if (this.context === ctx && ctx.state === "running") this.enqueue(input);
@@ -185,7 +185,10 @@ export type CaptureOptions = {
   shouldRecordSample?: () => boolean;
   onSample?: (sample: { blob: Blob; seconds: number }) => void;
   demoUrl?: string;
+  demoAudible?: boolean;
   deviceId?: string;
+  // Used when connected; otherwise the system default microphone.
+  preferredDeviceId?: string;
   echoCancellation?: boolean;
   context?: AudioContext;
 };
@@ -194,6 +197,7 @@ export class MicrophoneCapture {
   private stream: MediaStream | null = null;
   private node: AudioWorkletNode | null = null;
   private source: AudioNode | null = null;
+  private demoGain: GainNode | null = null;
   private sampleChunks: Uint8Array[] = [];
   private sampleBytes = 0;
   private lastSpeech = 0;
@@ -207,6 +211,11 @@ export class MicrophoneCapture {
   private lastLevelAt = 0;
   private ownsContext = false;
   constructor(private options: CaptureOptions) {}
+  setDemoAudible(audible: boolean) {
+    this.options.demoAudible = audible;
+    if (this.demoGain && this.ctx)
+      this.demoGain.gain.setTargetAtTime(audible ? 1 : 0, this.ctx.currentTime, 0.008);
+  }
   setOutputActive(active: boolean) {
     this.outputActive = active;
   }
@@ -278,7 +287,7 @@ export class MicrophoneCapture {
     if (this.options.demoUrl) {
       const response = await fetch(this.options.demoUrl);
       if (!response.ok)
-        throw new Error("L’exemple audio n’est pas disponible.");
+        throw new Error("The audio sample is not available.");
       if (this.stopped) return;
       const buffer = await this.ctx.decodeAudioData(
         await response.arrayBuffer(),
@@ -287,6 +296,10 @@ export class MicrophoneCapture {
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(this.node);
+      this.demoGain = this.ctx.createGain();
+      this.demoGain.gain.value = this.options.demoAudible ? 1 : 0;
+      source.connect(this.demoGain);
+      this.demoGain.connect(this.ctx.destination);
       source.onended = () => {
         if (!this.stopped) this.options.onEnded();
       };
@@ -295,7 +308,11 @@ export class MicrophoneCapture {
     } else {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          ...(this.options.deviceId ? { deviceId: { exact: this.options.deviceId } } : {}),
+          ...(this.options.deviceId
+            ? { deviceId: { exact: this.options.deviceId } }
+            : this.options.preferredDeviceId
+              ? { deviceId: { ideal: this.options.preferredDeviceId } }
+              : {}),
           channelCount: 1,
           echoCancellation: this.options.echoCancellation ?? true,
           noiseSuppression: true,
@@ -309,7 +326,7 @@ export class MicrophoneCapture {
       }
       const track = this.stream.getAudioTracks()[0];
       if (track) track.onended = () => {
-        if (!this.stopped) this.options.onError("Le microphone a été déconnecté.");
+        if (!this.stopped) this.options.onError("The microphone was disconnected.");
       };
       const modes = track?.getCapabilities?.().echoCancellation as unknown;
       if (this.options.echoCancellation !== false && Array.isArray(modes) && modes.includes("all")) {
@@ -333,6 +350,8 @@ export class MicrophoneCapture {
   }
   private async finish() {
     if (this.stopped) return null;
+    this.demoGain?.disconnect();
+    this.demoGain = null;
     if (this.node) {
       await Promise.race([
         new Promise<void>((resolve) => {

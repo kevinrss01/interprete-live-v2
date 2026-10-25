@@ -266,7 +266,7 @@ export class ContinuousTranscription {
           settled = true;
           clearTimeout(timer);
           this.retire(connection);
-          reject(new Error("La connexion de transcription est indisponible."));
+          reject(new Error("The transcription connection is unavailable."));
         } else if (!connection.retired) this.reconnect();
       };
       const timer = setTimeout(rejectOpen, this.timing.connectTimeoutMs);
@@ -308,7 +308,7 @@ export class ContinuousTranscription {
             if (connection.retired) break;
             if (chunk.closed) this.commit(connection, chunk);
           }
-          if (connection.retired) throw new Error("La reprise audio a été interrompue.");
+          if (connection.retired) throw new Error("Audio recovery was interrupted.");
           this.everConnected = true;
           this.options.onConnection("connected");
           this.armRenewal();
@@ -388,7 +388,7 @@ export class ContinuousTranscription {
       if (bytes <= limit) break;
       if (!chunk.closed) break;
       bytes -= chunk.bytes;
-      this.options.onWarning("Connexion interrompue plus d’une minute : une partie de l’audio n’a pas pu être transcrite. Le micro reste actif.");
+      this.options.onWarning("Connection lost for over a minute: some audio could not be transcribed. The microphone stays on.");
       this.finalize(chunk, chunk.text);
     }
   }

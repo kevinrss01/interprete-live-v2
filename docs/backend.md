@@ -60,8 +60,9 @@ Le [router](../apps/server/src/rpc/router.ts) regroupe les opérations par sujet
 
 ```ts
 export const router = {
-  account: { me },
+  account: { me, updateName },
   preferences: { get, update },
+  discussions: { list, messages, save, remove },
 };
 export type ApiClient = RouterClient<typeof router>;
 ```
@@ -127,17 +128,23 @@ await rpc.preferences.update({
 
 Cette opération remplace la paire de langues ; ce n’est pas une modification partielle. Elle crée la ligne à la première sauvegarde puis met à jour la même ligne. Les langues disponibles proviennent de [packages/shared/src/languages.ts](../packages/shared/src/languages.ts).
 
+### `discussions.list()`, `discussions.messages({ id })`, `discussions.save(input)`, `discussions.remove({ id })`
+
+`list` retourne les discussions du compte, de la plus récente à la plus ancienne, avec le nombre de messages. Le compte et l’appareil gardent les discussions encore ouvertes, puis les discussions fermées les plus récemment mises à jour, jusqu’aux mêmes 50 discussions et 200 messages définis dans `packages/shared/src/discussions.ts`. `messages` retourne les textes d’une discussion dans l’ordre où ils ont été prononcés. `save` crée ou met à jour une discussion et au plus vingt messages. Une écriture plus ancienne ne remplace ni le titre, ni la clôture, ni le texte déjà enregistré. Un message déjà enregistré conserve son heure de prononciation. `remove` supprime une discussion du compte et ses messages. Une discussion appartenant à un autre compte est refusée.
+
 ## Données et sessions
 
-Le [schéma Drizzle](../apps/server/src/db/schema.ts) contient cinq tables :
+Le [schéma Drizzle](../apps/server/src/db/schema.ts) contient les tables de compte et les discussions :
 
 - `user` : identité du compte, email unique et informations publiques.
 - `session` : sessions Better Auth, expiration et lien vers l’utilisateur.
 - `account` : informations des méthodes d’authentification gérées par Better Auth.
 - `verification` : données de vérification utilisées par Better Auth.
 - `user_preferences` : utilisateur, langue source, langue cible et date de mise à jour.
+- `discussion` : une conversation face à face ou un appel, avec son titre, l’identifiant d’appel, l’heure de début, l’heure de mise à jour et l’heure de clôture.
+- `discussion_message` : un message de cette discussion, avec le rôle, le nom, le texte source, la traduction, les langues, l’état, l’heure où il a été prononcé et l’heure de sa dernière modification. Aucun audio n’est conservé.
 
-`user_preferences.user_id` est à la fois la clé primaire et une référence vers `user.id` : un utilisateur possède au maximum une ligne de préférences. La suppression du compte supprime ses préférences, sessions et comptes d’authentification liés. Une contrainte SQL interdit deux langues identiques ; la liste des langues supportées est contrôlée par Zod.
+`user_preferences.user_id` est à la fois la clé primaire et une référence vers `user.id` : un utilisateur possède au maximum une ligne de préférences. La suppression du compte supprime ses préférences, sessions, comptes d’authentification et discussions liés. Une discussion supprimée emporte ses messages. Une contrainte SQL interdit deux langues identiques ; la liste des langues supportées est contrôlée par Zod. Le propriétaire d’une discussion est toujours `context.user.id`, jamais un champ du corps de la requête.
 
 Deux systèmes de session coexistent :
 
@@ -321,4 +328,4 @@ Les procédures utilisent le protocole d’erreur oRPC, décodé par son client.
 
 ## Travail restant pour le produit
 
-Choisir et activer les méthodes de connexion, intégrer leur parcours dans Tauri, décider du stockage des jetons et brancher les écrans sur oRPC. La reprise des préférences locales, le rattachement des voix aux comptes et la protection de l’API audio par les comptes nécessitent des changements explicites. Aucun historique de conversation n’est enregistré dans cette base.
+Choisir et activer les méthodes de connexion, intégrer leur parcours dans Tauri, décider du stockage des jetons et brancher les écrans sur oRPC. La reprise des préférences locales, le rattachement des voix aux comptes et la protection de l’API audio par les comptes nécessitent des changements explicites. L’historique des discussions est enregistré dans `discussion` et `discussion_message`.

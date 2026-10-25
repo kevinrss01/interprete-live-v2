@@ -1,4 +1,6 @@
 import { APP_MICROPHONE_NAME } from "../lib/call-preferences";
+import { LogicalSize } from "@tauri-apps/api/dpi";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 import { Phone, X } from "lucide-react";
 import {
@@ -20,8 +22,40 @@ export function CallToast() {
   const [busy, setBusy] = useState(false);
   const [options, setOptions] = useState<CallOptions>(loadCallOptions);
   const [languages, setLanguages] = useState(storedLanguages);
-  useEffect(() => {
+  if (typeof document !== "undefined") {
+    document.documentElement.classList.add("toast-window");
     document.body.classList.add("toast-window");
+  }
+  useEffect(() => {
+    if (!desktopAvailable()) return;
+    const card = document.querySelector(".call-toast");
+    if (!(card instanceof HTMLElement)) return;
+    let frame = 0;
+    let width = 0;
+    let height = 0;
+    // The native window is a rectangle. Keep it equal to the card, or the clear margin stays clickable.
+    const fit = () => {
+      const nextWidth = Math.ceil(card.offsetWidth);
+      const nextHeight = Math.ceil(card.offsetHeight);
+      if (nextWidth < 1 || nextHeight < 1 || (nextWidth === width && nextHeight === height)) return;
+      width = nextWidth;
+      height = nextHeight;
+      void getCurrentWindow()
+        .setSize(new LogicalSize(nextWidth, nextHeight))
+        .catch(() => {});
+    };
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    });
+    observer.observe(card);
+    fit();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, []);
+  useEffect(() => {
     if (!desktopAvailable()) return;
     let active = true;
     const subscription = onCallStatus((snapshot) => {
@@ -43,7 +77,7 @@ export function CallToast() {
     };
   }, []);
   const call = status?.call;
-  const chosen = options.captions || options.voice || options.microphone;
+  const chosen = options.captions || options.voice || options.microphone || options.camera;
   function choose(next: CallOptions) {
     setOptions(next);
     saveCallOptions(next);
@@ -63,28 +97,28 @@ export function CallToast() {
       <div className="call-toast-head">
         <Phone size={19} aria-hidden="true" />
         <strong id="call-toast-title">
-          {call?.simulated ? "Simulation d’appel" : "Appel détecté"}
+          {call?.simulated ? "Simulated call" : "Call detected"}
         </strong>
         <button
           className="icon-btn"
           type="button"
-          aria-label="Ignorer cet appel"
+          aria-label="Dismiss this call"
           disabled={busy || !call}
           onClick={() => void answer(false)}
         >
           <X size={17} aria-hidden="true" />
         </button>
       </div>
-      <p>{call?.app ?? "Recherche d’un appel…"}</p>
+      <p>{call?.app ?? "Looking for a call…"}</p>
       <CallOptionChecks
         options={options}
-        include={["captions", "voice", "microphone"]}
+        include={["captions", "voice", "microphone", "camera"]}
         disabled={busy || !call}
         mine={languages.mine}
         theirs={languages.theirs}
         route={`${
           localStorage.getItem("interprete-call-input-label") ||
-          "Microphone à configurer"
+          "Microphone not set up"
         } → ${localStorage.getItem("interprete-call-output") || APP_MICROPHONE_NAME}`}
         onChange={choose}
       />
@@ -100,7 +134,7 @@ export function CallToast() {
           disabled={busy || !call}
           onClick={() => void answer(false)}
         >
-          Ignorer
+          Dismiss
         </button>
         <button
           type="button"
@@ -108,7 +142,7 @@ export function CallToast() {
           disabled={busy || !call || !chosen}
           onClick={() => void answer(true)}
         >
-          Traduire l’appel
+          Translate the call
         </button>
       </div>
     </main>

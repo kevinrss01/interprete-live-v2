@@ -56,13 +56,13 @@ export function SpeakerPanel({
             ? "next"
             : "idle";
   const letter = profile.id.toUpperCase();
-  const name = profile.name || `Personne ${letter}`;
+  const name = profile.name || `Person ${letter}`;
   const voice = profile.cloneStatus;
   return (
     <section
       className="speaker"
       data-state={state}
-      aria-label={`Personne ${letter}`}
+      aria-label={`Person ${letter}`}
     >
       <div className="speaker-meta">
         <span className={`mark mark-${profile.id}`} aria-hidden="true">
@@ -73,22 +73,22 @@ export function SpeakerPanel({
         </span>
         <span
           className={`voice-chip ${voice === "error" ? "is-error" : ""}`}
-          title="Voix utilisée pour la traduction"
+          title="Voice used for the translation"
         >
           {voice === "ready" ? (
             <>
               <Check size={12} aria-hidden="true" />
-              Voix clonée
+              Cloned voice
             </>
           ) : voice === "creating" ? (
             <>
               <LoaderCircle size={12} className="spin" aria-hidden="true" />
-              Clonage…
+              Cloning…
             </>
           ) : voice === "verification" ? (
-            "À vérifier"
+            "Needs verification"
           ) : voice === "error" ? (
-            "Clonage échoué"
+            "Cloning failed"
           ) : profile.consent ? (
             <span className="tabular">
               {Math.min(SAMPLE_TARGET, profile.sampleSeconds)} / {SAMPLE_TARGET}{" "}
@@ -101,7 +101,7 @@ export function SpeakerPanel({
       </div>
       <div className="language-field">
         <Label className="sr-only" htmlFor={`language-${profile.id}`}>
-          Langue de la personne {letter}
+          Person {letter}’s language
         </Label>
         <Select
           items={LANGUAGES.map((l) => ({ value: l.code, label: l.native }))}
@@ -114,7 +114,7 @@ export function SpeakerPanel({
         >
           <SelectTrigger
             id={`language-${profile.id}`}
-            aria-label={`Langue de la personne ${letter}`}
+            aria-label={`Person ${letter}’s language`}
           >
             <SelectValue />
           </SelectTrigger>
@@ -142,15 +142,15 @@ export function SpeakerPanel({
         aria-label={
           listening
             ? demo
-              ? "Terminer l’exemple audio"
-              : `Couper le micro · ${name}`
+              ? "End the audio sample"
+              : `Mute microphone · ${name}`
             : connecting
-              ? "Annuler la connexion"
+              ? "Cancel connection"
               : working
-                ? "Traduction en cours"
+                ? "Translating"
                 : playing
-                  ? "Lecture de la traduction"
-                  : `Activer le micro · ${name} · ${languageNative(profile.language)}`
+                  ? "Playing the translation"
+                  : `Turn on microphone · ${name} · ${languageNative(profile.language)}`
         }
       >
         <span className="talk-icon" aria-hidden="true">
@@ -176,15 +176,15 @@ export function SpeakerPanel({
         <span className="talk-label">
           {listening
             ? demo
-              ? "Terminer l’exemple"
-              : "Couper le micro"
+              ? "End sample"
+              : "Mute microphone"
             : connecting
-              ? "Connexion…"
+              ? "Connecting…"
               : working
-                ? "Traduction…"
+                ? "Translating…"
                 : playing
-                  ? "Lecture…"
-                  : "Activer le micro"}
+                  ? "Playing…"
+                  : "Turn on microphone"}
         </span>
         {listening ? (
           <Square

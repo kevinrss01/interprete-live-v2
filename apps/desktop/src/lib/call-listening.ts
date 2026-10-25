@@ -4,7 +4,7 @@ import type {
   VoiceFeatures,
   VoiceMatch,
 } from "@interprete/shared/contracts";
-import { MATCH_VOICES, nearestMatchVoice } from "@interprete/shared/languages";
+import { matchVoices, nearestMatchVoice, speakingVoice } from "@interprete/shared/languages";
 import { api, call } from "./api";
 import { MicrophoneCapture, type CaptureOptions } from "./audio";
 import { CallAudioPlayer, SYSTEM_OUTPUT } from "./calls";
@@ -56,7 +56,11 @@ const idle: ListeningState = {
   error: null,
   ended: null,
 };
-const DEFAULT_VOICE: ChosenVoice = { voice: "river", name: "River", source: "default" };
+// The neutral voice, or its native counterpart in the translation language.
+function defaultVoice(language: string): ChosenVoice {
+  const voice = speakingVoice("river", language);
+  return { voice: voice?.key ?? "river", name: voice?.name ?? "River", source: "default" };
+}
 const sleep = (ms: number) => new Promise<null>((resolve) => setTimeout(() => resolve(null), ms));
 
 // Translates what the other participants say: the call's audio feeds the same transcription and
@@ -72,6 +76,9 @@ export class CallListening {
   private generation = 0;
   private started = false;
   private targetLanguage = "fr";
+  private sampleUrl = "";
+  private sampleAudible = false;
+  private sampleCapture: MicrophoneCapture | null = null;
   constructor(private adapters: ListeningAdapters) {
     this.player = new CallAudioPlayer((message) => {
       this.update({ error: message });
@@ -118,12 +125,14 @@ export class CallListening {
     app = null,
     callId = null,
     demo = false,
+    sample = "solo",
   }: {
     profiles: Record<SpeakerId, Profile>;
     options: ListenOptions;
     app?: string | null;
     callId?: string | null;
     demo?: boolean;
+    sample?: "solo" | "group";
   }) {
     if (!options.captions && !options.voice) return;
     this.stop();
@@ -132,6 +141,9 @@ export class CallListening {
     this.matching = null;
     this.choosing = null;
     this.targetLanguage = profiles.a.language;
+    this.sampleUrl = profiles.b.language === "en"
+      ? sample === "group" ? "/samples/nasa-three-speakers-en.wav" : "/samples/nasa-en.wav"
+      : "";
     // In the desktop app, their voice plays natively so a whole-system tap can exclude it.
     this.player.configure(options.voice && this.adapters.native ? SYSTEM_OUTPUT : null);
     this.update({
@@ -156,7 +168,7 @@ export class CallListening {
         this.update({
           sessionId: null,
           callId: null,
-          error: snapshot.error ?? "La traduction de l’appel n’a pas démarré.",
+          error: snapshot.error ?? "The call translation did not start.",
           ended: "failed",
         });
       }
@@ -176,12 +188,18 @@ export class CallListening {
     this.started = false;
     // Always cancel: a start still preparing output or credentials is idle but pending.
     this.controller.cancel();
+    this.sampleCapture?.setDemoAudible(false);
+    this.sampleCapture = null;
     if (this.state.sessionId)
       this.update({ sessionId: null, callId: null, notice: null, ended: "stopped" });
   }
   dismissError() {
     this.update({ error: null });
     this.controller.dismissError();
+  }
+  setSampleAudible(audible: boolean) {
+    this.sampleAudible = audible;
+    this.sampleCapture?.setDemoAudible(audible);
   }
   dispose() {
     this.stop();
@@ -198,10 +216,19 @@ export class CallListening {
         options.onAudio(bytes);
       },
     };
-    if (options.demoUrl) return new MicrophoneCapture(listen);
+    if (options.demoUrl) {
+      this.sampleCapture = new MicrophoneCapture({
+        ...listen,
+        demoUrl: this.sampleUrl || options.demoUrl,
+        demoAudible: this.sampleAudible,
+      });
+      return this.sampleCapture;
+    }
     const settings = {
       ...listen,
       source: this.state.app,
+      // Their translated voice replaces their own: the call's original audio is muted meanwhile.
+      muteSource: this.state.options.voice,
       onStarted: ({ scope }: { scope: CaptureScope }) => {
         if (generation === this.generation) this.update({ scope });
       },
@@ -244,13 +271,13 @@ export class CallListening {
       while (!this.profiler.features(0.8) && performance.now() < deadline - wait / 2)
         await sleep(100);
       const features = this.profiler.features(0.25);
-      if (!features) return DEFAULT_VOICE;
-      const fallback = nearestMatchVoice(features.medianPitchHz);
+      if (!features) return defaultVoice(this.targetLanguage);
+      const fallback = nearestMatchVoice(features.medianPitchHz, this.targetLanguage);
       const match = await Promise.race([
         this.match(features),
         sleep(Math.max(250, deadline - performance.now())),
       ]);
-      const chosen = MATCH_VOICES.find((voice) => voice.key === match?.voice);
+      const chosen = matchVoices(this.targetLanguage).find((voice) => voice.key === match?.voice);
       return chosen && match
         ? { voice: chosen.key, name: chosen.name, source: match.source }
         : { voice: fallback.key, name: fallback.name, source: "pitch" as const };

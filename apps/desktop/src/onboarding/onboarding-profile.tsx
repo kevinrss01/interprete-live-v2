@@ -202,7 +202,7 @@ const LANGUAGE_OPTIONS: LanguageOption[] = LANGUAGES.map((l) => {
     code: l.code,
     label: l.native,
     flag: flag(LANGUAGE_COUNTRY[l.code]),
-    // Native, English and French names: "Japanese", "日本語" and "Japonais" all match.
+    // Native and English names: "Japanese" and "日本語" both match.
     search: `${l.native} ${english} ${l.name}`.toLowerCase(),
   };
 });

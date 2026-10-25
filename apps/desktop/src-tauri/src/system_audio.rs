@@ -79,6 +79,7 @@ impl Sink {
 unsafe extern "C" {
     fn interprete_tap_start(
         prefixes: *const std::ffi::c_char,
+        mute: bool,
         callback: extern "C" fn(*mut std::ffi::c_void, *const f32, u32, f64),
         context: *mut std::ffi::c_void,
         handle: *mut *mut std::ffi::c_void,
@@ -125,6 +126,7 @@ impl Drop for Capture {
 #[cfg(target_os = "macos")]
 fn start(
     prefixes: Vec<&'static str>,
+    mute: bool,
     channel: Channel<InvokeResponseBody>,
 ) -> Result<Capture, String> {
     let prefixes =
@@ -140,10 +142,17 @@ fn start(
         last: last.clone(),
     }));
     let mut handle = std::ptr::null_mut();
-    let ptr =
-        unsafe { interprete_tap_start(prefixes.as_ptr(), on_samples, sink.cast(), &mut handle) };
+    let ptr = unsafe {
+        interprete_tap_start(
+            prefixes.as_ptr(),
+            mute,
+            on_samples,
+            sink.cast(),
+            &mut handle,
+        )
+    };
     let reply = if ptr.is_null() {
-        Err("CoreAudio n’a pas répondu.".to_string())
+        Err("CoreAudio did not respond.".to_string())
     } else {
         let parsed =
             serde_json::from_slice::<Reply>(unsafe { std::ffi::CStr::from_ptr(ptr) }.to_bytes())
@@ -173,7 +182,7 @@ fn start(
                     error: Some(error), ..
                 }) => error,
                 Err(error) => error,
-                _ => "La capture de l’appel n’a pas démarré.".into(),
+                _ => "Call capture did not start.".into(),
             });
         }
     };
@@ -204,9 +213,10 @@ fn start(
 #[cfg(not(target_os = "macos"))]
 fn start(
     _prefixes: Vec<&'static str>,
+    _mute: bool,
     _channel: Channel<InvokeResponseBody>,
 ) -> Result<Capture, String> {
-    Err("La capture du son d’un appel nécessite macOS.".into())
+    Err("Capturing call audio requires macOS.".into())
 }
 
 // Creating a tap happens outside the lock. Only the most recent request may install its capture:
@@ -249,15 +259,30 @@ impl<T> Slot<T> {
             None
         }
     }
+    // Forgets every request, including a start still being created.
+    fn clear(&mut self) -> Option<T> {
+        self.latest = None;
+        self.current.take().map(|(_, value)| value)
+    }
 }
 #[derive(Default)]
 pub struct SystemAudio(Mutex<Slot<Capture>>);
+impl SystemAudio {
+    // A reloaded page lost the session that would stop the capture, and a muted call would stay
+    // silent without its translation.
+    pub fn release_all(&self) {
+        let capture = self.0.lock().ok().and_then(|mut slot| slot.clear());
+        if let Some(capture) = capture {
+            tauri::async_runtime::spawn_blocking(move || drop(capture));
+        }
+    }
+}
 
 fn main_only(window: &tauri::WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         Ok(())
     } else {
-        Err("Capture réservée à la fenêtre principale.".into())
+        Err("Capture is reserved for the main window.".into())
     }
 }
 #[tauri::command]
@@ -266,11 +291,13 @@ pub async fn system_audio_start(
     state: tauri::State<'_, SystemAudio>,
     id: String,
     source: Option<String>,
+    // Only the translation is heard: the captured call stays silent until the capture stops.
+    mute: Option<bool>,
     on_audio: Channel<InvokeResponseBody>,
 ) -> Result<Started, String> {
     main_only(&window)?;
     if id.is_empty() || id.len() > 96 {
-        return Err("Capture invalide.".into());
+        return Err("Invalid capture.".into());
     }
     let prefixes = source
         .as_deref()
@@ -280,7 +307,7 @@ pub async fn system_audio_start(
     let previous = state.0.lock().map_err(|e| e.to_string())?.reserve(&id);
     let capture = tauri::async_runtime::spawn_blocking(move || {
         drop(previous);
-        start(prefixes, on_audio)
+        start(prefixes, mute.unwrap_or(false), on_audio)
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -292,7 +319,7 @@ pub async fn system_audio_start(
         .install(&id, capture);
     if let Err(stale) = installed {
         tauri::async_runtime::spawn_blocking(move || drop(stale));
-        return Err("Cette capture a été arrêtée.".into());
+        return Err("This capture was stopped.".into());
     }
     Ok(started)
 }
@@ -355,6 +382,19 @@ mod tests {
         assert_eq!(slot.install("c", "late"), Err("late"));
     }
     #[test]
+    fn a_page_reload_releases_the_live_capture_and_any_start_in_flight() {
+        let mut slot = Slot::<&str>::default();
+        slot.reserve("a");
+        assert_eq!(slot.install("a", "tap a"), Ok(()));
+        slot.reserve("b");
+        assert_eq!(slot.clear(), None, "b is still being created");
+        assert_eq!(slot.install("b", "tap b"), Err("tap b"));
+        slot.reserve("c");
+        assert_eq!(slot.install("c", "tap c"), Ok(()));
+        assert_eq!(slot.clear(), Some("tap c"));
+        assert!(slot.release("c").is_none());
+    }
+    #[test]
     #[ignore = "captures system audio for one second; run pnpm test:system-audio"]
     fn system_audio_tap_delivers_frames() {
         let frames = Arc::new(AtomicU64::new(0));
@@ -367,7 +407,7 @@ mod tests {
             Ok(())
         });
         let opening = Instant::now();
-        let capture = start(vec![], channel).expect("Start the process tap");
+        let capture = start(vec![], false, channel).expect("Start the process tap");
         let opened = opening.elapsed();
         std::thread::sleep(Duration::from_millis(1200));
         let started = capture.started.clone();

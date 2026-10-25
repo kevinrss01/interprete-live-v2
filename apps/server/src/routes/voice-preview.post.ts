@@ -38,7 +38,7 @@ export const voicePreview = new Hono().post(
     const s = c.var.session;
     rateLimit(s.id, "preview", 20);
     const { voice, speaker, language } = c.req.valid("json");
-    const voiceId = resolveVoice(voice, s.id, speaker);
+    const voiceId = resolveVoice(voice, s.id, speaker, language);
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
       {
@@ -49,7 +49,7 @@ export const voicePreview = new Hono().post(
       },
     );
     if (!response.ok)
-      throw new AppError("PREVIEW_PROVIDER", "ElevenLabs n’a pas pu lire cette voix.", 502);
+      throw new AppError("PREVIEW_PROVIDER", "ElevenLabs could not play this voice.", 502);
     return c.body(await response.arrayBuffer(), 200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" });
   },
 );

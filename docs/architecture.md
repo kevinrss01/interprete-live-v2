@@ -25,7 +25,7 @@ flowchart LR
 
   subgraph Fournisseurs["Fournisseurs"]
     RT["OpenAI Realtime<br/>gpt-live-transcribe"]
-    LLM["OpenAI Chat<br/>gpt-5.4-nano"]
+    LLM["OpenAI Chat<br/>gpt-5.4-mini"]
     Jev["AI Gateway<br/>Jev (prêt à traduire ? voix proche)"]
     EL["ElevenLabs<br/>TTS Flash v2.5, clonage"]
   end
@@ -74,6 +74,63 @@ flowchart TB
 
 Le desktop importe **uniquement le type** `AppType` du serveur : le client `hc<AppType>` connaît les routes, leurs entrées et leurs réponses. Modifier une route casse la compilation du desktop, pas l'app en production. Aucun code serveur n'est embarqué dans le bundle desktop.
 
+### Landing page
+
+La landing monte `LandingPage` depuis `packages/ui/src/components/landing-page.tsx` et charge
+`packages/ui/src/landing.css`. La hero centrée occupe environ 75 % de la hauteur de l'écran ;
+son fond de nuages s'efface vers le blanc avant les sections de présentation. Le premier
+bloc bénéficie de 192 px de padding supérieur sur desktop, 128 px sur tablette et 96 px
+sur mobile. La flèche de la hero a été retirée. Les images
+JPEG de 1280, 1920 et 3840 px sont sélectionnées avec `srcset` ; le grand format est un
+agrandissement, pas une génération 4K native. Une petite texture de grain statique se répète
+à l'échelle de l'écran, plus discrète derrière le texte et plus marquée sur les nuages.
+
+Le titre associe Manrope en graisse 650 et Instrument Serif en italique. Ces deux fontes sont
+hébergées localement et préchargées par `apps/landing/index.html` ; leurs licences sont
+livrées dans `apps/landing/public/licenses/`. Manrope porte les titres et la navigation ;
+l'italique Instrument Serif souligne aussi la seconde ligne des titres des deux blocs. Les liens nus restent en haut de l'écran, s'effacent à la descente et
+réapparaissent à la remontée ou au focus clavier. Ils restent visibles près du haut de page.
+Leur contraste s'adapte au fond par composition CSS ; la réduction des animations supprime
+leur transition.
+Un libellé « Live translation. Human connection. » encadré de lauriers dorés précède
+le titre. La hero ne contient pas de bouton d'ouverture de l'application, et aucun
+bouton flottant ne réapparaît sur mobile.
+
+Après la hero, la page se limite à deux blocs interactifs puis au CTA Download et au
+footer. Les sections séparées de procédure, de voix et de FAQ ont été retirées, ainsi
+que leurs styles et leurs liens devenus inutiles.
+
+La navigation Home / Features / Download cible des sections de la page. Le défilement
+fluide est défini uniquement dans `apps/landing/src/main.css` et reste instantané avec
+`prefers-reduced-motion`. L'exemple de
+traduction occupe un canevas ivoire pointillé : deux cartes de parole sont reliées par
+la marque orange, avec les seuls libellés « You » et « Other people ». La mention
+« Low-latency translation » met en avant le streaming sans afficher de mesure de délai.
+Le sélecteur English / Spanish / Japanese anime les mots,
+l'onde et un signal orange qui passe le long du trait entre les cartes. La marque
+effectue une brève impulsion avec une légère rotation à chaque sélection. Ces animations
+restent silencieuses, sans microphone ni lecture audio. Le second
+bloc remplace la bande noire par une console anthracite encadrée, avec onde sonore,
+statut et citation. Ses boutons Speak / Pause / Keep going / End turn illustrent
+que la pause ne termine pas le tour. Les sélecteurs de langue et d'étape utilisent
+un fond orange qui glisse vers le choix actif (360 ms), sans retarder la mise à jour
+du contenu. La traduction avance toutes les 3,5 secondes et les étapes de parole toutes
+les 4,5 secondes, uniquement
+quand leur bloc est à l'écran et l'onglet visible. Un clic manuel ou le bouton pause
+arrête la boucle ; le bouton lecture la relance. La réduction des mouvements désactive
+la lecture automatique par défaut et supprime les animations CSS. Les mises à jour
+automatiques ne déclenchent pas d'annonces répétées pour les lecteurs d'écran.
+
+Le CTA affiche un panorama alpin généré, en ivoire et orange, avec un premier plan sombre
+pour le texte. Les deux WebP `download-landscape.webp` (1983 × 793 px natifs) et
+`download-landscape-1280.webp` sont chargés paresseusement avec `srcset`. Le grain existant
+est réutilisé à l'échelle de l'écran. Le bouton « Download for macOS » cible le DMG
+Apple Silicon (`Interprete-macOS-arm64.dmg`) de la dernière release GitHub du dépôt
+`kevinrss01/interprete-live-v2`. C'est l'unique action du CTA ; le contour visible de
+la carte et le lien secondaire vers l'application web ont été retirés. Le CTA ne contient
+pas de logo ; l'image et son grain sont inchangés.
+La page reste en `noindex` pour la revue locale.
+
 ## API
 
 | Méthode | Route | Auth | Limite | Rôle |
@@ -83,9 +140,9 @@ Le desktop importe **uniquement le type** `AppType` du serveur : le client `hc<A
 | POST | `/api/interpret` | Bearer | 120 / min | Traduction + synthèse, réponse en SSE |
 | POST | `/api/voice/clone` | Bearer | 4 / h | Clone la voix d'un profil (multipart, accord requis) |
 | POST | `/api/voice/delete` | Bearer | — | Supprime un clone appartenant à cette session |
-| POST | `/api/voice/match` | Bearer | 20 / min | Choisit une voix ElevenLabs prédéfinie proche d’un interlocuteur d’appel (Jev), à partir de mesures calculées sur l’appareil |
+| POST | `/api/voice/match` | Bearer | 20 / min | Choisit une voix ElevenLabs proche d’un interlocuteur d’appel (Jev), à partir de mesures calculées sur l’appareil, parmi les voix natives de la langue de traduction quand elle en a |
 
-`POST /api/interpret` accepte `speak: false` pour les sous-titres d’appel : la réponse SSE contient le feu vert et le texte, sans synthèse vocale ni résolution de voix.
+`POST /api/interpret` accepte `speak: false` pour les sous-titres d’appel, ceux de vos interlocuteurs comme ceux incrustés dans votre vidéo : la réponse SSE contient le feu vert et le texte, sans synthèse vocale ni résolution de voix.
 
 Chaîne de traitement d’une requête audio dans `src/routes/`, montée par `src/app.ts` :
 
@@ -128,6 +185,8 @@ sequenceDiagram
 Le serveur comprend un socle Hono + oRPC + Zod + Better Auth + Drizzle + PostgreSQL. Les procédures `account.me`, `preferences.get` et `preferences.update` sont montées sous `/rpc/*` et protégées par une session utilisateur. Le frontend audio conserve son client Hono et ses sessions anonymes.
 
 Aucune méthode de connexion n’est encore activée. Le frontend, le stockage des jetons et la reprise des préférences locales restent à intégrer.
+
+Les discussions traduites sont enregistrées dans PostgreSQL, liées au compte. Le texte de chaque message y est conservé avec l’heure où il a été prononcé et l’heure de sa dernière mise à jour. L’audio de lecture n’est pas stocké. L’écran lit d’abord une copie locale (`interprete-discussions-v1`) puis la synchronise avec le compte.
 
 Le [guide backend](backend.md) décrit la structure des fichiers, les contrôles, les tables, les procédures, un exemple de client frontend, le démarrage local, les migrations, les tests et le déploiement.
 
@@ -174,6 +233,7 @@ sequenceDiagram
 - **Feu vert** : un segment est prononcé si Jev l'estime prêt (probabilité ≥ 0,6) ou s'il se termine par une ponctuation forte. Jev n'est pas appelé quand la règle locale suffit : portion finale, ponctuation forte, ou fin inutilisable (préposition, article, mot composé coupé, négation ou nombre annoncés par la suite). Un fragment refusé arrête aussitôt sa traduction et sa synthèse, ce qui libère la requête suivante. Si Jev ne répond pas, on attend la fin de la phrase.
 - **Traduction** : le modèle reçoit le fragment et ce qui a déjà été prononcé (source et traduction entendue), mais pas les mots suivants : les petits modèles les traduisaient en avance, puis une seconde fois dans le fragment suivant.
 - **Voix** : les silences ajoutés par ElevenLabs autour de chaque fragment sont retirés (20 ms gardés avant, 60 ms après), sans jamais retarder un échantillon audible ; une pause livrée en retard n'est pas rejouée après le trou qu'elle a déjà laissé dans la lecture. L'app indique avec chaque fragment la durée de traduction qui attend encore d'être lue (`queued`) : le serveur accélère alors légèrement la voix (de 1 à 1,2, la limite d'ElevenLabs) pour rattraper la personne ; une traduction à jour garde le débit naturel de la voix.
+- **Accent** : les voix prédéfinies ElevenLabs sont anglaises et gardent cet accent dans une autre langue. Quand la langue cible a des voix natives (aujourd’hui le français, dans `packages/shared/src/languages.ts`), le serveur remplace une voix prédéfinie par la voix native du même genre et de hauteur la plus proche. Une voix clonée reste celle de son propriétaire.
 - **Renouvellement** : la connexion Realtime est renouvelée après 45 minutes, avec une seconde connexion préparée en parallèle ; les items sont finalisés toutes les 30 secondes ou à chaque pause.
 
 ## Déploiement
@@ -199,6 +259,12 @@ flowchart LR
 - **API** : copier le repo et `apps/server/.env.local` sur le VPS, puis `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtient le certificat et relaie le SSE sans buffering (`flush_interval -1`).
 - **Desktop** : `VITE_API_URL` est intégré au moment du build ; le pointer vers le domaine du VPS avant `pnpm build:desktop`. Sur macOS, `Info.plist` déclare l'usage du micro et `Entitlements.plist` l'autorise sous hardened runtime. La signature et la notarisation ne sont pas encore configurées.
 
+### Note pour la page Download (2026-10-24)
+
+- Distribution initiale macOS uniquement, avec téléchargements hébergés sur GitHub Releases et liés depuis la landing. `pnpm release` déclenche manuellement le workflow sur `main` ; après les contrôles et le build, la release est publiée automatiquement et devient la dernière version.
+- Prérequis retenu pour la distribution : **macOS Sonoma 14.2 minimum**, afin d'inclure la détection automatique des appels (`apps/desktop/src-tauri/src/call_probe.m`). Le minimum du bundle est aligné sur 14.2. Ce choix ne constitue pas un test de compatibilité.
+- Le workflow de release prépare un DMG Apple Silicon (ARM64) ; aucun build Intel n'est prévu dans ce workflow. L'extension caméra est encore au stade de plan.
+
 ## Variables d'environnement
 
 | Où | Variable | Usage |
@@ -213,3 +279,13 @@ flowchart LR
 | | `ALLOWED_ORIGINS` | Origines autorisées (CORS et contrôle de session) |
 | | `PORT` | Port d'écoute, 3035 par défaut |
 | `apps/desktop/.env.local` | `VITE_API_URL` | URL de l'API, intégrée au build |
+
+### Préférences de sous-titres flottants (24 octobre 2026)
+
+`apps/desktop/src/lib/caption-preferences.ts` valide et conserve localement la position normalisée, la taille, le thème, l’opacité du fond et la couleur du texte. Les fenêtres réagissent aux événements de stockage ; les mises à jour de la fenêtre principale utilisent aussi un événement local. Aucune préférence de barre ni conversation n’est envoyée au serveur.
+
+`useCallCaptions` transmet la position, la taille et le nom optionnel du moniteur avec l’état des sous-titres. `call_captions.rs` valide ces valeurs et recalcule une géométrie bornée par la zone de travail du moniteur mémorisé, ou de celui de la fenêtre principale si l’écran choisi est absent. Les calculs utilisent les pixels physiques et le facteur d’échelle.
+
+La fenêtre `call-captions` démarre le déplacement natif Tauri au clic-glissé. Après stabilisation des événements de déplacement, `call_captions_position` relit sa géométrie et convertit sa position en coordonnées normalisées ; cette commande est réservée à la fenêtre de sous-titres. La requête inclut la disposition attendue pour ignorer les positions devenues obsolètes ; une modification plus récente des réglages gagne aussi côté frontend. Les arrondis de pixels ne déclenchent pas de boucle de sauvegarde. La préférence de moniteur reste locale. Les sous-titres visibles acceptent les clics pour être déplacés ; lorsqu’ils s’effacent, la fenêtre ignore les clics.
+
+**Settings → Floating captions → Show captions** pilote un texte fictif persistant dans cette même fenêtre, via l’unique publisher de `CallPanel`. Il ne reste plus d’aperçu intégré aux réglages. Les modifications d’apparence passent par les préférences locales et celles de géométrie par les mises à jour natives. Masquer l’aperçu, changer d’onglet ou quitter les réglages libère cet aperçu sans capture ni fournisseur.

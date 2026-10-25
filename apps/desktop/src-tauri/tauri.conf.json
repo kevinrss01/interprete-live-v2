@@ -22,21 +22,23 @@
       },
       {
         "label": "call-toast",
-        "title": "Appel détecté",
+        "title": "Call detected",
         "url": "index.html#call-toast",
-        "width": 384,
-        "height": 372,
+        "width": 400,
+        "height": 326,
         "resizable": false,
         "decorations": false,
+        "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": false,
         "focus": false,
-        "shadow": true
+        "shadow": false,
+        "acceptFirstMouse": true
       },
       {
         "label": "translation-overlay",
-        "title": "Traduction instantanée",
+        "title": "Live translation",
         "url": "index.html#translation-overlay",
         "width": 248,
         "height": 72,
@@ -54,7 +56,7 @@
       },
       {
         "label": "call-captions",
-        "title": "Sous-titres de l’appel",
+        "title": "Call captions",
         "url": "index.html#call-captions",
         "width": 980,
         "height": 220,
@@ -67,7 +69,8 @@
         "focus": false,
         "shadow": false,
         "backgroundThrottling": "disabled",
-        "focusable": false
+        "focusable": false,
+        "acceptFirstMouse": true
       }
     ],
     "security": {
@@ -87,7 +90,13 @@
     ],
     "macOS": {
       "entitlements": "./Entitlements.plist",
-      "minimumSystemVersion": "13.0"
+      "minimumSystemVersion": "14.2",
+      "dmg": {
+        "background": "dmg/background.png",
+        "windowSize": { "width": 720, "height": 440 },
+        "appPosition": { "x": 180, "y": 250 },
+        "applicationFolderPosition": { "x": 540, "y": 250 }
+      }
     }
   }
 }

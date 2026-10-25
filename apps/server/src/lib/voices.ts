@@ -47,7 +47,7 @@ async function createOrRecoverVoice(
   form.set("name", name);
   form.set(
     "description",
-    "Voix personnelle créée avec accord dans Interprète.",
+    "Personal voice created with consent in Interprète.",
   );
   form.set("remove_background_noise", "false");
   form.set(
@@ -78,18 +78,18 @@ async function createOrRecoverVoice(
     if (detail.includes("voice_limit") || detail.includes("max"))
       throw new AppError(
         "VOICE_LIMIT",
-        "La limite de voix ElevenLabs est atteinte. Libère une voix dans le compte pour réessayer.",
+        "The ElevenLabs voice limit has been reached. Free up a voice in the account to try again.",
         409,
       );
     if (response.status === 422)
       throw new AppError(
         "CLONE_SAMPLE",
-        "L’échantillon est trop court ou inexploitable. Ajoute de la parole claire puis réessaie.",
+        "The sample is too short or unusable. Add clear speech, then try again.",
         422,
       );
     throw new AppError(
       "CLONE_PROVIDER",
-      "ElevenLabs n’a pas pu créer cette voix. La voix provisoire reste disponible.",
+      "ElevenLabs could not create this voice. The standard voice is still available.",
       502,
     );
   }
@@ -102,7 +102,7 @@ export async function cloneVoice(sessionId: string, request: Request) {
   if (Number(request.headers.get("content-length")) > 3500000)
     throw new AppError(
       "UPLOAD_SIZE",
-      "L’échantillon audio est trop volumineux.",
+      "The audio sample is too large.",
       413,
     );
   const data = await request.formData();
@@ -115,10 +115,10 @@ export async function cloneVoice(sessionId: string, request: Request) {
   if (data.get("consent") !== "true")
     throw new AppError(
       "CONSENT",
-      "L’accord de la personne est nécessaire pour créer sa voix.",
+      "The person’s consent is required to create their voice.",
     );
   if (speaker !== "a" && speaker !== "b")
-    throw new AppError("SPEAKER", "Profil vocal invalide.");
+    throw new AppError("SPEAKER", "Invalid voice profile.");
   if (
     typeof consentId !== "string" ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -127,7 +127,7 @@ export async function cloneVoice(sessionId: string, request: Request) {
   )
     throw new AppError(
       "CONSENT",
-      "Autorise de nouveau la création de cette voix.",
+      "Authorize the creation of this voice again.",
     );
   if (
     !files.length ||
@@ -137,12 +137,12 @@ export async function cloneVoice(sessionId: string, request: Request) {
   )
     throw new AppError(
       "AUDIO",
-      "Envoie un échantillon audio de moins de 3 Mo.",
+      "Send an audio sample smaller than 3 MB.",
     );
   if (!Number.isFinite(seconds) || seconds < 10 || seconds > 90)
     throw new AppError(
       "AUDIO_LENGTH",
-      "Au moins 10 secondes de parole sont nécessaires.",
+      "At least 10 seconds of speech are required.",
     );
   const owner = voiceOwnerKey(sessionId, speaker, consentId);
   let job = jobs.get(owner);
@@ -163,7 +163,7 @@ export async function cloneVoice(sessionId: string, request: Request) {
   }
   return {
     voice: voiceGrant(sessionId, speaker, result.voice_id),
-    label: "Votre voix",
+    label: "Your voice",
     requiresVerification: Boolean(result.requires_verification),
   };
 }
@@ -182,7 +182,7 @@ export async function deleteVoice(
   )
     throw new AppError(
       "VOICE",
-      "Cette voix ne peut pas être supprimée.",
+      "This voice cannot be deleted.",
       403,
     );
   const response = await fetch(

@@ -1,6 +1,6 @@
 export const MODELS = {
   transcription: "gpt-live-transcribe",
-  translation: "gpt-5.4-nano",
+  translation: "gpt-5.4-mini",
   decision: "typesafe-ai/jev-1.14.0",
   speech: "eleven_flash_v2_5",
 } as const;

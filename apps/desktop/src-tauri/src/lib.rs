@@ -4,6 +4,7 @@ mod calls;
 mod system_audio;
 mod system_microphone;
 mod translation_overlay;
+mod virtual_camera;
 mod virtual_microphone;
 use tauri::Manager;
 
@@ -23,12 +24,14 @@ pub fn run() {
         .manage(translation_overlay::State::default())
         .manage(call_captions::State::default())
         .manage(system_audio::SystemAudio::default())
+        .manage(virtual_camera::CameraRelay::default())
         .invoke_handler(tauri::generate_handler![
             translation_overlay::set_translation_overlay,
             translation_overlay::translation_overlay_snapshot,
             translation_overlay::stop_translation_overlay,
             call_captions::set_call_captions,
             call_captions::call_captions_snapshot,
+            call_captions::call_captions_position,
             system_audio::system_audio_start,
             system_audio::system_audio_stop,
             calls::call_snapshot,
@@ -43,6 +46,14 @@ pub fn run() {
             audio_route::audio_route_push,
             audio_route::audio_route_close,
             audio_route::audio_route_status,
+            virtual_camera::camera_devices,
+            virtual_camera::camera_access,
+            virtual_camera::camera_relay_page,
+            virtual_camera::camera_relay_start,
+            virtual_camera::camera_relay_caption,
+            virtual_camera::camera_relay_stop,
+            virtual_camera::camera_relay_status,
+            virtual_camera::camera_relay_preview,
         ])
         .setup(|app| {
             app.state::<audio_route::AudioRoute>().configure(app.path().app_data_dir()?.join("microphone-restore.json"))?;
@@ -51,24 +62,46 @@ pub fn run() {
                 ctrlc::set_handler(move || handle.exit(0))?;
             }
             #[cfg(target_os = "macos")]
-            for label in ["call-toast", "translation-overlay", "call-captions"] {
-                if let Some(toast) = app.get_webview_window(label)
-                    && let Ok(window) = toast.ns_window()
+            if let Some(prompt) = app.get_webview_window("call-toast")
+                && let Ok(window) = prompt.ns_window()
+            {
+                unsafe extern "C" {
+                    fn interprete_configure_call_prompt(window: *mut std::ffi::c_void);
+                }
+                // Tauri setup runs on the UI thread and keeps this native window alive.
+                unsafe {
+                    interprete_configure_call_prompt(window);
+                }
+            }
+            // Captions and the pill float above other apps, including a full-screen call or browser.
+            #[cfg(target_os = "macos")]
+            for label in ["translation-overlay", "call-captions"] {
+                if let Some(overlay) = app.get_webview_window(label)
+                    && let Ok(window) = overlay.ns_window()
                 {
                     unsafe extern "C" {
-                        fn interprete_configure_toast(window: *mut std::ffi::c_void);
+                        fn interprete_configure_overlay(window: *mut std::ffi::c_void);
                     }
                     // Tauri setup runs on the UI thread and keeps this native window alive.
                     unsafe {
-                        interprete_configure_toast(window);
+                        interprete_configure_overlay(window);
                     }
                 }
             }
-            if let Some(captions) = app.get_webview_window("call-captions") {
-                let _ = captions.set_ignore_cursor_events(true);
-            }
             calls::start(app.handle().clone());
             Ok(())
+        })
+        .on_page_load(|webview, payload| {
+            if webview.label() == "main" && payload.event() == tauri::webview::PageLoadEvent::Started {
+                webview.state::<system_audio::SystemAudio>().release_all();
+                // The new page number applies at once; the release waits for a camera still
+                // opening, so it runs off the main thread.
+                let page = webview.state::<virtual_camera::CameraRelay>().next_page();
+                let app = webview.app_handle().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    app.state::<virtual_camera::CameraRelay>().release_before(page);
+                });
+            }
         })
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
@@ -86,6 +119,12 @@ pub fn run() {
                 let handle = app.clone();
                 let completed = restore_finished.clone();
                 tauri::async_runtime::spawn(async move {
+                    // Stopping a capture session blocks briefly; keep it off the main thread.
+                    let camera = handle.clone();
+                    let _ = tauri::async_runtime::spawn_blocking(move || {
+                        camera.state::<virtual_camera::CameraRelay>().shutdown();
+                    })
+                    .await;
                     if handle.state::<audio_route::AudioRoute>().shutdown().await.is_err() {
                         eprintln!("Microphone restoration pending; recovery record retained for next launch.");
                     }

@@ -6,6 +6,7 @@ import {
   type CaptureOptions,
 } from "./audio";
 import { api, call, saveSession, streamInterpretation } from "./api";
+import { savedMicrophone } from "./call-preferences";
 import { ContinuousTranscription, type ConnectionState, type StreamTiming, type Transcript } from "./transcription";
 import type {
   HistoryItem,
@@ -126,7 +127,7 @@ type Runtime = {
 const initialProfiles: Record<SpeakerId, Profile> = {
   a: {
     id: "a",
-    name: "Vous",
+    name: "You",
     language: "fr",
     voice: "sarah",
     consent: false,
@@ -135,7 +136,7 @@ const initialProfiles: Record<SpeakerId, Profile> = {
   },
   b: {
     id: "b",
-    name: "Votre interlocuteur",
+    name: "Other person",
     language: "en",
     voice: "george",
     consent: false,
@@ -168,7 +169,7 @@ const SEGMENT_SPACING_MS = 120;
 const storageKey = "interprete-profiles-v1";
 const volumeKey = "interprete-volume-v1";
 const message = (error: unknown) =>
-  error instanceof Error ? error.message : "Une erreur est survenue. Réessaie.";
+  error instanceof Error ? error.message : "Something went wrong. Try again.";
 
 export class InterpreterController {
   private state: Snapshot = initial;
@@ -378,20 +379,20 @@ export class InterpreterController {
     if (!this.state.services?.transcription || !this.state.services.voice) {
       this.update({
         error:
-          "Les services de traduction ne sont pas encore configurés sur ce déploiement.",
+          "Translation services are not configured on this deployment yet.",
       });
       return;
     }
     const profile = { ...this.state.profiles[speaker] };
     const target = { ...this.state.profiles[speaker === "a" ? "b" : "a"] };
     if (profile.language === target.language) {
-      this.update({ error: "Choisis deux langues différentes pour démarrer." });
+      this.update({ error: "Choose two different languages to start." });
       return;
     }
     if (demo && !["fr", "en"].includes(profile.language)) {
       this.update({
         error:
-          "L’exemple audio est disponible en français et en anglais. Utilise le micro pour cette langue.",
+          "The audio sample is available in French and English. Use the microphone for this language.",
       });
       return;
     }
@@ -437,7 +438,9 @@ export class InterpreterController {
       onSample: (sample) => {
         if (this.isCurrent(r)) void this.collect(speaker, sample.blob, sample.seconds);
       },
-      ...(demo ? { demoUrl: `/samples/${profile.language}.wav` } : {}),
+      ...(demo
+        ? { demoUrl: `/samples/${profile.language}.wav` }
+        : { preferredDeviceId: savedMicrophone() }),
       context: this.player.sharedContext?.(),
     });
     try {
@@ -448,9 +451,9 @@ export class InterpreterController {
     } catch (e) {
       if (this.isCurrent(r)) {
         const label = e instanceof DOMException && e.name === "NotAllowedError"
-          ? "Le micro est bloqué. Autorise-le dans ton navigateur, puis réessaie."
+          ? "The microphone is blocked. Allow it in your browser, then try again."
           : e instanceof DOMException && e.name === "NotFoundError"
-            ? "Aucun microphone n’a été trouvé sur cet appareil." : message(e);
+            ? "No microphone was found on this device." : message(e);
         this.fail(r, new Error(label));
       }
     }
@@ -506,8 +509,8 @@ export class InterpreterController {
     if (r.blocks.length > 60) {
       const index = r.inFlight ? 1 : 0;
       const [lost] = r.blocks.splice(index, 1);
-      this.turn(lost.id, { status: "error", error: "Traduction indisponible pendant une interruption prolongée." });
-      this.update({ warning: "La traduction a pris trop de retard. Certains passages n’ont pas pu être lus ; le micro reste actif." });
+      this.turn(lost.id, { status: "error", error: "Translation unavailable during an extended interruption." });
+      this.update({ warning: "The translation fell too far behind. Some passages could not be played; the microphone stays on." });
     }
     if (!r.finishing) this.scheduleSegment(r);
   }
@@ -574,7 +577,7 @@ export class InterpreterController {
       // Translation/provider errors must not tear down microphone capture.
       block.lastAttempt = "";
       r.retryAt = performance.now() + Math.min(5000, 500 * 2 ** Math.min(r.retries++, 4));
-      this.update({ warning: "La traduction se reconnecte. L’écoute continue et les passages en attente sont conservés." });
+      this.update({ warning: "The translation is reconnecting. Listening continues and pending passages are kept." });
     }
     if (this.isCurrent(r) && !r.finishing)
       setTimeout(() => this.scheduleSegment(r), 0);
@@ -649,12 +652,12 @@ export class InterpreterController {
             // An empty caption is retried once; a second one is a filler with nothing to show.
             if (!translation.trim() && block.emptyAttempt !== candidate.text) {
               block.emptyAttempt = candidate.text;
-              throw new Error("La traduction n’a renvoyé aucun texte.");
+              throw new Error("The translation returned no text.");
             }
             accept();
             display();
           }
-          if (event.spoken && !accepted) throw new Error("Aucun son reçu. Réessaie avec une voix provisoire.");
+          if (event.spoken && !accepted) throw new Error("No audio received. Try again with a standard voice.");
           // A last word held back after a pause is offered again if punctuation now ends it.
           if (!accepted) block.rejectedThrough = candidate.endUnits - (flight.tentative ? 1 : 0);
           block.metrics.translationMs ??= event.metrics.translationMs;
@@ -709,7 +712,7 @@ export class InterpreterController {
       for (const block of r.blocks) { block.final = true; block.replaying = false; block.reconcile = true; }
       this.update({ phase: "translating", connection: null });
       await r.inFlight;
-      if (!r.hadSpeech) throw new Error("Aucune parole détectée. Rapproche-toi du micro et réessaie.");
+      if (!r.hadSpeech) throw new Error("No speech detected. Move closer to the microphone and try again.");
       while (this.isCurrent(r) && r.blocks.length) {
         if ((this.player.pendingSeconds ?? 0) > 6) {
           await new Promise((resolve) => setTimeout(resolve, 100));
@@ -719,7 +722,7 @@ export class InterpreterController {
         const before = first.consumed;
         await this.pumpSegment(r);
         if (r.blocks[0] === first && first.consumed <= before)
-          throw new Error("La traduction n’a pas renvoyé d’audio. Réessaie.");
+          throw new Error("The translation returned no audio. Try again.");
       }
       await this.player.idle(r.abort.signal);
       if (!this.isCurrent(r)) return;
@@ -840,7 +843,7 @@ export class InterpreterController {
           cloneVoice: result.voice,
           cloneStatus: "verification",
           cloneError:
-            "ElevenLabs demande une vérification de cette voix. La voix provisoire reste active.",
+            "ElevenLabs requires verification for this voice. The standard voice stays active.",
         });
       else {
         this.setProfile(id, {
@@ -881,7 +884,7 @@ export class InterpreterController {
       this.setProfile(id, {
         cloneStatus: "error",
         cloneError:
-          "La voix n’est plus utilisée. Sa suppression a échoué ; réessaie.",
+          "The voice is no longer in use, but deleting it failed; try again.",
       });
       this.update({ error: message(e) });
     }

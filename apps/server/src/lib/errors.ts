@@ -12,24 +12,24 @@ export async function checkProvider(response: Response, service: string) {
   if (response.status === 429)
     throw new AppError(
       "RATE_LIMIT",
-      `${service} est momentanément saturé. Réessaie dans quelques instants.`,
+      `${service} is temporarily overloaded. Try again in a moment.`,
       429,
     );
   if (response.status === 401 || response.status === 403)
     throw new AppError(
       "PROVIDER_ACCESS",
-      `L’accès à ${service} n’est pas disponible. Vérifie la configuration du projet.`,
+      `Access to ${service} is unavailable. Check the project configuration.`,
       503,
     );
   if (response.status === 402)
     throw new AppError(
       "PROVIDER_CREDITS",
-      `Le crédit disponible sur ${service} est insuffisant.`,
+      `There is not enough credit available on ${service}.`,
       503,
     );
   throw new AppError(
     "PROVIDER_ERROR",
-    `${service} n’a pas pu terminer la demande. Réessaie.`,
+    `${service} could not complete the request. Try again.`,
     502,
   );
 }
@@ -45,7 +45,7 @@ export function errorResponse(error: unknown) {
   );
   return Response.json(
     {
-      error: "La demande n’a pas abouti. Réessaie dans quelques instants.",
+      error: "The request did not complete. Try again in a moment.",
       code: "UNEXPECTED",
     },
     { status: 500, headers: { "Cache-Control": "no-store" } },

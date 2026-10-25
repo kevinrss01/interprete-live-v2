@@ -8,6 +8,13 @@
       "when": 1792836257094,
       "tag": "0000_panoramic_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792864878593,
+      "tag": "0001_discussions",
+      "breakpoints": true
     }
   ]
 }

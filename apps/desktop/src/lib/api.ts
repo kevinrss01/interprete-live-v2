@@ -26,11 +26,11 @@ export async function call<T>(request: Promise<ClientResponse<T>>): Promise<T> {
   const response = await request;
   const type = response.headers.get("content-type") || "";
   if (!type.includes("application/json"))
-    throw new Error("La session a expiré. Recharge la page pour continuer.");
+    throw new Error("The session expired. Reload the page to continue.");
   const json = await response.json();
   if (!response.ok) {
     const { error: message, code } = json as ServerError;
-    throw Object.assign(new Error(message || "La demande a échoué."), { code });
+    throw Object.assign(new Error(message || "The request failed."), { code });
   }
   return json as T;
 }
@@ -47,7 +47,7 @@ export async function streamInterpretation(
     const value = (await response
       .json()
       .catch(() => ({
-        error: "La traduction n’a pas abouti.",
+        error: "The translation did not complete.",
       }))) as ServerError;
     throw new Error(value.error);
   }
@@ -55,7 +55,7 @@ export async function streamInterpretation(
     !response.body ||
     !response.headers.get("content-type")?.includes("text/event-stream")
   )
-    throw new Error("Recharge la page pour rétablir la connexion.");
+    throw new Error("Reload the page to restore the connection.");
   const reader = response.body.getReader(),
     decoder = new TextDecoder();
   let pending = "",
@@ -80,7 +80,7 @@ export async function streamInterpretation(
     }
     if (!completed && !signal.aborted)
       throw new Error(
-        "La connexion a été interrompue avant la fin de la traduction. Réessaie.",
+        "The connection was interrupted before the translation finished. Try again.",
       );
   } finally {
     await reader.cancel().catch(() => {});

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MATCH_VOICES, nearestMatchVoice } from "@interprete/shared/languages";
+import { MATCH_VOICES, NATIVE_VOICES, VOICE_PRESETS, nearestMatchVoice, speakingVoice } from "@interprete/shared/languages";
 import type { InterpretationEvent } from "@interprete/shared/contracts";
 import { interpretResponse } from "../src/lib/interpret";
 import { resolveVoice } from "../src/lib/session";
@@ -74,8 +74,28 @@ test("speech stays the default and matched voices resolve to premade voices only
   });
   assert.equal(data.speak, undefined);
   for (const voice of MATCH_VOICES)
-    assert.equal(resolveVoice(voice.key, "any-session", "b"), voice.id);
-  assert.throws(() => resolveVoice(MATCH_VOICES[0].id, "any-session", "b"));
+    assert.equal(resolveVoice(voice.key, "any-session", "b", "en"), voice.id);
+  for (const voice of NATIVE_VOICES)
+    assert.equal(resolveVoice(voice.key, "any-session", "b", "fr"), voice.id);
+  assert.throws(() => resolveVoice(MATCH_VOICES[0].id, "any-session", "b", "en"));
+});
+
+test("French is never read by an English premade voice", () => {
+  const french = new Set<string>(NATIVE_VOICES.map((voice) => voice.id));
+  for (const voice of [...VOICE_PRESETS, ...MATCH_VOICES]) {
+    const id = resolveVoice(voice.key, "any-session", "a", "fr");
+    assert.ok(french.has(id), `${voice.key} reads French natively`);
+  }
+  // The substitute keeps the voice's gender and its nearest pitch.
+  assert.equal(speakingVoice("sarah", "fr")?.key, "fr-lucie");
+  assert.equal(speakingVoice("george", "fr")?.key, "fr-hugo");
+  assert.equal(speakingVoice("brian", "fr")?.key, "fr-martin");
+  assert.equal(speakingVoice("jessica", "fr")?.gender, "female");
+  assert.equal(speakingVoice("river", "fr")?.key, "fr-maxime");
+  // Without native voices, the English premade voice stays; a native voice reads English with one.
+  assert.equal(speakingVoice("sarah", "es")?.key, "sarah");
+  assert.equal(speakingVoice("fr-lucie", "en")?.key, "sarah");
+  assert.equal(speakingVoice("custom", "fr"), undefined);
 });
 
 test("Jev chooses among the premade voices from on-device measurements", async () => {
@@ -94,7 +114,7 @@ test("Jev chooses among the premade voices from on-device measurements", async (
     };
     const match = await matchVoice(
       features,
-      "fr",
+      "en",
       new AbortController().signal,
     );
     assert.deepEqual(match, { voice: "chris", name: "Chris", source: "jev" });
@@ -104,6 +124,26 @@ test("Jev chooses among the premade voices from on-device measurements", async (
       Object.keys(body.questions?.voice?.criteria ?? {}),
       MATCH_VOICES.map((voice) => voice.key),
     );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a French translation is matched among native French voices only", async () => {
+  const original = globalThis.fetch;
+  try {
+    let criteria: string[] = [];
+    let choice = "fr-marcel";
+    globalThis.fetch = async (_url, init) => {
+      criteria = Object.keys(JSON.parse(String(init?.body)).questions.voice.criteria);
+      return Response.json({ answers: { voice: { type: "choice", choice } } });
+    };
+    const signal = new AbortController().signal;
+    assert.deepEqual(await matchVoice(features, "fr", signal), { voice: "fr-marcel", name: "Marcel", source: "jev" });
+    assert.deepEqual(criteria, NATIVE_VOICES.map((voice) => voice.key));
+    // An English voice is not a valid answer for French: the nearest native pitch band wins.
+    choice = "chris";
+    assert.deepEqual(await matchVoice(features, "fr", signal), { voice: "fr-hugo", name: "Hugo", source: "pitch" });
   } finally {
     globalThis.fetch = original;
   }

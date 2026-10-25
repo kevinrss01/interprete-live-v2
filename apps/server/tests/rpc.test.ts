@@ -25,8 +25,16 @@ test("RPC requires authentication and exposes the configured browser headers", a
     url: "http://localhost:3035/rpc",
     fetch: async (request, init) => app.request(request, init),
   }));
-  for (const request of [() => client.account.me(), () => client.preferences.get(),
-    () => client.preferences.update({ sourceLanguage: "fr", targetLanguage: "en" })])
+  for (const request of [() => client.account.me(), () => client.account.updateName({ name: "Alex" }),
+    () => client.preferences.get(),
+    () => client.preferences.update({ sourceLanguage: "fr", targetLanguage: "en" }),
+    () => client.discussions.list(),
+    () => client.discussions.messages({ id: "discussion" }),
+    () => client.discussions.remove({ id: "discussion" }),
+    () => client.discussions.save({
+      id: "discussion", kind: "conversation", title: "Hello", callId: null,
+      startedAt: 1, updatedAt: 1, closedAt: null, messages: [],
+    })])
     await assert.rejects(request, { code: "UNAUTHORIZED" });
   assert.equal((await app.request("/api/auth/ok")).status, 200);
 

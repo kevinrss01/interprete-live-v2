@@ -30,7 +30,7 @@ test("session tokens are bearer-only and bound to the app origins", () => {
           headers: { ...headers, origin: "https://another.test" },
         }),
       ),
-    /application/,
+    /does not come from the app/,
   );
   assert.throws(
     () =>
@@ -49,14 +49,19 @@ test("session tokens are bearer-only and bound to the app origins", () => {
 
 test("custom voices cannot cross speaker or session boundaries", () => {
   const grant = voiceGrant("session-one", "a", "custom-voice-id");
-  assert.equal(resolveVoice(grant, "session-one", "a"), "custom-voice-id");
-  assert.throws(() => resolveVoice(grant, "session-two", "a"));
-  assert.throws(() => resolveVoice(grant, "session-one", "b"));
+  assert.equal(resolveVoice(grant, "session-one", "a", "en"), "custom-voice-id");
+  assert.equal(
+    resolveVoice(grant, "session-one", "a", "fr"),
+    "custom-voice-id",
+    "a clone keeps its owner's voice in every language",
+  );
+  assert.throws(() => resolveVoice(grant, "session-two", "a", "en"));
+  assert.throws(() => resolveVoice(grant, "session-one", "b", "en"));
   assert.throws(() =>
-    resolveVoice("raw-external-voice-id", "session-one", "a"),
+    resolveVoice("raw-external-voice-id", "session-one", "a", "en"),
   );
   assert.equal(
-    resolveVoice("sarah", "any-session", "b"),
+    resolveVoice("sarah", "any-session", "b", "en"),
     "EXAVITQu4vr4xnSDxMaL",
   );
 });
@@ -65,7 +70,7 @@ test("rate limits reject repeated work and reset for a different session", () =>
   const id = randomUUID();
   rateLimit(id, "test", 2);
   rateLimit(id, "test", 2);
-  assert.throws(() => rateLimit(id, "test", 2), /Trop de demandes/);
+  assert.throws(() => rateLimit(id, "test", 2), /Too many requests/);
   assert.doesNotThrow(() => rateLimit(randomUUID(), "test", 2));
 });
 
@@ -101,7 +106,7 @@ test("translation inputs must use different supported languages and bounded text
           body: "x".repeat(25001),
         }),
       ),
-    /longue/,
+    /too long/,
   );
 });
 

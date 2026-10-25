@@ -6,7 +6,8 @@
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/lib/*.ts",
     "./assets/*": "./src/assets/*",
-    "./styles.css": "./src/styles.css"
+    "./styles.css": "./src/styles.css",
+    "./landing.css": "./src/landing.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

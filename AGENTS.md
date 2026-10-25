@@ -29,7 +29,7 @@ Read [README.md](README.md) and [docs/architecture.md](docs/architecture.md) for
 - Keep profiles A/B and their voice authorizations separate by speaker and session. Real voice cloning requires consent; exclude generated playback from samples. Demo audio must never feed the product's cloning flow.
 - Keep provider keys and session signing secrets on the server. The desktop uses ephemeral transcription credentials and signed bearer sessions via the Hono RPC client in `apps/desktop/src/lib/api.ts`.
 - Preserve origin validation, rate limits, and voice ownership checks. The API currently has one instance with in-memory rate limits; do not assume distributed quotas.
-- Do not add server-side conversation persistence. Preferences and voice permissions are local; hosted clones have their own lifecycle.
+- Store discussion text per account in PostgreSQL, including spoken time and last update. Do not store playback audio. Preferences and voice permissions stay local; hosted clones have their own lifecycle.
 - Automated verification must remain silent: no speaker output or real microphone recording. Use synthetic input and mocked playback; report acoustic behavior as unverified when it was not tested.
 
 ## Code conventions

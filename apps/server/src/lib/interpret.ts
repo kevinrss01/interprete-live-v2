@@ -166,10 +166,10 @@ export function interpretResponse(
           emit({
             type: "error",
             message: deadline.aborted
-              ? "La traduction met trop de temps à répondre. Réessaie."
+              ? "The translation is taking too long to respond. Try again."
               : e instanceof AppError
                 ? e.message
-                : "La traduction a été interrompue. Réessaie.",
+                : "The translation was interrupted. Try again.",
             code: deadline.aborted
               ? "TIMEOUT"
               : e instanceof AppError

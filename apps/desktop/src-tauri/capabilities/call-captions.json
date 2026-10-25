@@ -1,12 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "call-captions",
-  "description": "Display-only captions: listen to caption state; no microphone, audio capture, routing or emit permissions.",
+  "description": "Captions can be dragged and ignore clicks while hidden; no microphone, audio capture, routing or emit permissions.",
   "windows": [
     "call-captions"
   ],
   "permissions": [
     "core:event:allow-listen",
-    "core:event:allow-unlisten"
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-ignore-cursor-events"
   ]
 }

@@ -63,7 +63,7 @@ char *interprete_virtual_outputs(const char *name_utf8, const char *uid_utf8, bo
         [outputs addObject:@{@"name": device_name, @"uid": device_uid, @"virtualMic": @YES, @"appMic": @NO}];
       }
     }
-    if (!devices) error = @"Impossible de lire les périphériques CoreAudio.";
+    if (!devices) error = @"Unable to read CoreAudio devices.";
     if (driver_uid) {
       AudioDeviceID branded = device_for_uid(uid);
       if (branded == kAudioObjectUnknown && create) {
@@ -76,11 +76,11 @@ char *interprete_virtual_outputs(const char *name_utf8, const char *uid_utf8, bo
         OSStatus status = AudioHardwareCreateAggregateDevice((__bridge CFDictionaryRef)description, &branded);
         if (status != noErr) {
           branded = device_for_uid(uid); // Another instance may have created the same UID.
-          if (branded == kAudioObjectUnknown) error = [NSString stringWithFormat:@"Création du micro de l’app impossible (CoreAudio %d).", (int)status];
+          if (branded == kAudioObjectUnknown) error = [NSString stringWithFormat:@"Unable to create the app microphone (CoreAudio %d).", (int)status];
         }
       }
       if (branded != kAudioObjectUnknown) {
-        if (!only_subdevice(branded, driver_uid)) error = @"Le micro de l’app contient des périphériques inattendus. Vérifiez sa configuration dans Configuration audio et MIDI.";
+        if (!only_subdevice(branded, driver_uid)) error = @"The app microphone contains unexpected devices. Check its configuration in Audio MIDI Setup.";
         else {
           NSString *actual_name = string_property(branded, kAudioObjectPropertyName);
           if (actual_name) [outputs insertObject:@{@"name": actual_name, @"uid": uid, @"virtualMic": @YES, @"appMic": @YES} atIndex:0];
@@ -92,7 +92,7 @@ char *interprete_virtual_outputs(const char *name_utf8, const char *uid_utf8, bo
     for (NSDictionary *output in outputs) {
       NSUInteger matches = 0;
       for (NSNumber *number in current_devices) if ([string_property(number.unsignedIntValue, kAudioObjectPropertyName) isEqual:output[@"name"]]) matches++;
-      if (matches != 1) error = @"Plusieurs périphériques portent le nom du micro virtuel. Renommez le périphérique en double dans Configuration audio et MIDI.";
+      if (matches != 1) error = @"Several devices share the virtual microphone’s name. Rename the duplicate device in Audio MIDI Setup.";
     }
     NSDictionary *result = error ? @{@"outputs": @[], @"error": error} : @{@"outputs": outputs};
     NSData *json = [NSJSONSerialization dataWithJSONObject:result options:0 error:nil];
