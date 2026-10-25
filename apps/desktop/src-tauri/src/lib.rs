@@ -27,6 +27,8 @@ pub fn run() {
             translation_overlay::set_translation_overlay,
             translation_overlay::translation_overlay_snapshot,
             translation_overlay::stop_translation_overlay,
+            translation_overlay::open_translation_options,
+            translation_overlay::expand_translation_options,
             call_captions::set_call_captions,
             call_captions::call_captions_snapshot,
             call_captions::call_captions_position,

@@ -88,6 +88,7 @@ export function Interpreter({
   const [captionError, setCaptionError] = useState<string | null>(null);
   const [overlayError, setOverlayError] = useState<string | null>(null);
   const [callBusy, setCallBusy] = useState(false);
+  const [overlayExpanded, setOverlayExpanded] = useState(false);
   const [view, setView] = useState<View>("conversation");
   const callMode = view === "call" || view === "benchmark";
   const mainRef = useRef<HTMLElement>(null);
@@ -115,7 +116,16 @@ export function Interpreter({
       callPanelRef.current?.stop(sessionId);
     else controller.cancelSession(sessionId);
   }
-  useTranslationOverlay(overlay, stopTranslation, setOverlayError);
+  function openTranslationOptions(sessionId: string) {
+    if (sessionId !== overlay?.sessionId) return;
+    // Keep the current call/benchmark view: normal navigation can stop its session.
+    if (callOverlay?.sessionId === sessionId) callPanelRef.current?.openOptions();
+    else {
+      document.querySelector<HTMLElement>(".dock:not([hidden])")?.scrollIntoView({ block: "end" });
+      document.querySelector<HTMLElement>(".dock:not([hidden]) button:not(:disabled)")?.focus({ preventScroll: true });
+    }
+  }
+  useTranslationOverlay(overlay, stopTranslation, setOverlayError, openTranslationOptions);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -322,6 +332,11 @@ export function Interpreter({
         <div className="translation-overlay-browser">
           <TranslationPill
             session={overlay}
+            expanded={overlayExpanded}
+            onExpand={() => setOverlayExpanded((current) => !current)}
+            onOptions={() => {
+              if (overlay.sessionId) openTranslationOptions(overlay.sessionId);
+            }}
             onStop={() => {
               if (overlay.sessionId) stopTranslation(overlay.sessionId);
             }}
