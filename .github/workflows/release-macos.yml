@@ -71,6 +71,8 @@ jobs:
           test "${#files[@]}" -eq 1
           mkdir -p release
           cp "${files[0]}" release/Interprete-macOS-arm64.dmg
+      - name: Verify the packaged macOS app
+        run: bash scripts/verify-macos-dmg.sh release/Interprete-macOS-arm64.dmg
       - name: Skip publication of obsolete builds
         id: current
         env:
