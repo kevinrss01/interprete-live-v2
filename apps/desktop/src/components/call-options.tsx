@@ -28,7 +28,7 @@ export function CallOptionChecks({
     },
     voice: {
       title: "Translated voice",
-      detail: "Their translation played on this Mac in a similar voice. Headphones recommended.",
+      detail: "Replaces their voice with a similar one in your language. Headphones recommended.",
     },
     microphone: {
       title: "My voice in the call",

@@ -44,7 +44,7 @@ Documentation détaillée, avec les diagrammes : [docs/architecture.md](docs/arc
 flowchart LR
   Micro[Micro du navigateur] --> ASR[OpenAI · gpt-live-transcribe]
   ASR --> Text[Texte partiel et final]
-  Text --> Translate[OpenAI · gpt-5.4-nano]
+  Text --> Translate[OpenAI · gpt-5.4-mini]
   Text --> Jev[Jev 1.14.0 · AI Gateway]
   Translate --> Speech[ElevenLabs Flash v2.5]
   Jev --> Buffer[Valider le prochain fragment]
