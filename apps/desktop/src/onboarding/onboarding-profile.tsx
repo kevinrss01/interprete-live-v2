@@ -200,7 +200,7 @@ const LANGUAGE_OPTIONS: LanguageOption[] = LANGUAGES.map((l) => {
   const english = englishName.of(l.code) ?? l.code;
   return {
     code: l.code,
-    label: l.native,
+    label: english,
     flag: flag(LANGUAGE_COUNTRY[l.code]),
     // Native and English names: "Japanese" and "日本語" both match.
     search: `${l.native} ${english} ${l.name}`.toLowerCase(),

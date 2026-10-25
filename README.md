@@ -1,90 +1,90 @@
 # Interprète
 
-Traduction vocale en conversation ou pendant un appel sur Mac.
+Live speech translation for conversations and calls on Mac.
 
-À l’ouverture, l’accueil propose deux choix : **Conversation** (deux personnes, un appareil) ou **Réunion en ligne**. Le mode **Réunion en ligne** détecte les applications d’appel qui utilisent le microphone ou la caméra, dès la salle d’attente, et propose un toast de confirmation au-dessus de toutes les apps : sous-titres en direct de vos interlocuteurs en bas de l’écran (cochés par défaut), lecture de leur traduction avec une voix proche choisie par Jev, et traduction de votre micro vers le microphone virtuel **Interprete** (via BlackHole 2ch). Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
+Choose **Conversation** (two people, one device) or **Online meeting**. Meeting mode detects calling apps using the microphone or camera, including in the waiting room, and offers a confirmation above other apps. It can show live captions for other participants at the bottom of the screen (enabled by default), read their translation aloud in a similar voice chosen by Jev, and send your translated microphone audio to the **Interprete** virtual microphone (through BlackHole 2ch). A headphone mode and synthetic samples let you test without a meeting. See the [setup and testing guide](docs/CALL-MODE.md).
 
-**Activer la traduction** retrouve vos réglages et peut basculer le micro système automatiquement ; l’arrêt rétablit le micro précédent. Dans l’application d’appel, choisissez **Système / Par défaut** pour suivre ces changements.
+**Turn on translation** restores your settings and can switch the system microphone automatically; stopping restores the previous microphone. Select **System / Default** in your calling app to follow these changes.
 
-Lors de la première configuration sur Mac, **Get your Mac ready** guide les accès au microphone, à l’audio des appels et au bouton mute de Meet, puis l’installation du microphone virtuel. L’installateur officiel BlackHole 2ch est téléchargé, vérifié et ouvert dans l’installateur macOS. Le parcours reprend après un redémarrage et reste accessible depuis **Settings → Permissions → Review Mac setup**. Il peut être reporté pour utiliser la conversation sur place ; chaque direction de traduction d’appel vérifie ses prérequis avant de démarrer.
+On first setup on Mac, **Get your Mac ready** guides you through microphone access, call audio access, Meet mute-button access, and virtual microphone installation. The official BlackHole 2ch installer is downloaded, verified, and opened in macOS Installer. Setup resumes after a restart and remains available under **Settings → Permissions → Review Mac setup**. You can defer it to use in-person conversation; each call translation direction checks its prerequisites before starting.
 
-Le mode conversation permet la traduction vocale pour deux personnes qui parlent à tour de rôle sur **un seul appareil**. App desktop [Tauri 2](https://v2.tauri.app) (React, TypeScript, Vite, Tailwind CSS) et API [Hono](https://hono.dev) hébergée sur un VPS.
+Conversation mode translates speech for two people taking turns on **one shared device**. The desktop app uses [Tauri 2](https://v2.tauri.app), React, TypeScript, Vite, and Tailwind CSS, with a [Hono](https://hono.dev) API that can run on Vercel or a VPS. The interface is in English, including language selectors and accessibility labels. Reading passages, voice previews, transcripts, and translations use their selected speech language.
 
 ```
-apps/desktop     App Tauri : front React (export statique) + coque Rust (src-tauri)
-apps/server      API Hono (Node) : clés OpenAI / ElevenLabs, sessions signées, déployée en Docker
-apps/landing     Landing page statique (Vite), déployée sur Vercel
-packages/shared  Types, langues et segmentation communs aux deux
-packages/ui      Design system : composants shadcn, tokens CSS, logos
-scripts/         Benchmark et vérifications hors app
+apps/desktop     Tauri app: React frontend (static export) + Rust shell (src-tauri)
+apps/server      Hono API (Node): OpenAI / ElevenLabs keys, signed sessions, Docker deployment
+apps/landing     Static landing page (Vite), deployed on Vercel
+packages/shared  Shared types, languages, and segmentation
+packages/ui      Design system: shadcn components, CSS tokens, logos
+scripts/         Benchmarks and verification outside the app
 ```
 
-## Démarrer
+## Getting started
 
-Prérequis : Node 22+, pnpm, Docker démarré (avec Compose), Rust ([prérequis Tauri](https://v2.tauri.app/start/prerequisites/)).
+Prerequisites: Node 22+, the pnpm version in `package.json`, Docker running with Compose, and Rust ([Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)).
 
 ```sh
-pnpm install
-cp apps/server/.env.example apps/server/.env.local   # renseigner les secrets
+pnpm install --frozen-lockfile
+cp apps/server/.env.example apps/server/.env.local   # fill in the secrets
 cp apps/desktop/.env.example apps/desktop/.env.local # VITE_API_URL
-pnpm dev          # PostgreSQL + migrations + API + Studio + app macOS Tauri
+pnpm dev          # PostgreSQL + migrations + API + Studio + macOS Tauri app
 ```
 
-Après la première configuration, `pnpm dev` suffit à tout lancer depuis la racine du dépôt. Le backend est accessible sur `http://localhost:3035`, Vite sur `http://localhost:1420` et Studio sur https://local.drizzle.studio. `Ctrl+C` arrête les processus de développement et le conteneur PostgreSQL, en conservant son volume et les données. Les commandes `pnpm dev:server` et `pnpm dev:desktop` restent disponibles pour démarrer chaque partie séparément ; `pnpm --filter @interprete/desktop dev:web` lance uniquement Vite.
+After the initial setup, `pnpm dev` starts everything from the repository root. The backend is available at `http://localhost:3035`, Vite at `http://localhost:1420`, and Studio at https://local.drizzle.studio. `Ctrl+C` stops the development processes and PostgreSQL container while preserving its volume and data. Use `pnpm dev:server` and `pnpm dev:desktop` to start each part separately; `pnpm --filter @interprete/desktop dev:web` starts Vite alone.
 
-Choisir les deux langues, puis appuyer sur **Activer le micro** pour la personne qui parle, depuis **Conversation**. L’état du micro reste visible au-dessus des commandes. La traduction commence pendant sa prise de parole, par petits segments, sans attendre l’arrêt du micro. Le micro reste ouvert pendant les pauses et la lecture ; **Couper le micro** clôt son tour. Les touches **A**, **B** et **Échap** permettent aussi de piloter la session.
+In **Conversation**, choose both languages and press **Turn on microphone** for the person speaking. The microphone status stays visible above the controls. Translation starts during speech, in small segments, without waiting for the microphone to stop. The microphone stays open during pauses and playback; **Mute microphone** ends the turn. The **A**, **B**, and **Esc** keys also control the session.
 
-Le bouton d’exemple utilise un enregistrement synthétique pour tester toute la chaîne sans microphone. Il ne sert jamais au clonage. Une pastille ovale à droite de l’écran indique la session en cours et permet de l’arrêter depuis n’importe quelle application. **Réunion en ligne → Essayer sans appel → Tester la pastille** affiche son aperçu sans ouvrir le micro.
+**Audio sample** uses a synthetic recording to test the pipeline without a microphone. It is never used for cloning. A floating card on the right of the screen shows the current session and lets you stop it from any application. In **Online meeting**, **Show translation card** previews it without opening the microphone.
 
-Si la création de compte échoue en local, vérifiez `DATABASE_URL`, `BETTER_AUTH_URL` et `BETTER_AUTH_SECRET` dans `apps/server/.env.local` (y compris dans chaque nouveau worktree). Le secret doit faire au moins 32 caractères ; générez-le une seule fois avec `openssl rand -base64 32`. `pnpm dev` et `pnpm dev:server` vérifient cette configuration avant de démarrer les services. Après une modification du fichier, relancez le serveur pour qu’il recharge les variables.
+If local account creation fails, check `DATABASE_URL`, `BETTER_AUTH_URL`, and `BETTER_AUTH_SECRET` in `apps/server/.env.local`, including in each new worktree. The secret must contain at least 32 characters; generate it once with `openssl rand -base64 32`. `pnpm dev` and `pnpm dev:server` validate this configuration before starting services. Restart the server after editing the file so it reloads the variables.
 
 ## Architecture
 
-Documentation détaillée, avec les diagrammes : [docs/architecture.md](docs/architecture.md).
+Detailed documentation and diagrams: [docs/architecture.md](docs/architecture.md).
 
 ```mermaid
 flowchart LR
-  Micro[Micro du navigateur] --> ASR[OpenAI · gpt-live-transcribe]
-  ASR --> Text[Texte partiel et final]
+  Micro[Browser microphone] --> ASR[OpenAI · gpt-live-transcribe]
+  ASR --> Text[Partial and final text]
   Text --> Translate[OpenAI · gpt-5.4-mini]
-  Text --> Jev[Jev 1.14.0 · AI Gateway]
+  Text --> Decider[Decider v1.2 · AI Gateway]
   Translate --> Speech[ElevenLabs Flash v2.5]
-  Jev --> Buffer[Valider le prochain fragment]
+  Decider --> Buffer[Approve the next fragment]
   Buffer --> Speech
-  Speech --> Audio[Lecture pendant la prise de parole]
-  Micro -->|Avec accord, en parallèle| Clone[ElevenLabs Instant Voice Cloning]
-  Clone -->|Dès le prochain segment| Speech
+  Speech --> Audio[Playback during speech]
+  Micro -->|With consent, in parallel| Clone[ElevenLabs Instant Voice Cloning]
+  Clone -->|From the next segment| Speech
 ```
 
-- Tauri n’embarque qu’un front statique : toute la logique serveur (clés, SSE, WebSocket ElevenLabs) vit dans `apps/server`. L’app obtient une session signée via `/api/status`, la garde dans son stockage local et l’envoie en `Authorization: Bearer`. Le serveur n’accepte que les origines de `ALLOWED_ORIGINS` (CORS dans `apps/server/src/app.ts`).
-- Le front appelle l’API avec le client RPC typé de Hono (`hc<AppType>` dans `apps/desktop/src/lib/api.ts`) : les types des requêtes et réponses viennent des routes du serveur, donc modifier une route casse la compilation du desktop au lieu de casser l’app.
-- La webview capture du PCM 24 kHz par trames de 20 ms et se connecte à OpenAI avec un jeton éphémère délivré par `/api/session`. La capture et la connexion commencent en parallèle ; les premières trames attendent en mémoire si la connexion n’est pas encore prête. Les clés permanentes restent sur le serveur.
-- `/api/interpret` traduit en streaming et communique avec ElevenLabs par WebSocket. La réponse audio revient au navigateur en SSE.
-- OpenAI utilise `gpt-live-transcribe` avec `delay: minimal`. Ses deltas sont découpés en fragments lexicaux ; Jev estime quand un fragment peut être traduit sans attendre une phrase entière. Un contexte des mots suivants aide à attendre une négation ou un nombre incomplet. Jev ne garantit ni la vérité de la transcription ni la qualité de la traduction.
-- Les items ASR sont finalisés séparément toutes les 30 secondes ou à une pause, sans arrêter la capture. Les transcriptions finales sont associées à leur `item_id`. Les connexions sont renouvelées après 45 minutes avec une seconde connexion préparée en parallèle ; une reconnexion rejoue le tampon non finalisé (60 secondes maximum). Une panne plus longue est signalée.
-- Chaque segment autorisé est immédiatement envoyé à la synthèse. Les paquets audio sont lus dès leur réception, dans l’ordre, alors que le micro reste ouvert. Le curseur des mots déjà prononcés évite de rejouer toute la phrase à la validation finale. La dernière portion est traduite à la fin du tour.
-- L’annulation d’écho du navigateur est activée (mode `all` lorsqu’il est disponible). Son efficacité acoustique dépend du navigateur, du microphone et du volume des haut-parleurs. La collecte de clonage exclut les périodes de sortie audio et émet des petits fichiers WAV pendant que le micro continue.
-- Chaque profil possède sa langue, sa voix et ses échantillons. Le clonage démarre en arrière-plan après environ 30 secondes de parole autorisée, ou manuellement à partir de 10 secondes. La voix provisoire reste disponible pendant la création ; le clone est utilisé dès le prochain segment disponible. Un clone qui demande une vérification supplémentaire n’est pas activé.
-- Une nouvelle tentative de clonage recherche d’abord la voix déjà créée pour ce consentement, profil et session. Cela permet de récupérer une réponse réseau perdue sans réutiliser la voix d’une personne précédente.
+- Tauri bundles only a static frontend. All server logic (keys, SSE, ElevenLabs WebSocket) lives in `apps/server`. The app obtains a signed session from `/api/status`, keeps it in local storage, and sends it as `Authorization: Bearer`. The server accepts only origins in `ALLOWED_ORIGINS` (CORS in `apps/server/src/app.ts`).
+- The frontend calls the API through Hono's typed RPC client (`hc<AppType>` in `apps/desktop/src/lib/api.ts`). Request and response types come from the server routes, so a route change breaks desktop compilation rather than the running app.
+- The webview captures 24 kHz PCM in 20 ms frames and connects to OpenAI using an ephemeral token from `/api/session`. Capture and connection start in parallel; initial frames wait in memory until the connection is ready. Permanent keys stay on the server.
+- `/api/interpret` streams translation and communicates with ElevenLabs over WebSocket. Audio returns to the client over SSE.
+- OpenAI uses `gpt-live-transcribe` with `delay: minimal`. Its deltas are split into lexical fragments; Decider estimates when a fragment can be translated without waiting for a complete sentence. Look-ahead context helps wait for negations or incomplete numbers. Readiness decisions do not guarantee transcription accuracy or translation quality. Jev selects similar voices for call participants. Model configuration lives in `apps/server/src/lib/config.ts`.
+- ASR items finalize separately every 30 seconds or during a pause, without stopping capture. Final transcripts are associated with their `item_id`. Connections renew after 45 minutes, with a second connection prepared in parallel; reconnection replays the unfinalized buffer (up to 60 seconds). Longer outages are reported.
+- Each approved segment is immediately sent to speech synthesis. Audio packets play as they arrive, in order, while the microphone stays open. The spoken-word cursor avoids replaying the full sentence on finalization. The remaining portion is translated when the turn ends.
+- Browser echo cancellation is enabled (`all` mode when available). Its acoustic effectiveness depends on the browser, microphone, and speaker volume. Clone collection excludes audio playback periods and produces small WAV files while the microphone continues.
+- Each profile has its own language, voice, and samples. Cloning starts in the background after about 30 seconds of authorized speech, or manually after 10 seconds. The temporary voice remains available during creation; the clone is used from the next available segment. A clone requiring additional verification is not activated.
+- A cloning retry first searches for the voice already created for that consent, profile, and session. This recovers a lost network response without reusing a previous person's voice.
 
-Le serveur dispose d’un socle PostgreSQL + Drizzle pour les comptes Better Auth et les préférences, exposé par oRPC. Le front n’y est pas encore connecté et aucune méthode de connexion n’est activée. Il n’y a pas d’enregistrement des conversations sur le serveur de l’app. Les 30 derniers passages et les trois derniers audios de réécoute restent en mémoire dans l’onglet. Les préférences et autorisations de voix sont conservées dans ce navigateur. Les voix clonées sont hébergées chez ElevenLabs jusqu’à leur suppression ; les fournisseurs appliquent leurs propres règles de conservation aux requêtes.
+PostgreSQL and Drizzle store Better Auth accounts, preferences, and discussion text through oRPC. Email/password sign-up and sign-in are connected to the frontend. Discussion history is stored per account, including spoken time and last update, and cached on the device; retention is limited to 50 discussions and 200 messages per discussion. Playback audio is not stored on the server. The live interpreter retains the latest 30 turns and three replay clips in memory. Speaker A's cloned voice ID is stored per account and authorized for the current device session at login; other preferences and speaker B's voice remain local. Cloned voices are hosted by ElevenLabs until deletion; providers apply their own retention policies to requests.
 
-## Socle comptes et préférences
+## Accounts and preferences
 
-Le [guide backend](docs/backend.md) décrit le routage, les contrôles, les procédures disponibles, les migrations et le branchement du futur frontend.
+The [backend guide](docs/backend.md) describes routing, checks, available procedures, migrations, and frontend integration.
 
 ```sh
-# Renseigner DATABASE_URL, BETTER_AUTH_URL et BETTER_AUTH_SECRET dans apps/server/.env.local.
+# Set DATABASE_URL, BETTER_AUTH_URL, and BETTER_AUTH_SECRET in apps/server/.env.local.
 pnpm dev:server
 ```
 
-La commande attend PostgreSQL, applique les migrations, puis lance l’API avec rechargement et Studio. La configuration d’exemple utilise PostgreSQL sur `localhost:5436`. Les identifiants du compose local sont réservés au développement. Le serveur seul reste accessible via `pnpm --filter @interprete/server dev` pour les usages avancés.
+This command waits for PostgreSQL, applies migrations, then starts the API with reloading and Studio. The example configuration uses PostgreSQL at `localhost:5436`. Local Compose credentials are for development only. Advanced users can run the server alone with `pnpm --filter @interprete/server dev`.
 
-Studio est déjà lancé par `pnpm dev:server` : ouvrir https://local.drizzle.studio. La commande autonome `pnpm db:studio` reste disponible si l’on souhaite lancer uniquement Studio contre une base déjà démarrée. Les commandes de base utilisent `DATABASE_URL` depuis `apps/server/.env.local`.
+Studio is already started by `pnpm dev:server`: open https://local.drizzle.studio. Use `pnpm db:studio` to start Studio alone against an already running database. Database commands use `DATABASE_URL` from `apps/server/.env.local`.
 
-Après une modification de `src/db/schema.ts`, exécuter `pnpm --filter @interprete/server db:generate`, relire et committer les fichiers `apps/server/drizzle/`, puis lancer `db:migrate`.
+After changing `apps/server/src/db/schema.ts`, run `pnpm --filter @interprete/server db:generate`, review and commit the files in `apps/server/drizzle/`, then run `pnpm --filter @interprete/server db:migrate`.
 
-En production, fournir une URL PostgreSQL accessible depuis le conteneur, une URL publique HTTPS dans `BETTER_AUTH_URL` et un secret distinct de `SESSION_SECRET`. Construire l’image, appliquer les migrations une seule fois, puis démarrer l’API :
+In production, provide a PostgreSQL URL reachable from the container, a public HTTPS URL in `BETTER_AUTH_URL`, and a secret distinct from `SESSION_SECRET`. Build the image, apply migrations once, then start the API:
 
 ```sh
 API_DOMAIN=api.example.com docker compose build api
@@ -92,92 +92,94 @@ API_DOMAIN=api.example.com docker compose run --rm api node dist/db/migrate.mjs
 API_DOMAIN=api.example.com docker compose up -d
 ```
 
-Le stockage des jetons dans Tauri et les méthodes de connexion restent à intégrer avec le frontend. Ne pas utiliser le jeton anonyme `interprete-session` pour les comptes.
+Account authentication uses a Better Auth bearer token stored separately from the anonymous `interprete-session` token. The current Tauri client keeps the account token in webview local storage; moving it to the native keychain remains future work.
 
-## Variables serveur
+## Server variables
 
-| Variable | Usage |
+| Variable | Purpose |
 | --- | --- |
-| `INTERPRETER_OPENAI_API_KEY` | Transcription et traduction OpenAI |
-| `ELEVENLABS_API_KEY` | Synthèse, inventaire, création et suppression des voix |
-| `AI_GATEWAY_API_KEY` | Évaluation Jev ; la traduction finale fonctionne aussi sans ce service |
-| `SESSION_SECRET` | Signature des sessions anonymes et autorisations de voix ; valeur aléatoire longue |
-| `DATABASE_URL` | Connexion PostgreSQL pour les comptes et préférences |
-| `BETTER_AUTH_URL` | URL publique de l’API, HTTPS en production |
-| `BETTER_AUTH_SECRET` | Secret d’authentification distinct, au moins 32 caractères |
-| `ALLOWED_ORIGINS` | Origines autorisées (défaut : `tauri://localhost`, `http://tauri.localhost`, `http://localhost:1420`) |
+| `INTERPRETER_OPENAI_API_KEY` | OpenAI transcription and translation |
+| `ELEVENLABS_API_KEY` | Speech synthesis, voice inventory, creation, and deletion |
+| `AI_GATEWAY_API_KEY` | Decider readiness checks and Jev voice matching; final translation also works without this service |
+| `SESSION_SECRET` | Signs anonymous sessions and voice grants; use a long random value |
+| `DATABASE_URL` | PostgreSQL connection for accounts, preferences, and discussion text |
+| `BETTER_AUTH_URL` | Public API URL; HTTPS in production |
+| `BETTER_AUTH_SECRET` | Separate authentication secret, at least 32 characters |
+| `ALLOWED_ORIGINS` | Allowed origins (default: `tauri://localhost`, `http://tauri.localhost`, `http://localhost:1420`) |
 
-Côté desktop, `VITE_API_URL` (dans `apps/desktop/.env.local`) est intégré au build : le pointer vers l’URL HTTPS du VPS avant `pnpm build:desktop`.
+On desktop, `VITE_API_URL` (in `apps/desktop/.env.local`) is embedded at build time: point it to the API's HTTPS URL before running `pnpm build:desktop`.
 
-La clé ElevenLabs doit autoriser la lecture de l’inventaire, le text-to-speech et la gestion des voix. Ne jamais préfixer ces variables par `NEXT_PUBLIC_`, les committer ou les inclure dans un rapport.
+The ElevenLabs key must allow voice inventory reads, text-to-speech, and voice management. Never prefix server secrets with `VITE_` or `NEXT_PUBLIC_`, commit them, or include their values in reports.
 
-## Vérification
+## Verification
 
 ```sh
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build:server
-pnpm build:desktop   # bundle .app / .dmg / .msi selon la plateforme
-pnpm build:desktop:dmg # sur macOS : DMG Apple Silicon, sans publication GitHub
+pnpm --filter @interprete/desktop build # static app build
+pnpm --filter @interprete/landing build
+pnpm build:desktop   # native .app / .dmg / .msi bundle, depending on the platform
+pnpm build:desktop:dmg # on macOS: Apple Silicon DMG, without GitHub publication
 ```
 
-Les tests serveur couvrent aussi le routage oRPC et le refus des appels non authentifiés sans nécessiter de base. Le test d’intégration applique les migrations et crée/supprime ses propres utilisateurs ; il doit utiliser une base dédiée :
+Root lint currently covers the server only. Server tests also cover oRPC routing and unauthenticated request rejection without requiring a database. The integration test applies migrations and creates/deletes its own users; use a dedicated database:
 
 ```sh
 TEST_DATABASE_URL=postgresql://interprete:interprete@localhost:5436/interprete_test pnpm --filter @interprete/server test:db
 ```
 
-Créer au préalable la base `interprete_test` dans le PostgreSQL local. Ce test utilise de vraies sessions Better Auth, sans activer de méthode de connexion ni appeler les fournisseurs IA.
+Create `interprete_test` in the local PostgreSQL instance first. This test uses real Better Auth sessions without calling AI providers.
 
-Les tests couvrent les signatures, la séparation des voix, le consentement, les flux incomplets, la lecture avant l’arrêt de la capture, l’absence de répétition finale et le démarrage parallèle. `pnpm exec tsx scripts/verify-live-app.ts <synthetic-24khz.wav>` teste silencieusement les vraies API, sans haut-parleur. Les anciens scripts de benchmark restent dans `scripts/` ; ils utilisent les services payants et ne sont pas exécutés par les tests de l’app.
+Tests cover signatures, voice separation, consent, incomplete streams, playback before capture stops, no final repetition, and parallel startup. `pnpm exec tsx scripts/verify-live-app.ts <synthetic-24khz.wav>` is a silent live-API check without speaker output; inspect its auth and transport against the current implementation before using it. Older benchmark scripts remain in `scripts/`; they use paid services and are not run by app tests. Automated verification must use synthetic input and mocked or silent playback, without recording a real microphone.
 
-Voir [les vérifications effectuées](docs/VALIDATION.md). Les latences de démonstration sont des observations sur quelques phrases, pas un benchmark représentatif de toutes les langues et conditions réseau.
+See the [recorded verification results](docs/VALIDATION.md). Demo latency observations cover a few sentences; they are not representative benchmarks across all languages and network conditions.
 
-## Déploiement
+## Deployment
 
-### Téléchargement macOS et publication automatique
+### macOS download and automatic releases
 
-La [landing](https://tryinterprete.com) propose un téléchargement public du DMG Apple Silicon, sans compte GitHub. Le code source et les releases de référence restent dans le dépôt privé. Le fichier public est hébergé dans le store Vercel Blob `interprete-downloads`, rattaché au projet `interprete-landing`.
+The [landing page](https://tryinterprete.com) offers a public Apple Silicon DMG download without a GitHub account. Source code and reference releases remain in the private repository. The public file is hosted in the Vercel Blob store `interprete-downloads`, attached to the `interprete-landing` project.
 
-Chaque **push sur `main`** déclenche le workflow [Release macOS](.github/workflows/release-macos.yml). Il vérifie la configuration et les tests, construit le DMG, publie une release GitHub `v<version>-build.<numéro du workflow>.<tentative>`, puis remplace le téléchargement public. Il n'est pas nécessaire d'augmenter la version pour chaque push. Les builds sont sérialisés et les commits devenus obsolètes ne sont pas publiés ; si un build échoue, le fichier public précédent reste disponible. Le cache du fichier est limité à 60 secondes.
+Every **push to `main`** triggers the [Release macOS](.github/workflows/release-macos.yml) workflow. It checks configuration and tests, builds the DMG, publishes a GitHub release tagged `v<version>-build.<workflow-run-number>.<attempt>`, then replaces the public download. You do not need to bump the version for every push. Builds are serialized and obsolete commits are not published; if a build fails, the previous public file stays available. The file cache is limited to 60 seconds.
 
-Configuration de publication :
+Publication configuration:
 
-- GitHub Actions : variable `VITE_API_URL` avec l'URL HTTPS de l'API de production et secret `DOWNLOAD_PUBLISH_SECRET`.
-- Projet Vercel `interprete-landing` : le même secret serveur `DOWNLOAD_PUBLISH_SECRET`, variable `BLOB_STORE_ID` et authentification OIDC activée. Aucune de ces valeurs ne doit être préfixée par `VITE_`.
-- L'endpoint `POST /api/publish-download` vérifie le secret, puis émet une URL d'envoi valable 10 minutes, limitée au DMG (100 Mio maximum). L'envoi va directement vers Blob, sans faire transiter le fichier par une Function. Les identifiants du store restent sur Vercel.
+- GitHub Actions: `VITE_API_URL` variable with the production API's HTTPS URL, and `DOWNLOAD_PUBLISH_SECRET` secret.
+- Vercel project `interprete-landing`: the same server-side `DOWNLOAD_PUBLISH_SECRET`, a `BLOB_STORE_ID` variable, and OIDC authentication enabled. Neither server-side value should be prefixed with `VITE_`.
+- `POST /api/publish-download` checks the secret, then issues an upload URL valid for 10 minutes and limited to the DMG (100 MiB maximum). The upload goes directly to Blob without passing the file through a Function. Store credentials stay on Vercel.
 
-`pnpm release` reste disponible pour déclencher manuellement une release stable `v<version>` sur `main`. Augmenter d'abord la version dans `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/Cargo.toml` et l'entrée du paquet dans `Cargo.lock`, puis pousser. Le workflow refuse une version stable déjà publiée. Suivre **Actions → Release macOS** ; aucun clic de publication supplémentaire n'est requis.
+Use `pnpm release` to manually trigger a stable `v<version>` release from `main`. First bump the version in `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/Cargo.toml`, and the package entry in `Cargo.lock`, then push. The workflow rejects an already published stable version. Follow **Actions → Release macOS**; no additional publication click is needed.
 
-La release est préparée en brouillon pendant l'envoi du fichier, puis publiée et définie comme dernière version. Si la publication publique échoue après la release GitHub, le workflow échoue et le fichier public précédent reste disponible ; relancer le workflow automatique (la tentative reçoit un nouveau tag) ou republier ce DMG avec `scripts/publish-download.mjs`. Le backend n'est pas déployé par ce workflow. Le téléchargement ne met pas automatiquement à jour les applications déjà installées.
+The release is prepared as a draft during upload, then published and marked as latest. If public download publication fails after the GitHub release, the workflow fails and the previous public file stays available. Rerun the automatic workflow (the attempt gets a new tag), or republish that DMG with `scripts/publish-download.mjs`. This workflow does not deploy the backend. Downloading a new build does not automatically update installed apps.
 
-Le lien permanent public est `https://h7ddt3inb3wj86c7.public.blob.vercel-storage.com/Interprete-macOS-arm64.dmg?download=1`. La landing et le footer partagent ce lien. Le DMG reste non signé et non notarisé ; macOS peut demander une autorisation d'ouverture dans **System Settings → Privacy & Security**.
+The permanent public link is `https://h7ddt3inb3wj86c7.public.blob.vercel-storage.com/Interprete-macOS-arm64.dmg?download=1`. The landing page and footer share this link. The DMG remains unsigned and unnotarized; macOS may require permission to open it under **System Settings → Privacy & Security**.
 
-En local, `pnpm build:desktop:dmg` reconstruit le DMG avec les icônes et les réglages Tauri existants, sans créer de tag ou de release. Configurer `VITE_API_URL` dans `apps/desktop/.env.local` avant le build ; le terminal indique le chemin du fichier produit. Cible : macOS 14.2 minimum, Apple Silicon. La signature et la notarisation ne sont pas ajoutées par ce workflow.
+Locally, `pnpm build:desktop:dmg` rebuilds the DMG with the existing icons and Tauri settings without creating a tag or release. Configure `VITE_API_URL` in `apps/desktop/.env.local` before building; the terminal reports the output path. Target: macOS 14.2 or later, Apple Silicon. This workflow does not add signing or notarization.
 
-Le fond du DMG et les positions des icônes sont configurés dans `bundle.macOS.dmg`. Pour modifier le visuel, éditer `apps/desktop/src-tauri/dmg/background.swift`, puis exécuter `swift apps/desktop/src-tauri/dmg/background.swift` sur macOS pour régénérer le PNG avant de reconstruire le DMG. Aucun outil de dessin supplémentaire n'est nécessaire.
+The DMG background and icon positions are configured in `bundle.macOS.dmg`. To change the visual, edit `apps/desktop/src-tauri/dmg/background.swift`, then run `swift apps/desktop/src-tauri/dmg/background.swift` on macOS to regenerate the PNG before rebuilding the DMG. No additional drawing tool is required.
 
-### Hébergement
+### Hosting
 
-- **Landing (Vercel)** : [tryinterprete.com](https://tryinterprete.com) sert `apps/landing` et l’image de partage commune au site et à l’application. Voir [les métadonnées de partage](docs/social-preview.md).
-- **Web (Vercel)** : [app.tryinterprete.com](https://app.tryinterprete.com) sert le build Vite de `apps/desktop` (`dist/`). La variable de build `VITE_API_URL=https://api.tryinterprete.com` relie les clients Hono et oRPC au backend commun. `apps/desktop/vercel.json` conserve le routage de l’app lors d’un rechargement. Le projet est relié au dépôt GitHub `kevinrss01/interprete-live-v2` : chaque push sur `main` déploie la production, les autres branches des prévisualisations. Vercel bloque un déploiement dont l’auteur du commit n’est pas membre de l’équipe VoiceCheap. `www` et les anciennes adresses web/landing redirigent via les réglages Domains de Vercel ; l’ancienne adresse API reste disponible pour les applications macOS déjà distribuées.
-- **API (Vercel)** : le projet `interprete-backend` utilise `apps/server`, la région Frankfurt et la base Neon `interprete-postgres`. `pnpm --filter @interprete/server build:vercel` génère `dist/app.mjs` ; `apps/server/app.mjs` l’expose au runtime Hono sans ouvrir de serveur autonome. Les clés fournisseurs et les secrets de session restent exclusivement dans les variables serveur. `BETTER_AUTH_URL` doit correspondre au domaine de l’API et `ALLOWED_ORIGINS` inclure les domaines web autorisés. Appliquer les migrations avec la connexion Neon avant d’ouvrir le parcours comptes.
-- **API (VPS)** : copier le repo et `apps/server/.env.local` sur le serveur, puis `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtient le certificat HTTPS et relaie le SSE sans buffering ; l’image contient les bundles ESM `dist/server.mjs`, `dist/db/migrate.mjs` et les migrations SQL. Pour le socle comptes, configurer PostgreSQL et suivre les [étapes de déploiement](docs/backend.md#déployer). Une seule instance : les limites de requêtes sont en mémoire.
-- **Desktop** : `pnpm build:desktop`. Sur macOS, `Info.plist` déclare l’usage du micro et `Entitlements.plist` l’autorise sous hardened runtime ; la signature et la notarisation se configurent à part.
+- **Landing (Vercel)**: [tryinterprete.com](https://tryinterprete.com) serves `apps/landing` and the social sharing image used by the site and app. See [social sharing metadata](docs/social-preview.md).
+- **Web (Vercel)**: [app.tryinterprete.com](https://app.tryinterprete.com) serves the Vite build of `apps/desktop` (`dist/`). The build variable `VITE_API_URL=https://api.tryinterprete.com` connects the Hono and oRPC clients to the shared backend. `apps/desktop/vercel.json` preserves app routing on reload. The project is connected to GitHub repository `kevinrss01/interprete-live-v2`: pushes to `main` deploy production; other branches create previews. Vercel blocks deployments whose commit author is not a member of the VoiceCheap team. `www` and older web/landing addresses redirect through Vercel Domains settings; the old API address remains available to previously distributed macOS apps.
+- **API (Vercel)**: `interprete-backend` uses `apps/server`, the Frankfurt region, and the Neon database `interprete-postgres`. `pnpm --filter @interprete/server build:vercel` generates `dist/app.mjs`; `apps/server/app.mjs` exposes it to the Hono runtime without starting a standalone server. Provider keys and session secrets remain exclusively in server variables. `BETTER_AUTH_URL` must match the API domain, and `ALLOWED_ORIGINS` must include allowed web domains. Apply migrations through the Neon connection before enabling account flows.
+- **API (VPS)**: copy the repository and `apps/server/.env.local` to the server, then run `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtains the HTTPS certificate and proxies SSE without buffering. The image includes the ESM bundles `dist/server.mjs`, `dist/db/migrate.mjs`, and SQL migrations. Configure PostgreSQL and follow the [deployment steps](docs/backend.md#déployer) for accounts. Use a single instance: request limits are in memory.
+- **Desktop**: `pnpm build:desktop`. On macOS, `Info.plist` declares microphone use and `Entitlements.plist` authorizes it under the hardened runtime; signing and notarization are configured separately.
 
-La conversation vocale fonctionne dans le navigateur avec l’autorisation microphone. La détection des appels sur Mac, les fenêtres flottantes hors navigateur et le microphone virtuel nécessitent l’app Tauri. Les limites de requêtes restent en mémoire par instance ; le déploiement Vercel ne les transforme pas en quotas distribués.
+Voice conversation works in the browser with microphone permission. Mac call detection, floating windows outside the browser, and the virtual microphone require the Tauri app. Request limits remain in memory per instance; Vercel deployment does not turn them into distributed quotas.
 
-Le clonage d’une voix réelle nécessite l’accord de cette personne et un échantillon propre. Les deux personnes prennent toujours la parole à tour de rôle ; seule la traduction synthétique chevauche la parole. L’identification automatique des personnes et la séparation de deux voix humaines simultanées ne sont pas prises en charge.
+Cloning a real voice requires that person's consent and a clean sample. The two people always take turns; only synthetic translation overlaps speech. Automatic speaker identification and separation of two simultaneous human voices are not supported.
 
-Références : [transcription continue OpenAI](https://developers.openai.com/api/docs/guides/realtime-transcription), [streaming ElevenLabs](https://elevenlabs.io/docs/eleven-api/guides/how-to/websockets/realtime-tts).
+References: [OpenAI continuous transcription](https://developers.openai.com/api/docs/guides/realtime-transcription), [ElevenLabs streaming](https://elevenlabs.io/docs/eleven-api/guides/how-to/websockets/realtime-tts).
 
-## Agents de développement
+## Development agents
 
-[AGENTS.md](AGENTS.md) rassemble les règles du projet et les commandes de vérification ;
-[CLAUDE.md](CLAUDE.md) charge ce même guide pour Claude Code.
-Le [catalogue des skills](docs/agent-skills.md) couvre les commits et PR, les revues,
-les builds, les dépendances, l’interface, Rust et les flux audio.
-Le skill [ship-and-merge](.agents/skills/ship-and-merge/SKILL.md), partagé avec Codex et Claude Code,
-se lance explicitement avec `$ship-and-merge` ou `/ship-and-merge` pour publier puis fusionner
-la PR de la tâche après les vérifications. Le déploiement manuel reste une action distincte.
+[AGENTS.md](AGENTS.md) contains project rules and verification commands;
+[CLAUDE.md](CLAUDE.md) loads the same guide for Claude Code.
+The [skill catalog](docs/agent-skills.md) covers commits and PRs, reviews,
+builds, dependencies, UI, Rust, and audio pipelines.
+The [ship-and-merge](.agents/skills/ship-and-merge/SKILL.md) skill is shared with Codex and Claude Code.
+Invoke it explicitly with `$ship-and-merge` or `/ship-and-merge` to publish and merge
+the task PR after verification. Manual deployment remains a separate action.

@@ -1354,5 +1354,5 @@ export function CallPanel({
 
 const LANGUAGE_OPTIONS = LANGUAGES.map((l) => ({
   value: l.code,
-  label: l.native,
+  label: l.name,
 }));

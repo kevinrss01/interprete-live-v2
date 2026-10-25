@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import { languageNative, type Language } from "@interprete/shared/languages";
+import { languageName, type Language } from "@interprete/shared/languages";
 import { cn } from "@interprete/ui/lib/utils";
 import { onboardingSegments } from "./onboarding-alignment";
 import { LanguagePicker, STEP_IN } from "./onboarding-profile";
@@ -56,7 +56,7 @@ export function OnboardingReading({
               <LanguagePicker
                 value={language}
                 onChange={onLanguage}
-                label={`My native language: ${languageNative(language)}`}
+                label={`My native language: ${languageName(language)}`}
                 className="h-10 w-auto gap-2.5 px-3 text-lg font-semibold text-foreground"
               />
               {/* Ends the sentence right against the menu. */}
@@ -64,7 +64,7 @@ export function OnboardingReading({
             </>
           ) : (
             <span>
-              <b className="font-semibold text-foreground">{languageNative(language)}</b>.
+              <b className="font-semibold text-foreground">{languageName(language)}</b>.
             </span>
           )}
         </p>
