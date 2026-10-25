@@ -19,8 +19,7 @@
     "benchmark": "node scripts/benchmark.mjs",
     "test:benchmark": "node --test scripts/*.test.mjs",
     "test:virtual-mic": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml audio_route::tests::virtual_microphone_loopback -- --ignored --exact --nocapture",
-    "test:system-audio": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml system_audio::tests::system_audio_tap_delivers_frames -- --ignored --exact --nocapture",
-    "test:virtual-camera": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml virtual_camera::tests::synthetic_frames_reach_the_virtual_camera -- --ignored --exact --nocapture"
+    "test:system-audio": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml system_audio::tests::system_audio_tap_delivers_frames -- --ignored --exact --nocapture"
   },
   "devDependencies": {
     "tsx": "4.23.15",

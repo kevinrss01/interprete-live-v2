@@ -7,12 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Implemented by virtual_camera.m: devices kept running by the camera relay itself.
-bool interprete_camera_relay_uses(NSString *uid);
-
 // True while any camera streams to some process. CoreMediaIO does not say which one, and
-// reading this state needs no camera permission: no frame is opened. Cameras that the relay
-// keeps running do not count, or Interprète would keep its own call alive.
+// reading this state needs no camera permission: no frame is opened.
 static BOOL InterpreteCameraRunning(void) {
   CMIOObjectPropertyAddress list = { kCMIOHardwarePropertyDevices, kCMIOObjectPropertyScopeGlobal, kCMIOObjectPropertyElementMain };
   UInt32 size = 0;
@@ -24,15 +20,7 @@ static BOOL InterpreteCameraRunning(void) {
   for (UInt32 i = 0; i < used / sizeof(CMIOObjectID); i++) {
     CMIOObjectPropertyAddress running = { kCMIODevicePropertyDeviceIsRunningSomewhere, kCMIOObjectPropertyScopeGlobal, kCMIOObjectPropertyElementMain };
     UInt32 active = 0, length = 0;
-    if (CMIOObjectGetPropertyData(ids[i], &running, 0, NULL, sizeof(active), &length, &active) != noErr || !active) continue;
-    CMIOObjectPropertyAddress identity = { kCMIODevicePropertyDeviceUID, kCMIOObjectPropertyScopeGlobal, kCMIOObjectPropertyElementMain };
-    CFStringRef uid = NULL;
-    if (CMIOObjectGetPropertyData(ids[i], &identity, 0, NULL, sizeof(uid), &length, &uid) == noErr && uid) {
-      BOOL relayed = interprete_camera_relay_uses((__bridge NSString *)uid);
-      CFRelease(uid);
-      if (relayed) continue;
-    }
-    return YES;
+    if (CMIOObjectGetPropertyData(ids[i], &running, 0, NULL, sizeof(active), &length, &active) == noErr && active) return YES;
   }
   return NO;
 }

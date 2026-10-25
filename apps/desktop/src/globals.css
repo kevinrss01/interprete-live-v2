@@ -1834,50 +1834,6 @@ html.toast-window,
   padding: 6px 0;
   font-weight: 500;
 }
-.call-advanced[open] > :not(summary) + * {
-  margin-top: 12px;
-}
-.call-advanced[open] > summary {
-  margin-bottom: 4px;
-}
-.call-advanced[open] > .call-device-actions {
-  margin-top: 4px;
-}
-/* Consecutive settings disclosures read as one list. */
-.call-advanced + .call-advanced {
-  margin-top: 0;
-}
-.call-video-status {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px 16px;
-  margin-top: -4px;
-  color: var(--ink-2);
-}
-.call-video-status .btn {
-  min-height: 36px;
-}
-.call-video-preview {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  max-width: 480px;
-  aspect-ratio: 16 / 9;
-  margin: 0;
-  overflow: hidden;
-  border-radius: var(--radius);
-  background: var(--fill);
-  color: var(--ink-3);
-  font-size: 13px;
-}
-.call-video-preview img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
 
 /* Wispr Flow–style shell: sidebar on the canvas, the app in a rounded white panel. */
 .shell {

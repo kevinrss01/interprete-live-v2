@@ -19,16 +19,13 @@ pub struct CallSnapshot {
     pub dismissed: bool,
     pub error: Option<String>,
 }
-// What an accepted call translates: their speech as captions and/or voice, and the user's
-// speech as a voice through the virtual microphone and/or captions on their camera.
+// What an accepted call translates: their speech as captions and/or voice, and the user's microphone.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CallOptions {
     pub captions: bool,
     pub voice: bool,
     pub microphone: bool,
-    #[serde(default)]
-    pub camera: bool,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -356,7 +353,7 @@ pub fn answer_call(
     accept: bool,
     options: CallOptions,
 ) -> Result<(), String> {
-    if accept && !options.captions && !options.voice && !options.microphone && !options.camera {
+    if accept && !options.captions && !options.voice && !options.microphone {
         return Err("Choose at least one translation.".into());
     }
     let mut m = state.0.lock().map_err(|e| e.to_string())?;
@@ -374,8 +371,8 @@ pub fn answer_call(
     m.snapshot.dismissed = !accept;
     drop(m);
     if accept {
-        // Captions and voice run over the call; the microphone and camera routes may need setup.
-        if (options.microphone || options.camera)
+        // Captions and voice run over the call; only the microphone route may need the setup window.
+        if options.microphone
             && let Some(main) = app.get_webview_window("main")
         {
             let _ = main.show();
@@ -511,21 +508,15 @@ mod tests {
                 captions: true,
                 voice: false,
                 microphone: false,
-                camera: true,
             },
         };
         assert_eq!(
             serde_json::to_value(accepted).expect("json"),
             serde_json::json!({
                 "id": "call-1", "app": "Zoom", "simulated": false,
-                "options": { "captions": true, "voice": false, "microphone": false, "camera": true }
+                "options": { "captions": true, "voice": false, "microphone": false }
             })
         );
-        // Choices saved before captions on the camera existed leave them off.
-        let saved: CallOptions =
-            serde_json::from_str(r#"{"captions":true,"voice":true,"microphone":true}"#)
-                .expect("saved");
-        assert!(!saved.camera);
     }
     #[test]
     fn system_probe_is_readable() {

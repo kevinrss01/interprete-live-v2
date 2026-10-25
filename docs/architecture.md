@@ -142,7 +142,7 @@ La page reste en `noindex` pour la revue locale.
 | POST | `/api/voice/delete` | Bearer | — | Supprime un clone appartenant à cette session |
 | POST | `/api/voice/match` | Bearer | 20 / min | Choisit une voix ElevenLabs proche d’un interlocuteur d’appel (Jev), à partir de mesures calculées sur l’appareil, parmi les voix natives de la langue de traduction quand elle en a |
 
-`POST /api/interpret` accepte `speak: false` pour les sous-titres d’appel, ceux de vos interlocuteurs comme ceux incrustés dans votre vidéo : la réponse SSE contient le feu vert et le texte, sans synthèse vocale ni résolution de voix.
+`POST /api/interpret` accepte `speak: false` pour les sous-titres d’appel : la réponse SSE contient le feu vert et le texte, sans synthèse vocale ni résolution de voix.
 
 Chaîne de traitement d’une requête audio dans `src/routes/`, montée par `src/app.ts` :
 

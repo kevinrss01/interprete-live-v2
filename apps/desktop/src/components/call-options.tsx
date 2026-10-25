@@ -34,10 +34,6 @@ export function CallOptionChecks({
       title: "My translated voice",
       detail: route ?? "Your translated microphone, sent through the virtual microphone.",
     },
-    camera: {
-      title: "Captions on my video",
-      detail: "Your translation written on your video, through OBS Virtual Camera.",
-    },
   };
   return (
     <div className="call-options" role="group" aria-label="Call translations">
