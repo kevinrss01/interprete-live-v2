@@ -77,7 +77,7 @@ export function CallToast() {
     };
   }, []);
   const call = status?.call;
-  const chosen = options.captions || options.voice || options.microphone;
+  const chosen = options.captions || options.voice || options.microphone || options.camera;
   function choose(next: CallOptions) {
     setOptions(next);
     saveCallOptions(next);
@@ -112,7 +112,7 @@ export function CallToast() {
       <p>{call?.app ?? "Looking for a call…"}</p>
       <CallOptionChecks
         options={options}
-        include={["captions", "voice", "microphone"]}
+        include={["captions", "voice", "microphone", "camera"]}
         disabled={busy || !call}
         mine={languages.mine}
         theirs={languages.theirs}
