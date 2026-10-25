@@ -101,11 +101,13 @@ test("translated prefix is passed explicitly to continue, rather than translatin
     globalThis.fetch = async (_url, init) => {
       const body = JSON.parse(String(init?.body));
       const newest = JSON.parse(body.messages.at(-1).content);
-      assert.deepEqual(newest.translatedPrefix, {
+      assert.deepEqual(newest.spoken, {
         source: "Aucune personne réelle",
         translation: "No real person",
       });
-      assert.equal(newest.speech, "ne parle.");
+      assert.equal(newest.fragment, "ne parle.");
+      // Look-ahead words are for the readiness gate only: the translator spoke them twice.
+      assert.equal("followingSpeech" in newest, false);
       return sse([
         'data: {"choices":[{"delta":{"content":"speaks."}}]}\n\ndata: [DONE]\n\n',
       ]);

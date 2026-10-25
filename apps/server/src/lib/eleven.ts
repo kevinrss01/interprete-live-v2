@@ -6,6 +6,7 @@ export async function speechSocket(
   language: string,
   signal: AbortSignal,
   onAudio: (data: string) => void,
+  speed = 1,
 ) {
   signal.throwIfAborted();
   const query = new URLSearchParams({
@@ -99,7 +100,7 @@ export async function speechSocket(
         stability: 0.5,
         similarity_boost: 0.75,
         use_speaker_boost: false,
-        speed: 1,
+        speed,
       },
       generation_config: { chunk_length_schedule: [50, 80, 120, 160] },
     }),
