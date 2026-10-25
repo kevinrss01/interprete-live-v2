@@ -6,8 +6,6 @@ import {
   CaptionsPublisher,
   captionLines,
   captionTail,
-  emptyCaptionText,
-  nextCaptionText,
   previewFrames,
   type CaptionsUpdate,
 } from "../src/lib/call-captions";
@@ -61,7 +59,7 @@ const turn = (id: string, translation: string, status: Turn["status"]): Turn => 
   metrics: {},
 });
 
-test("captions show the two latest translated passages and animate only appended text", () => {
+test("captions show the two latest translated passages and preserve preview frames", () => {
   const lines = captionLines([
     turn("1", "Première phrase.", "done"),
     turn("2", "", "draft"),
@@ -72,19 +70,6 @@ test("captions show the two latest translated passages and animate only appended
     { id: "3", text: "Deuxième phrase.", live: false },
     { id: "4", text: "Troisième, en cours", live: true },
   ]);
-  let text = nextCaptionText(emptyCaptionText, "Bonjour");
-  text = nextCaptionText(text, "Bonjour à tous");
-  assert.deepEqual(text.fresh.map((part) => part.text), ["Bonjour", " à tous"]);
-  const keys = text.fresh.map((part) => part.key);
-  assert.equal(nextCaptionText(text, "Bonjour à tous"), text, "an unchanged caption keeps its spans");
-  for (let i = 0; i < 10; i++) text = nextCaptionText(text, text.settled + text.fresh.map((p) => p.text).join("") + ` ${i}`);
-  assert.equal(text.fresh.length, 8, "older fragments settle into one static span");
-  assert.ok(text.settled.startsWith("Bonjour à tous"));
-  assert.ok(!text.fresh.some((part) => keys.includes(part.key)));
-  const revised = nextCaptionText(text, "Bonsoir");
-  assert.equal(revised.version, text.version + 1);
-  assert.deepEqual(revised.fresh.map((part) => part.text), ["Bonsoir"]);
-  assert.equal(revised.settled, "");
   const long = captionTail("mot ".repeat(600));
   assert.ok(long.startsWith("…mot") && long.length <= 1501);
   const frames = previewFrames("fr");

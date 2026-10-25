@@ -30,6 +30,7 @@ function harness(
 ) {
   const originalFetch = globalThis.fetch,
     originalSocket = globalThis.WebSocket;
+  const gate: Partial<Extract<import("@interprete/shared/contracts").InterpretationEvent, { type: "gate" }>> = {};
   const requests: Array<{
     text: string;
     followingText: string;
@@ -108,6 +109,8 @@ function harness(
         decision: ready ? "ready" : "wait",
         probability: ready ? 0.99 : 0.1,
         elapsedMs: 1,
+        unavailable: false,
+        ...gate,
       },
       ...(translate(input.text) ? [{ type: "text", delta: translate(input.text) }] : []),
       ...(spoken
@@ -166,6 +169,7 @@ function harness(
     speech,
   });
   return {
+    gate,
     controller,
     requests,
     capture,
@@ -721,4 +725,76 @@ test("an empty caption is retried once, then a filler is skipped without blockin
   } finally {
     h.cleanup();
   }
+});
+
+test("optional benchmark observers trace real capture and playback without changing the stream", async () => {
+  const h = harness();
+  const events: import("../src/lib/benchmark").DiagnosticEvent[] = [];
+  h.controller.observeDiagnostics(() => { throw new Error("Observer failure must be isolated"); });
+  const unsubscribe = h.controller.observeDiagnostics(event => events.push(event));
+  try {
+    await h.controller.start("a", true);
+    h.socket.delta("Bonjour, ");
+    await waitFor(() => events.some(e => e.type === "segment" && e.segment.finishedAt !== undefined));
+    const input = events.find(e => e.type === "input");
+    const last = events.filter(e => e.type === "segment").at(-1);
+    assert.ok(input?.type === "input" && input.seconds === .1);
+    assert.ok(last?.type === "segment");
+    const s = last.segment;
+    assert.ok(s.requestedAt! <= s.textAt!);
+    assert.ok(s.audioAt! <= s.playbackAt!);
+    assert.equal(s.outcome, "done");
+    assert.equal(s.gateProbability, .99);
+    assert.equal(s.gateUnavailable, false);
+    assert.equal(h.player.chunks, 1);
+    h.options.onEnded();
+    await waitFor(() => events.some(e => e.type === "end"));
+    assert.ok(events.some(e => e.type === "input-end"));
+    assert.ok(events.some(e => e.type === "end" && e.outcome === "done"));
+    unsubscribe();
+  } finally { h.cleanup(); }
+});
+
+for (const gate of [
+  { probability: .1, unavailable: false, elapsedMs: 200 },
+  { probability: null, unavailable: true, elapsedMs: 3000 },
+  { probability: null, unavailable: false, elapsedMs: 0 },
+]) test(`benchmark preserves a held gate (${JSON.stringify(gate)}) without displaying or playing it`, async () => {
+  const h = harness(() => true);
+  Object.assign(h.gate, gate);
+  const events: import("../src/lib/benchmark").DiagnosticEvent[] = [];
+  h.controller.observeDiagnostics(event => events.push(event));
+  try {
+    await h.controller.start("a", true);
+    h.socket.delta("Bonjour, ");
+    await waitFor(() => events.some(e => e.type === "segment" && e.segment.finishedAt !== undefined));
+    const last = events.filter(e => e.type === "segment").at(-1);
+    assert.ok(last?.type === "segment");
+    assert.equal(last.segment.gate, "wait");
+    assert.equal(last.segment.gateProbability, gate.probability);
+    assert.equal(last.segment.gateUnavailable, gate.unavailable);
+    assert.equal(last.segment.metrics?.gateMs, gate.elapsedMs);
+    assert.equal(last.segment.outcome, "held");
+    assert.equal(last.segment.displayedAt, undefined);
+    assert.equal(h.player.chunks, 0);
+  } finally { h.cleanup(); }
+});
+
+test("completed sentences can end with a word that would otherwise be dangling", async () => {
+  for (const text of ["What are you looking for?", "I know that.", "That's what it's for!"])
+    assert.equal(usablePrefix(text, "", "en"), true, text);
+  for (const text of ["What are you looking for", "I know that", "I know that,", "I know that..."])
+    assert.equal(usablePrefix(text, "the answer is correct", "en"), false, text);
+
+  const h = harness();
+  try {
+    h.controller.setProfile("a", { language: "en" });
+    h.controller.setProfile("b", { language: "fr" });
+    await h.controller.start("a");
+    h.socket.delta("What are you looking for?");
+    await waitFor(() => h.player.chunks === 1);
+    assert.equal(h.requests[0].text, "What are you looking for?");
+    assert.equal(h.requests[0].isFinal, false, "sentence punctuation must release the live prefix without ending the turn");
+    assert.equal(h.controller.getSnapshot().phase, "listening");
+  } finally { h.cleanup(); }
 });

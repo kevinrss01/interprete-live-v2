@@ -4,6 +4,7 @@ import type { Turn } from "@interprete/shared/contracts";
 import { languageName } from "@interprete/shared/languages";
 import type { DiscussionMessage } from "../lib/discussion";
 import { readAuthToken } from "../lib/account";
+import { LiveText } from "../components/live-text";
 import { Button } from "@interprete/ui/components/button";
 
 function TurnItem({
@@ -23,6 +24,7 @@ function TurnItem({
   const source = current?.source ?? message.source;
   const translation = current?.translation ?? message.translation;
   const status = current?.status ?? message.status;
+  const revealing = !!current && (status === "draft" || status === "working");
   const error = current?.error ?? message.error;
   const demo = current?.demo ?? message.demo;
   return (
@@ -51,12 +53,12 @@ function TurnItem({
         </p>
         {(source || status === "draft") && (
           <p className="turn-source">
-            {source || <span className="pending">Listening…</span>}
+            {source ? <LiveText text={source} language={message.sourceLanguage} live={revealing} /> : <span className="pending">Listening…</span>}
           </p>
         )}
         {(translation || (source && status !== "error")) && (
           <p className="turn-translation">
-            {translation || <span className="pending">Translating…</span>}
+            {translation ? <LiveText text={translation} language={message.targetLanguage} live={revealing} /> : <span className="pending">Translating…</span>}
             {status === "working" && (
               <LoaderCircle size={15} className="spin" aria-label="Translating" />
             )}

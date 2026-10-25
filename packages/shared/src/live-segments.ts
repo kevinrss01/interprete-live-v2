@@ -54,7 +54,7 @@ export function usablePrefix(
   const last = units.at(-1);
   if (!last) return false;
   const tail = text.slice(last.start, last.end).toLocaleLowerCase();
-  if (weakEndings[language]?.has(tail)) return false;
+  if (weakEndings[language]?.has(tail) && !/(?:[^.]\.|[!?。！？])$/u.test(text)) return false;
   // A hyphenated compound ("soixante-dix", "Est-ce") is one unit of meaning.
   if (!/[.!?。！？]$/u.test(text) && /^-\p{L}/u.test(following)) return false;
   if (

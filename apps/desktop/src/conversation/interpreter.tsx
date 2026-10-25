@@ -4,6 +4,7 @@ import {
   AudioLines,
   CircleAlert,
   History,
+  Gauge,
   LoaderCircle,
   MessagesSquare,
   Mic,
@@ -44,11 +45,12 @@ import {
   AlertDialogTitle,
 } from "@interprete/ui/components/alert-dialog";
 
-type View = "conversation" | "call" | "history" | "voices" | "settings";
+type View = "conversation" | "call" | "benchmark" | "history" | "voices" | "settings";
 
 const NAV: { view: View; label: string; icon: typeof Phone }[] = [
   { view: "conversation", label: "Conversation", icon: MessagesSquare },
   { view: "call", label: "Online meeting", icon: Phone },
+  { view: "benchmark", label: "Benchmark", icon: Gauge },
   { view: "history", label: "History", icon: History },
   { view: "voices", label: "Voices", icon: AudioLines },
 ];
@@ -86,7 +88,7 @@ export function Interpreter({
   const [overlayError, setOverlayError] = useState<string | null>(null);
   const [callBusy, setCallBusy] = useState(false);
   const [view, setView] = useState<View>("conversation");
-  const callMode = view === "call";
+  const callMode = view === "call" || view === "benchmark";
   const mainRef = useRef<HTMLElement>(null);
   const shownView = useRef(view);
   useEffect(() => {
@@ -199,6 +201,7 @@ export function Interpreter({
     onLeave();
   }
   function openView(next: View) {
+    if (next !== view && (view === "call" || view === "benchmark")) callPanelRef.current?.stopAll();
     // Leaving the conversation ends any turn in progress; the call panel stops itself when hidden.
     if (view === "conversation" || next === "call") controller.cancel();
     setView(next);
@@ -255,7 +258,7 @@ export function Interpreter({
       <div className="app panel">
         <header
           className="topbar"
-          hidden={view === "voices" || view === "settings" || (view === "call" && !callBusy)}
+          hidden={view === "benchmark" || view === "voices" || view === "settings" || (view === "call" && !callBusy)}
         >
           <div className="frame topbar-inner">
             {(view === "conversation" || view === "history") && (
@@ -336,6 +339,7 @@ export function Interpreter({
           onCaptionError={setCaptionError}
           onBusy={setCallBusy}
           visible={callMode}
+          benchmark={view === "benchmark"}
           onOpen={() => openView("call")}
           beforeStart={() => controller.cancel()}
           profiles={state.profiles}

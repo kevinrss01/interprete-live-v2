@@ -66,7 +66,7 @@ export function VideoSettings({
   onAllow: () => void;
   onRefresh: () => void;
   onPreview: () => void;
-  onTest: () => void;
+  onTest?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const running = video.sessionId !== null;
@@ -151,7 +151,7 @@ export function VideoSettings({
                 Preview video
               </button>
             )}
-            <button
+            {onTest && <button
               type="button"
               className="btn btn-quiet"
               disabled={!running || video.starting || testing || busy}
@@ -159,7 +159,7 @@ export function VideoSettings({
             >
               <Captions size={15} aria-hidden="true" />
               Test the captions
-            </button>
+            </button>}
             {devices?.authorization === "notDetermined" && camera !== TEST_PATTERN && (
               <button type="button" className="btn btn-quiet" onClick={onAllow}>
                 <Camera size={15} aria-hidden="true" />

@@ -32,10 +32,10 @@ Après installation du pilote, redémarrez macOS si demandé puis ouvrez Interpr
 
 ## Tester sans perturber un appel
 
-- **Tester la pastille** affiche un aperçu de l’overlay sans ouvrir de micro ni contacter un fournisseur. Le carré ferme l’aperçu.
+- **Benchmark → Other checks → Show stop control** affiche un aperçu de l’overlay sans ouvrir de micro ni contacter un fournisseur. Le carré ferme l’aperçu.
 - Dans **Réglages du micro et mode test**, **Tester au casque** permet de tester votre voix avec le bouton principal. Portez un casque.
-- **Traduire l’exemple audio** utilise un fichier synthétique français ou anglais avec les vrais fournisseurs. Il ne contribue pas au clonage et ne bascule jamais le micro système.
-- **Simuler un appel** teste la détection et le toast. Avec une configuration déjà valide, l’accord peut démarrer une vraie capture ; **Terminer la simulation** arrête la session associée.
+- **Benchmark → Other checks → Test outgoing audio** utilise un fichier synthétique français ou anglais avec les vrais fournisseurs. Il ne contribue pas au clonage et ne bascule jamais le micro système.
+- **Benchmark → Other checks → Show call prompt** teste la détection et le toast. Avec une configuration déjà valide, l’accord peut démarrer une vraie capture ; **Terminer la simulation** arrête la session associée.
 
 Le bouton **Activer** ou l’accord dans le toast ouvre la capture ; la détection seule ne le fait pas. Les sessions appel ne collectent pas d’échantillons de clonage.
 
@@ -64,9 +64,11 @@ Le son capté suit la chaîne existante : trames PCM de 20 ms à 24 kHz, transcr
 
 ### Tester sans appel
 
-- Dans **Test without joining a call**, **Start the recording test** lance le test principal, avec une explication de son entrée et de sa sortie. Si **They speak** est réglé sur **English**, un extrait NASA anglais de 22,723 secondes remplace la capture système et alimente la vraie traduction entrante. Réglez **You speak** sur **Français** pour tester anglais → français. Les sous-titres flottants sont toujours activés pour ce test ; aucun micro n’est ouvert.
+Les outils de test sont regroupés dans **Benchmark**. Voir le [protocole et les limites de mesure](BENCHMARK.md).
+
+- Dans **Benchmark** (barre latérale), **Start the recording test** lance le test principal, avec une explication de son entrée et de sa sortie. Si **They speak** est réglé sur **English**, un extrait NASA anglais de 22,723 secondes remplace la capture système et alimente la vraie traduction entrante. Réglez **You speak** sur **Français** pour tester anglais → français. Les sous-titres flottants sont toujours activés pour ce test ; aucun micro n’est ouvert.
 - Pour l’anglais, **Choose a recording** propose **One voice · 23 seconds** et **Three voices · 24 seconds**. Le second extrait est un échange continu entre Suni Williams, Houston et Bill Nelson. Arrêtez le test avant de changer d’extrait. Il permet de tester les changements de voix dans un flux commun ; il n’ajoute ni identification automatique des personnes, ni étiquettes par locuteur, ni trois voix de synthèse distinctes.
-- **Play the original English audio** permet d’écouter ou de couper le son source pendant la lecture, sans relancer le fichier ni interrompre la transcription. Le son source est coupé par défaut. **Also read the French translation aloud** ajoute la voix traduite ; ce choix partage la préférence **Translated voice** de l’appel. Laissez les deux options audio décochées pour une vérification silencieuse. La traduction nécessite internet et utilise les fournisseurs payants. Utilisez un casque pour comparer parole et sous-titres. L’exemple français reste synthétique ; ces exemples ne servent jamais au clonage. Source et reproduction : [samples/README.md](../apps/desktop/public/samples/README.md).
+- **Play the original English audio** choisit si le son source sera audible. Ce réglage est figé pendant le test pour garder une configuration comparable. Le son source est coupé par défaut. **Also read the French translation aloud** ajoute la voix traduite ; ce choix est indépendant de la préférence **Translated voice** de l’appel. Laissez les deux options audio décochées pour une vérification silencieuse. La traduction nécessite internet et utilise les fournisseurs payants. Utilisez un casque pour comparer parole et sous-titres. L’exemple français reste synthétique ; ces exemples ne servent jamais au clonage. Source et reproduction : [samples/README.md](../apps/desktop/public/samples/README.md).
 - **Other checks**, replié par défaut, sépare quatre outils avec une explication par action : aperçu local des sous-titres (**Show text preview**, sans audio ni fournisseur), traduction sortante synthétique (**Test outgoing audio**), aperçu de la pastille (**Show stop control**) et simulation du toast (**Show call prompt**). Accepter ce dernier peut démarrer une vraie capture selon les options sélectionnées.
 - `pnpm test:system-audio` vérifie sur ce Mac que le tap système livre des trames de 20 ms pendant une seconde. Il ne conserve ni n’envoie le son, et peut déclencher la demande d’autorisation.
 
@@ -117,8 +119,8 @@ La vidéo démarre avec **Activer la traduction** quand la case est cochée, ave
 
 ### Tester
 
-- **Tester les sous-titres** (*Test the captions*), vidéo démarrée, fait défiler deux phrases d’exemple sur votre vidéo avec le rythme et l’effacement réels, sans capture ni fournisseur.
-- **Test outgoing audio** (dans **Other checks**), vidéo démarrée, incruste la vraie traduction de l’exemple synthétique.
+- Dans **Benchmark → Camera and video preview**, **Test the captions**, vidéo démarrée, fait défiler deux phrases d’exemple sur votre vidéo avec le rythme et l’effacement réels, sans capture ni fournisseur.
+- **Test outgoing audio** (dans **Benchmark → Other checks**), vidéo démarrée, incruste la vraie traduction de l’exemple synthétique.
 - Les versions de développement proposent une mire de test à la place d’une caméra.
 - `pnpm test:virtual-camera` envoie cette mire sous-titrée à OBS Virtual Camera pendant deux secondes et vérifie que l’extension prend les images. Il n’ouvre aucune caméra. Exécutez-le hors réunion : une application qui affiche cette caméra verrait la mire. Les tests ordinaires composent les images sans jamais les envoyer à la caméra virtuelle.
 

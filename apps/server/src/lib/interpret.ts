@@ -54,13 +54,16 @@ export function interpretResponse(
       const work = new AbortController();
       const workSignal = AbortSignal.any([signal, work.signal]);
       const local = localDecision(data);
+      const preceding = data.context.findLast((turn) =>
+        turn.continuation && turn.sourceLanguage === data.sourceLanguage &&
+        turn.targetLanguage === data.targetLanguage);
       const gatePromise = local
         ? Promise.resolve({ probability: null, elapsedMs: 0, unavailable: false })
         : evaluateReadiness(
             data.text,
             signal,
             data.followingText,
-            data.context.at(-1)?.source || "",
+            preceding?.source ?? "",
           );
       const permission = gatePromise.then((g) => {
         const ready = local

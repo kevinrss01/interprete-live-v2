@@ -26,6 +26,8 @@ import {
   type LiveSegment,
 } from "@interprete/shared/live-segments";
 
+import type { DiagnosticEvent, SegmentTrace } from "./benchmark";
+
 export type Snapshot = {
   profiles: Record<SpeakerId, Profile>;
   turns: Turn[];
@@ -171,10 +173,25 @@ const volumeKey = "interprete-volume-v1";
 const message = (error: unknown) =>
   error instanceof Error ? error.message : "Something went wrong. Try again.";
 
+const hotControllers = new Set<InterpreterController>();
+
 export class InterpreterController {
   private state: Snapshot = initial;
   private listeners = new Set<() => void>();
   private runtime: Runtime | null = null;
+  private diagnosticListeners = new Set<(event: DiagnosticEvent) => void>();
+  private models: Record<string, string> = {};
+  observeDiagnostics = (listener: (event: DiagnosticEvent) => void) => {
+    this.diagnosticListeners.add(listener);
+    return () => { this.diagnosticListeners.delete(listener); };
+  };
+  get pendingAudioSeconds() { return this.player.pendingSeconds ?? 0; }
+  private diagnostic(event: DiagnosticEvent) {
+    // Diagnostics must never interrupt capture, cancellation, or ordered playback.
+    for (const listener of this.diagnosticListeners) {
+      try { listener(event); } catch { /* The translation remains usable if a diagnostic observer fails. */ }
+    }
+  }
   private player: Player;
   private captureFactory: (options: CaptureOptions) => Capture;
   private timing?: Partial<StreamTiming>;
@@ -191,6 +208,13 @@ export class InterpreterController {
   private stoppingCapture: Promise<unknown> = Promise.resolve();
   constructor(adapters: InterpreterAdapters = {}) {
     this.player = adapters.player ?? new AudioPlayer();
+    if (import.meta.hot) {
+      hotControllers.add(this);
+      import.meta.hot.dispose(() => Promise.allSettled([...hotControllers].map(async (controller) => {
+        controller.dispose();
+        await Promise.allSettled([controller.stoppingCapture, controller.player.idle()]);
+      })));
+    }
     this.timing = adapters.timing;
     this.speech = adapters.speech;
     this.captureFactory =
@@ -273,6 +297,7 @@ export class InterpreterController {
       try {
         const result = await call(api.api.status.$get());
         saveSession(result.session);
+        this.models = result.models ?? {};
         try {
           const raw = localStorage.getItem(volumeKey);
           const storedVolume = Number(raw);
@@ -406,6 +431,7 @@ export class InterpreterController {
       lastSegmentAt: 0, retryAt: 0, retries: 0, hadSpeech: false, finishing: false,
     };
     this.runtime = r;
+    this.diagnostic({ type: "session", sessionId: id, at: performance.now(), startedAt: clickedAt, source: profile.language, target: target.language, models: this.models });
     this.addTurn(r, r.blocks[0]);
     this.update({
       phase: "connecting", sessionId: id, connection: "connecting", active: speaker,
@@ -423,11 +449,26 @@ export class InterpreterController {
         if (this.isCurrent(r)) this.update({ warning });
       },
     });
+    let inputBytes = 0, lastInputTrace = -Infinity;
     r.capture = this.captureFactory({
-      onAudio: (bytes) => { if (this.isCurrent(r)) r.transcriber?.append(bytes); },
+      onAudio: (bytes) => {
+        if (!this.isCurrent(r)) return;
+        inputBytes += bytes.length;
+        const now = performance.now();
+        if (this.diagnosticListeners.size && now - lastInputTrace >= 250) {
+          lastInputTrace = now;
+          this.diagnostic({ type: "input", sessionId: id, at: now, seconds: inputBytes / 48000, queued: this.pendingAudioSeconds });
+        }
+        r.transcriber?.append(bytes);
+      },
       onLevel: (level) => { if (this.isCurrent(r)) this.update({ level }); },
       onBoundary: () => { if (this.isCurrent(r)) r.transcriber?.checkpoint(); },
-      onEnded: () => { if (this.isCurrent(r) && !r.finishing) void this.stop(); },
+      onEnded: () => {
+        if (!this.isCurrent(r)) return;
+        this.diagnostic({ type: "input", sessionId: id, at: performance.now(), seconds: inputBytes / 48000, queued: this.pendingAudioSeconds });
+        this.diagnostic({ type: "input-end", sessionId: id, at: performance.now() });
+        if (!r.finishing) void this.stop();
+      },
       onError: (error) => this.fail(r, new Error(error)),
       recordSample: profile.consent && !demo,
       shouldRecordSample: () => {
@@ -484,7 +525,10 @@ export class InterpreterController {
       r.blocks.push(block);
       r.blocks.sort((a, b) => a.sequence - b.sequence);
     }
-    if (block.text !== item.text) block.updatedAt = performance.now();
+    if (block.text !== item.text) {
+      block.updatedAt = performance.now();
+      if (item.text.trim()) this.diagnostic({ type: "transcript", sessionId: r.id, at: block.updatedAt });
+    }
     block.text = item.text;
     const flight = r.flight;
     // An unspoken fragment can still be wrong: the ASR may revise its words or keep extending
@@ -583,6 +627,12 @@ export class InterpreterController {
       setTimeout(() => this.scheduleSegment(r), 0);
   }
   private async translateSegment(r: Runtime, block: Block, candidate: LiveSegment) {
+    const trace: SegmentTrace | null = this.diagnosticListeners.size ? {
+      id: crypto.randomUUID(), text: candidate.text, translation: "", observedAt: block.updatedAt,
+      startedAt: performance.now(), queued: this.pendingAudioSeconds, outcome: "running",
+    } : null;
+    const report = () => { if (trace) this.diagnostic({ type: "segment", sessionId: r.id, at: performance.now(), segment: { ...trace } }); };
+    report();
     const previous = block.translation;
     let translation = "", accepted = false, allowed = block.final;
     const flight: Flight = {
@@ -594,6 +644,7 @@ export class InterpreterController {
     const choice = (await this.speech?.(r.speaker)) ?? { speak: true };
     if (!this.isCurrent(r)) return;
     const speak = choice.speak;
+    if (trace) trace.voice = speak ? (choice.voice ?? this.state.profiles[r.speaker].voice) : undefined;
     // Spoken audio commits a source prefix; for captions, the approved and completed text does.
     const accept = () => {
       if (accepted) return;
@@ -610,6 +661,7 @@ export class InterpreterController {
       sourceLanguage: r.profile.language, targetLanguage: r.target.language, continuation: true,
     });
     try {
+      if (trace) { trace.requestedAt = performance.now(); trace.queued = this.pendingAudioSeconds; report(); }
       await streamInterpretation({
         text: candidate.text, followingText: candidate.followingText,
         sourceLanguage: r.profile.language, targetLanguage: r.target.language,
@@ -619,20 +671,31 @@ export class InterpreterController {
         ...(speak ? { queued: Math.round(100 * (this.player.pendingSeconds ?? 0)) / 100 } : {}),
       }, AbortSignal.any([r.abort.signal, flight.abort.signal]), async (event) => {
         if (!this.isCurrent(r)) return;
-        const display = () => this.turn(block.id, {
-          translation: appendTranslation(previous, translation, r.target.language),
-        });
+        const display = () => {
+          if (trace && translation && trace.displayedAt === undefined) { trace.displayedAt = performance.now(); report(); }
+          this.turn(block.id, { translation: appendTranslation(previous, translation, r.target.language) });
+        };
         if (event.type === "gate") {
+          if (trace) {
+            trace.gate = event.decision;
+            trace.gateAt = performance.now();
+            trace.gateProbability = event.probability;
+            trace.gateUnavailable = event.unavailable;
+            trace.metrics = { ...trace.metrics, gateMs: event.elapsedMs };
+            report();
+          }
           allowed = event.decision !== "wait";
           if (allowed && translation) display();
         }
         if (event.type === "text") {
           translation += event.delta;
+          if (trace) { trace.textAt ??= performance.now(); trace.translation = translation; report(); }
           if (allowed) display();
         }
         if (event.type === "audio") {
           const bytes = base64ToBytes(event.audio);
           if (!bytes.length) return;
+          if (trace && trace.audioAt === undefined) { trace.audioAt = performance.now(); report(); }
           accept();
           // Replay history is optional and bounded, live playback is never truncated.
           block.pcmBytes += bytes.length;
@@ -640,6 +703,7 @@ export class InterpreterController {
           else block.pcm = [];
           const at = await this.player.enqueue(bytes);
           if (!this.isCurrent(r)) return;
+          if (trace && trace.playbackAt === undefined && at !== null) { trace.playbackAt = at; report(); }
           if (block.firstPlaybackAt === null && at !== null) {
             block.firstPlaybackAt = at;
             block.metrics.firstAudioMs = Math.max(0, at - block.startedAt);
@@ -648,6 +712,7 @@ export class InterpreterController {
           if (r.finishing) this.update({ phase: "playing" });
         }
         if (event.type === "done") {
+          if (trace) { trace.metrics = { ...trace.metrics, ...event.metrics }; trace.outcome = allowed ? "done" : "held"; }
           if (!speak && allowed) {
             // An empty caption is retried once; a second one is a filler with nothing to show.
             if (!translation.trim() && block.emptyAttempt !== candidate.text) {
@@ -666,9 +731,14 @@ export class InterpreterController {
         }
       });
     } catch (error) {
+      if (trace) {
+        trace.outcome = flight.superseded && !accepted ? "superseded" : r.abort.signal.aborted ? "cancelled" : "error";
+        if (trace.outcome === "error") trace.error = message(error);
+      }
       if (!flight.superseded || accepted) throw error;
       block.lastAttempt = "";
     } finally {
+      if (trace) { trace.finishedAt = performance.now(); if (trace.outcome === "running") trace.outcome = "cancelled"; report(); }
       if (r.flight === flight) r.flight = null;
       // Once audio was played, never replay this source prefix on a network retry.
       if (accepted) {
@@ -726,6 +796,7 @@ export class InterpreterController {
       }
       await this.player.idle(r.abort.signal);
       if (!this.isCurrent(r)) return;
+      this.diagnostic({ type: "end", sessionId: r.id, at: performance.now(), outcome: "done" });
       this.runtime = null;
       this.update({ phase: "idle", sessionId: null, input: null, connection: null, active: r.speaker === "a" ? "b" : "a", level: 0, outputActive: false });
     } catch (error) {
@@ -734,6 +805,7 @@ export class InterpreterController {
   }
   private fail(r: Runtime, error: unknown) {
     if (!this.isCurrent(r)) return;
+    this.diagnostic({ type: "end", sessionId: r.id, at: performance.now(), outcome: "error", error: message(error) });
     this.cancel(false);
     for (const block of r.blocks) this.turn(block.id, { status: "error", error: message(error) });
     this.update({ error: message(error) });
@@ -751,6 +823,7 @@ export class InterpreterController {
     const r = this.runtime;
     this.runtime = null;
     if (r) {
+      this.diagnostic({ type: "end", sessionId: r.id, at: performance.now(), outcome: "cancelled" });
       r.abort.abort();
       if (r.segmentTimer) clearTimeout(r.segmentTimer);
       r.transcriber?.close();
@@ -896,7 +969,11 @@ export class InterpreterController {
     this.update({ turns: [] });
   };
   dispose = () => {
+    if (import.meta.hot) hotControllers.delete(this);
     this.cancel();
     this.player.dispose();
   };
 }
+
+// React refresh retains controllers in useState, including their previous implementation.
+if (import.meta.hot) import.meta.hot.accept(() => window.location.reload());

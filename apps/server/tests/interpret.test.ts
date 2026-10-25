@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { InterpretationEvent } from "@interprete/shared/contracts";
+import type { HistoryItem, InterpretationEvent } from "@interprete/shared/contracts";
 import { catchUpPace, interpretResponse } from "../src/lib/interpret";
 import { SilenceTrimmer } from "../src/lib/pcm";
 import { interpretSchema } from "../src/lib/validation";
@@ -88,6 +88,55 @@ test("Jev is not asked when punctuation, a final remainder or a dangling word de
     // A dangling prefix is held back before any translation is requested.
     assert.equal(asked.length, 2);
     assert.deepEqual(dangling.map((event) => event.type), ["gate", "done"]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("readiness uses only the current speaker's translated continuation, in either direction", async () => {
+  const original = globalThis.fetch;
+  const states: Record<string, string>[] = [];
+  try {
+    globalThis.fetch = async (url, init) => {
+      if (String(url).includes("ai-gateway")) {
+        states.push(JSON.parse(String(init?.body)).state);
+        return Response.json({ answers: { ready: { probability: 0.9 } } });
+      }
+      return new Response('data: [DONE]\n\n');
+    };
+    for (const [sourceLanguage, targetLanguage, text, followingText] of [
+      ["en", "fr", "We would like", "a coffee"],
+      ["fr", "en", "Nous voudrions", "un café"],
+    ]) {
+      const other: HistoryItem = {
+        source: "Previous speaker",
+        translation: "Previous translation",
+        sourceLanguage: targetLanguage,
+        targetLanguage: sourceLanguage,
+      };
+      const continuation: HistoryItem = {
+        source: "Current speaker prefix",
+        translation: "Current translated prefix",
+        sourceLanguage,
+        targetLanguage,
+        continuation: true,
+      };
+      for (const [context, precedingSpeech] of [
+        [[other], ""],
+        [[{ ...continuation, continuation: false }], ""],
+        [[{ ...other, continuation: true }], ""],
+        [[other, continuation], continuation.source],
+      ] as [HistoryItem[], string][]) {
+        await events(interpretResponse(request(text, {
+          sourceLanguage, targetLanguage, followingText, context,
+        }), null, new AbortController().signal));
+        assert.deepEqual(states.at(-1), {
+          speech: text,
+          followingSpeech: followingText, precedingSpeech,
+        });
+      }
+    }
+    assert.equal(states.length, 8);
   } finally {
     globalThis.fetch = original;
   }

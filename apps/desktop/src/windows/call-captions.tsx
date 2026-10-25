@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { LiveText } from "../components/live-text";
 import { GripHorizontal } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { captionAppearance, loadCaptionPreferences, saveCaptionPreferences, useCaptionPreferences, type CaptionPreferences } from "../lib/caption-preferences";
 import {
-  emptyCaptionText,
   getCaptions,
   getCaptionPosition,
-  nextCaptionText,
   newestCaptions,
   onCaptions,
   type CaptionLine,
@@ -14,27 +13,10 @@ import {
   type CaptionsUpdate,
 } from "../lib/call-captions";
 
-// Each newly translated fragment fades in; text already on screen never re-animates.
-function CaptionText({ text }: { text: string }) {
-  const state = useRef(emptyCaptionText);
-  // Idempotent for an unchanged text, so a repeated render cannot add a fragment twice.
-  state.current = nextCaptionText(state.current, text);
-  const { version, settled, fresh } = state.current;
-  return (
-    <>
-      {settled && <span key={`settled-${version}`}>{settled}</span>}
-      {fresh.map((part) => (
-        <span key={`fresh-${part.key}`} className="caption-fresh">
-          {part.text}
-        </span>
-      ))}
-    </>
-  );
-}
 function Caption({ line, latest, language }: { line: CaptionLine; latest: boolean; language: string }) {
   return (
     <p className="caption-line" data-latest={latest} data-live={line.live} lang={language} dir="auto">
-      <CaptionText text={line.text} />
+      <LiveText text={line.text} language={language} live={line.live} />
     </p>
   );
 }
@@ -87,7 +69,7 @@ export function CaptionsView({ captions, preferences, onHidden }: { captions: Ca
         ) : (
           captions.lines.map((line, index) => (
             <Caption
-              key={line.id}
+              key={`${captions.sessionId}:${line.id}`}
               line={line}
               latest={index === captions.lines.length - 1}
               language={captions.target}

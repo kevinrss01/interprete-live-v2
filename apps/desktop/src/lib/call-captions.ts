@@ -45,30 +45,6 @@ export function captionLines(turns: Turn[]): CaptionLine[] {
       live: turn.status === "draft" || turn.status === "working",
     }));
 }
-// Appended words animate in as "fresh" spans; older ones settle into one static span.
-// A revised caption starts a new version and is drawn again.
-export type CaptionText = {
-  version: number;
-  settled: string;
-  fresh: { key: number; text: string }[];
-  nextKey: number;
-};
-export const emptyCaptionText: CaptionText = { version: 0, settled: "", fresh: [], nextKey: 0 };
-export function nextCaptionText(current: CaptionText, text: string): CaptionText {
-  const shown = current.settled + current.fresh.map((part) => part.text).join("");
-  if (text === shown) return current;
-  if (shown && text.startsWith(shown)) {
-    const fresh = [...current.fresh, { key: current.nextKey, text: text.slice(shown.length) }];
-    const settled = fresh.length > 8 ? current.settled + fresh.shift()!.text : current.settled;
-    return { ...current, settled, fresh, nextKey: current.nextKey + 1 };
-  }
-  return {
-    version: current.version + (shown ? 1 : 0),
-    settled: "",
-    fresh: [{ key: current.nextKey, text }],
-    nextKey: current.nextKey + 1,
-  };
-}
 export function newestCaptions(
   current: CaptionsSnapshot | null,
   incoming: CaptionsSnapshot,

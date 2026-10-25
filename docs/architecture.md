@@ -231,7 +231,9 @@ sequenceDiagram
 - **Lecture pendant la parole** : le micro reste ouvert pendant la lecture. L'annulation d'écho du navigateur limite le retour du haut-parleur.
 - **Découpage** : tant que la personne parle, le dernier mot attend le début du suivant : il peut être incomplet, et il donne à Jev un mot d'anticipation. Après 250 ms sans nouveau mot, il est considéré comme complet, pour ne pas retenir une phrase dont l'ASR ajoute la ponctuation tard. Tant qu'aucun son d'un fragment n'a été lu, il est retiré puis reproposé si l'ASR révise ses mots ou prolonge son dernier mot, ou si les mots suivants annoncent une négation ou la suite d'un montant. Un fragment refusé après une pause est reproposé dès qu'une ponctuation forte le termine.
 - **Feu vert** : un segment est prononcé si Jev l'estime prêt (probabilité ≥ 0,6) ou s'il se termine par une ponctuation forte. Jev n'est pas appelé quand la règle locale suffit : portion finale, ponctuation forte, ou fin inutilisable (préposition, article, mot composé coupé, négation ou nombre annoncés par la suite). Un fragment refusé arrête aussitôt sa traduction et sa synthèse, ce qui libère la requête suivante. Si Jev ne répond pas, on attend la fin de la phrase.
-- **Traduction** : le modèle reçoit le fragment et ce qui a déjà été prononcé (source et traduction entendue), mais pas les mots suivants : les petits modèles les traduisaient en avance, puis une seconde fois dans le fragment suivant.
+- **Contexte du feu vert** : seul un élément `continuation` du même sens de traduction constitue le préfixe source déjà traduit du locuteur actuel ; la dernière réplique d'un autre tour ne doit pas être présentée à Jev comme la phrase en cours. Une vraie fin de phrase libère aussi les mots qui seraient incomplets sans ponctuation, comme « for? » en anglais ; une virgule ou une ellipse ne suffit pas.
+- **Consigne Jev en essai** : un sujet complet peut être traduit avant son verbe, y compris au début d'une proposition introduite par « when ». La consigne distingue ces débuts stables des adjectifs sans nom, des verbes dont le sens dépend du complément et des noms ou mots composés incomplets. Le seuil reste 0,6. Il s'agit de consignes probabilistes, pas de garanties : les essais et leurs limites sont consignés dans `VALIDATION.md`.
+- **Traduction** : le modèle reçoit le fragment et ce qui a déjà été prononcé (source et traduction entendue), mais pas les mots suivants : les petits modèles les traduisaient en avance, puis une seconde fois dans le fragment suivant. La consigne interdit de retraduire l'ancien préfixe source, tout en conservant une répétition effectivement présente dans le nouveau fragment ; une interdiction générale de répéter des mots déjà traduits supprimait parfois un sujet réintroduit par le locuteur.
 - **Voix** : les silences ajoutés par ElevenLabs autour de chaque fragment sont retirés (20 ms gardés avant, 60 ms après), sans jamais retarder un échantillon audible ; une pause livrée en retard n'est pas rejouée après le trou qu'elle a déjà laissé dans la lecture. L'app indique avec chaque fragment la durée de traduction qui attend encore d'être lue (`queued`) : le serveur accélère alors légèrement la voix (de 1 à 1,2, la limite d'ElevenLabs) pour rattraper la personne ; une traduction à jour garde le débit naturel de la voix.
 - **Accent** : les voix prédéfinies ElevenLabs sont anglaises et gardent cet accent dans une autre langue. Quand la langue cible a des voix natives (aujourd’hui le français, dans `packages/shared/src/languages.ts`), le serveur remplace une voix prédéfinie par la voix native du même genre et de hauteur la plus proche. Une voix clonée reste celle de son propriétaire.
 - **Renouvellement** : la connexion Realtime est renouvelée après 45 minutes, avec une seconde connexion préparée en parallèle ; les items sont finalisés toutes les 30 secondes ou à chaque pause.
@@ -289,3 +291,22 @@ flowchart LR
 La fenêtre `call-captions` démarre le déplacement natif Tauri au clic-glissé. Après stabilisation des événements de déplacement, `call_captions_position` relit sa géométrie et convertit sa position en coordonnées normalisées ; cette commande est réservée à la fenêtre de sous-titres. La requête inclut la disposition attendue pour ignorer les positions devenues obsolètes ; une modification plus récente des réglages gagne aussi côté frontend. Les arrondis de pixels ne déclenchent pas de boucle de sauvegarde. La préférence de moniteur reste locale. Les sous-titres visibles acceptent les clics pour être déplacés ; lorsqu’ils s’effacent, la fenêtre ignore les clics.
 
 **Settings → Floating captions → Show captions** pilote un texte fictif persistant dans cette même fenêtre, via l’unique publisher de `CallPanel`. Il ne reste plus d’aperçu intégré aux réglages. Les modifications d’apparence passent par les préférences locales et celles de géométrie par les mises à jour natives. Masquer l’aperçu, changer d’onglet ou quitter les réglages libère cet aperçu sans capture ni fournisseur.
+
+## Benchmark diagnostics
+
+The Benchmark sidebar reuses the call controllers for recording tests. Optional
+controller observers report client timestamps, fragment outcomes, server metrics
+and pending playback to a bounded local recorder; they do not alter scheduling.
+Demo turns are excluded from account discussion history. Reports, comparison
+criteria and measurement limits are described in [BENCHMARK.md](BENCHMARK.md).
+
+## Live text presentation
+
+Conversation transcripts and floating captions share `LiveText`: complete word segments
+fade in over 200 ms, normally 35 ms apart, with each batch starting within 240 ms.
+`Intl.Segmenter` preserves punctuation, spacing and unspaced languages. Revisions
+replace the obsolete suffix; session changes and unmount remove its CSS animations.
+Completed history and reduced motion show all text immediately. The accessible text
+updates only with upstream content. This presentation does not delay the controllers,
+audio, persistence or gate decisions; benchmark timestamps measure controller text
+availability, not painted words.

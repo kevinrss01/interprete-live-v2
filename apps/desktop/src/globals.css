@@ -1738,8 +1738,8 @@ html.toast-window,
   font-size: 18px;
   color: inherit;
 }
-.caption-fresh {
-  animation: caption-in 280ms var(--ease);
+.live-word {
+  animation: caption-in 200ms ease-out both;
 }
 @keyframes caption-in {
   from {
@@ -2232,4 +2232,44 @@ html.toast-window,
 .autosave-field[data-state="error"] .autosave-status {
   color: var(--accent);
   pointer-events: auto;
+}
+
+/* Benchmark shares the call engine; measurements remain readable at compact widths. */
+.benchmark-results { margin-top: 32px; padding-block: 24px; border-top: 1px solid var(--line); font-size: 13px; }
+.benchmark-results h2 { font-size: 18px; font-weight: 600; }
+.benchmark-results > p { margin-block: 12px; line-height: 1.6; }
+.benchmark-heading, .benchmark-actions, .benchmark-labels { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.benchmark-selectors, .benchmark-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-block: 24px; }
+.benchmark-selectors .field, .benchmark-review .field { display: grid; gap: 8px; min-width: 0; }
+.benchmark-results select, .benchmark-results textarea { width: 100%; min-height: 44px; padding: 10px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--canvas); color: var(--ink); font: inherit; }
+.benchmark-results textarea { resize: vertical; }
+.benchmark-stats > div { padding: 16px; background: var(--fill); }
+.benchmark-stats span { display: block; color: var(--ink-2); }
+.benchmark-stats strong { display: block; margin-top: 8px; font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.benchmark-queue { margin-block: 24px; }
+.benchmark-queue svg { display: block; width: 100%; height: 100px; margin-block: 12px; border-bottom: 1px solid var(--line); overflow: visible; }
+.benchmark-labels { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.benchmark-empty, .benchmark-comparison { margin-block: 24px; padding: 20px; background: var(--fill); }
+.benchmark-config { margin-block: 24px; }
+.benchmark-timings { margin-block: 16px; }
+.benchmark-timings > div { display: flex; justify-content: space-between; gap: 20px; padding-block: 8px; border-bottom: 1px solid var(--line); }
+.benchmark-timings dt { color: var(--ink-2); }
+.benchmark-timings dd { text-align: right; overflow-wrap: anywhere; min-width: 0; font-variant-numeric: tabular-nums; }
+.benchmark-table { overflow-x: auto; margin-block: 16px; }
+.benchmark-table table { width: 100%; border-collapse: collapse; text-align: left; }
+.benchmark-table th, .benchmark-table td { padding: 12px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.benchmark-table thead th { font-weight: 500; color: var(--ink-2); }
+.benchmark-table td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.benchmark-table tbody th { min-width: 170px; font-weight: 400; }
+.benchmark-table button { text-align: left; min-height: 44px; width: 100%; }
+.benchmark-table tr[data-selected="true"] { background: var(--fill); }
+.benchmark-detail { padding: 16px; background: var(--fill); overflow-wrap: anywhere; }
+.benchmark-detail p + p { margin-top: 12px; }
+.benchmark-review { display: grid; gap: 16px; margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px; }
+.benchmark-review legend { font-weight: 500; }
+@media (max-width: 600px) {
+  .benchmark-selectors { grid-template-columns: 1fr; }
+  .benchmark-actions { gap: 4px; }
+  .benchmark-stats { gap: 8px; }
+  .benchmark-stats > div { padding: 12px; }
 }

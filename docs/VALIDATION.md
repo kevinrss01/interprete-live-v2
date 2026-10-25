@@ -1,5 +1,172 @@
 # Vérifications de l’app — 24 octobre 2026
 
+## Verb, compound and agreement trial — 25 October 2026
+
+The next user-authorized trial refines the current Jev instructions to hold ambiguous
+verbs until their complement is known and to keep multiword names/noun compounds
+together. Translation instructions now explicitly continue target-language gender,
+number and verb construction, and use established translations of complete names.
+Models, the 0.6 readiness threshold and local segmentation rules are unchanged.
+
+Final gate calibration: 19 cases repeated twice, no unavailable responses. The
+requested stable subject still passes (0.61–0.68); incomplete verb/name/compound
+examples now wait, while their complete forms pass. An unseen verb-complement
+boundary still passes despite its conservative expected-wait label (36/38 labels
+matched); this prompt is not a deterministic boundary validator. Sixteen translation
+outputs (eight cases twice) preserved the tested agreements, names, repetition,
+negation and amount. These are small manual calibration checks, not a quality score.
+
+One silent NASA EN→FR run with real providers and in-process Hono routes completed:
+first transcript 1.88 s, first captions 4.94 s, 37 held out of 49 attempts, 12 completed
+fragments, no errors/unavailability, maximum caption gap 4.53 s. Manual review found
+the previously observed verb, station-name, environment and plural-agreement errors
+corrected in the resulting text. A literal intensifier translation and wrong relative
+pronoun remained in the later microgravity clause. The station name was still split
+in the source requests, although its translated output was correct: the grouping
+instruction is not always obeyed.
+
+The user's preceding browser/native scan started captions at 2.35 s with 13 holds
+out of 33 attempts. The slower new observation is a warning about the quality/latency
+tradeoff, not a controlled A/B comparison: capture adapter and transport differ and
+only one new run was made. No TTS, microphone, speaker output or acoustic timing.
+Workspace typecheck, server lint, 13 configuration/29 server/114 desktop tests and
+server/desktop/landing builds pass. The final prompt-only adjustment was bundled
+again and the diff checked. Private traces remain outside the repository.
+
+## Stable subject-prefix prompt trial — 25 October 2026
+
+At the user's request, the current Jev prompt now explicitly accepts stable subject
+prefixes, including an open “when” clause, without requiring its verb. It distinguishes
+these from adjectives awaiting nouns and unfinished compounds. Only the prompt was
+changed for this trial: the 0.6 threshold, provider model, local guards and request
+data are unchanged. This supersedes the original-question configuration retained
+at the end of the previous investigation below.
+
+Final text-only check: 11 cases, two repetitions before and after (44 evaluations,
+zero unavailable responses). The requested English prefix scored 0.45–0.48 before
+and 0.91 after, with known following words supplied. Two unseen English/French
+subject prefixes also crossed the threshold. All 10 expected-ready evaluations and
+12 expected-wait evaluations matched their labels after the change, including
+negations, numbers and a compound not included in the prompt. An earlier draft
+incorrectly allowed an adjective/compound boundary; the final prompt corrected it.
+These are small calibration checks, not replay of the user's exact recorded context
+or proof of end-to-end translation quality.
+
+Workspace typecheck, server lint, 13 configuration/29 server/111 desktop tests and
+server/desktop/landing builds pass. The user will run the full benchmark next;
+latency, complete translations and synthesized audio remain unverified for this
+prompt. No microphone or audible playback was used during these checks.
+
+## NASA scan diagnosis and fixes — 25 October 2026
+
+The new user run was captions-only: 22.72 seconds of input, 43 held attempts out of
+51 and first captions at 7.63 seconds. Gate scores were still absent: React refresh
+could retain a controller created before diagnostics were added. Missing historical
+fields must not be reported as zero provider failures.
+
+Corrections retained:
+
+- Completed sentences ending in words such as English “for” or “that” are no longer
+  blocked as dangling prefixes. Commas, ellipses and unfinished prefixes still wait.
+- Jev receives only the current translated continuation as its preceding source,
+  rather than the last unrelated conversation turn. Its request shape is unchanged.
+- Development engine edits cancel and release controllers before reloading. One
+  initial reload is needed to replace instances predating this hook.
+- Starting a benchmark selects the new run; inspecting history afterward remains
+  possible without selection being reset on every update.
+- Translation instructions preserve repetitions actually present in the new fragment,
+  while forbidding retranslation of the old source prefix. A broad prohibition on
+  repeating anything already translated could omit a reintroduced subject.
+
+### Provider investigation and rejected optimizations
+
+Six alternating, silent NASA English→French runs used real OpenAI/Jev calls, the
+real controller and Hono routes in process, 20 ms PCM frames and no speech synthesis.
+Models and readiness threshold (0.6) were unchanged. The three original-question
+controls recorded 126 Jev refusals and one unavailable evaluation: semantic holds,
+rather than provider failures, dominate this sample. First captions had a median
+of 5.28 seconds, ranging from 4.80 to 11.98 seconds.
+
+A more permissive question reduced that median to 2.11 seconds (1.85–2.19), but
+manual inspection found major translation regressions in all three runs. A second,
+more cautious question also failed quality review in one of two runs. Both question
+changes were rejected; the original question and threshold remain. The first new
+caption was sometimes just an introductory word, so these numbers also compare
+different amounts of content. This is not a demonstrated shipping latency gain.
+
+The separate translation-instruction correction was checked on eight text cases,
+twice before and twice after (32 provider calls): repeated subjects/objects,
+intentional repetitions, ordinary continuation, split negation and repeated amounts,
+in both language directions. The observed subject omission occurred in one of two
+original outputs and neither corrected output. All 16 corrected outputs passed
+manual checks for those cases; this is a small, non-blinded check, not a general
+translation-quality score. No provider response or transcript is stored in this doc.
+
+Two additional NASA runs with the original question but extra language/translation
+metadata also showed quality problems. Those metadata additions were removed too;
+only the deterministic continuation selection fix remains in the gate input.
+
+### Verification and limits
+
+Workspace typecheck, server ESLint, 13 configuration tests, 29 server tests,
+111 desktop tests, 17 benchmark-tool tests and server/desktop/landing builds pass.
+Existing desktop chunk-size and landing module-directive warnings remain.
+Controller regressions cover punctuation without ending capture; server regressions
+cover continuation selection in both directions.
+
+Synthetic browser checks at desktop and 390 px verify new-run selection, preserved
+history/baseline choices during updates and stop, with no overflow or browser errors.
+HMR cleanup was checked with simulated capture and two native players, including
+waiting for pending native closes. Native-window reload was not verified: preview
+snapshots timed out twice and the native automation tool could not bind the debug
+executable. No real microphone, speaker playback or native bundle was used.
+
+The NASA timing investigation covers captions only, excludes the browser/backend
+network hop, and is not a word-aligned or acoustic benchmark. The main semantic
+readiness delay remains; the rejected faster questions must not be reported as a fix.
+
+## Jev benchmark diagnostics — 25 October 2026
+
+The benchmark now retains the existing gate probability and unavailable flag,
+separates Jev wait decisions from evaluation failures, and identifies local decisions
+and older runs with missing details. No server readiness rule or model changed.
+
+- Workspace typecheck, server ESLint, 13 configuration tests, 28 server tests,
+  110 desktop tests, 17 benchmark-tool tests, and server/desktop/landing builds pass.
+- Controller tests cover accepted, held, unavailable and local gates without
+  changing caption/audio delivery. Recorder tests check reload/export data,
+  zero/one/null probabilities, legacy compatibility and malformed stored values.
+- Browser checks at 1280×1000 and 390×844 verify scores/statuses, counts, fragment
+  details, JSON export and reload. All input/results were synthetic; no real
+  microphone, provider call or audible playback was used. No browser exceptions or
+  page overflow were observed. Existing build warnings remain as documented below.
+
+The user's first NASA run predates these fields. Its refusals cannot be diagnosed
+retroactively; no new live-provider or native acoustic benchmark was run here.
+
+## Benchmark workspace — 25 October 2026
+
+Recording tests and call previews now live under Benchmark. Verified locally:
+
+- Typecheck across the workspace, server ESLint, 13 configuration tests, 28 server
+  tests, 105 desktop tests, and 17 benchmark-tool tests pass.
+- Server bundle and desktop/landing static builds pass. Vite still reports the
+  desktop chunk-size warning; landing bundling reports module-directive warnings.
+- Browser checks at 1280×1000 and 390×844 cover captions-only and voiced reports,
+  fragment inspection, manual notes, mismatched comparison, JSON export, stop and
+  navigation cancellation, provider errors, outgoing FR→EN, and caption previews.
+  Capture, ASR/provider responses and playback were mocked; no microphone or audible
+  output was used. No page overflow or browser exceptions were observed.
+- Recorder tests cover session isolation, missing native playback timestamps,
+  cancellation, corrupt/full storage, bounded history/traces, comparison eligibility
+  and exclusion of signed voice grants. A controller regression checks observer
+  isolation and the capture/request/playback/end events using the existing harness.
+
+These checks validate the diagnostic tool, not real provider latency. No paid live
+benchmark, acoustic measurement, native capture or Tauri bundle was run for this
+change. See [BENCHMARK.md](BENCHMARK.md) for the measurement protocol and limits.
+
+
 ## Latence de la traduction des interlocuteurs — 25 octobre
 
 Mesures silencieuses avec les vrais fournisseurs (transcription `gpt-live-transcribe`, Jev, `gpt-5.4-nano`, ElevenLabs Flash v2.5), sans micro ni haut-parleur. Source : 6 passages anglais et 4 passages français synthétiques (voix ElevenLabs, horodatage exact de chaque mot), joués en temps réel en trames de 20 ms, une session par langue avec 2,5 s de pause entre les passages et la connexion déjà ouverte, comme pendant un appel. Une pause de 450 ms ferme l’item ASR comme la capture système ; la file de lecture est simulée. Le code d’origine (`277ea77`) et le nouveau code tournaient sur deux API locales, en alternance, 3 répétitions chacun : 30 passages, environ 90 segments et 450 mots par variante et par série. Ces mesures précèdent le passage de la traduction à `gpt-5.4-mini` (section suivante) : son premier token médian est environ 0,15 s plus lent, ce qui s’ajoute aux valeurs absolues ci-dessous pour les deux variantes.
@@ -202,3 +369,22 @@ Les 27 tests de l’app et les 4 tests de métriques du benchmark passent. TypeS
 - La détection des locuteurs est manuelle via les boutons A/B. Pas de séparation de deux voix qui parlent en même temps.
 - L’application doit conserver la protection Vercel tant qu’elle n’a pas d’authentification et de quotas distribués propres.
 - Le cookie et les autorisations de voix expirent après 30 jours. Les voix hébergées chez ElevenLabs ne sont pas automatiquement supprimées à l’expiration du cookie.
+
+## Progressive live words — 2026-10-25
+
+Presentation only: conversation source/translation and floating captions now share
+word-level CSS reveals (35 ms cadence, compressed to a 240 ms start window, 80 ms
+fade). Completed text and reduced motion are immediate. Controller timestamps in
+Benchmark remain text-availability measurements, not painted reveal measurements.
+
+- `pnpm typecheck`, `pnpm lint` (server), `pnpm test` (13 script, 29 server,
+  114 desktop tests), `pnpm build:server`, desktop static build and diff whitespace
+  checks passed. The static build retains its large-chunk warning.
+- Silent synthetic browser checks at 1280 and 390 px passed: batch staggering,
+  stable appended-word DOM identity, revision, session replacement, completion,
+  reduced motion, full accessible text, Chinese segmentation, unmount cancellation
+  and no horizontal page overflow. Screenshots were inspected locally.
+- T3 preview snapshots timed out twice; Playwright loaded the actual components
+  through the existing Vite server in an isolated synthetic page. No microphone,
+  speaker output, provider request or benchmark run was used. Native rendering,
+  screen-reader speech and frame-rate guarantees remain unverified.

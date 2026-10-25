@@ -1,3 +1,5 @@
+import { BenchmarkResults } from "./benchmark";
+import { BenchmarkRecorder } from "../lib/benchmark";
 import {
   useCallback,
   useEffect,
@@ -97,6 +99,7 @@ function save(key: string, value: string) {
 
 export type CallPanelHandle = {
   stop: (sessionId: string) => void;
+  stopAll: () => void;
   previewCaptions: (visible: boolean) => void;
   clearDiscussion: () => void;
 };
@@ -106,6 +109,7 @@ type Outputs = { voice: boolean; camera: boolean };
 
 export function CallPanel({
   visible,
+  benchmark,
   onOpen,
   beforeStart,
   profiles,
@@ -120,6 +124,7 @@ export function CallPanel({
   onOverlayChange: (overlay: OverlayUpdate | null) => void;
   onCaptionError?: (message: string | null) => void;
   visible: boolean;
+  benchmark: boolean;
   onOpen: () => void;
   beforeStart: () => void;
   onBusy: (busy: boolean) => void;
@@ -128,6 +133,9 @@ export function CallPanel({
   onNewDiscussion: () => void;
 }) {
   const native = desktopAvailable();
+  const [recorder] = useState(() => new BenchmarkRecorder());
+  const [benchmarkVoice, setBenchmarkVoice] = useState(false);
+  const [benchmarkRoute, setBenchmarkRoute] = useState<"local" | "virtual">("local");
   const captionPreferences = useCaptionPreferences();
   const [monitor, setMonitor] = useState<CallSnapshot | null>(null);
   const [enabled, setEnabled] = useState(
@@ -237,13 +245,25 @@ export function CallPanel({
   );
   const busy = preparing || state.phase !== "idle";
   const anyBusy = busy || listenBusy;
+  useEffect(() => {
+    if (!benchmark) return;
+    const unsubscribeIncoming = listening.controller.observeDiagnostics(recorder.observe);
+    const unsubscribeOutgoing = controller.observeDiagnostics(recorder.observe);
+    const timer = setInterval(() => recorder.sampleQueue(
+      listening.controller.pendingAudioSeconds + controller.pendingAudioSeconds,
+    ), 250);
+    return () => {
+      unsubscribeIncoming(); unsubscribeOutgoing(); clearInterval(timer);
+      recorder.finish("cancelled");
+    };
+  }, [benchmark, controller, listening, recorder]);
   const callId = listen.callId ?? session?.callId ?? accepted?.id ?? null;
   const participantNames = {
     you: profiles.a.name,
     them: profiles.b.name,
   };
   const callTurns = useMemo(
-    () => [...incoming.turns, ...state.turns],
+    () => [...incoming.turns, ...state.turns].filter(turn => !turn.demo),
     [incoming.turns, state.turns],
   );
   const callTitle = listen.app || accepted?.app;
@@ -326,10 +346,12 @@ export function CallPanel({
     overlayId.current = null;
     stopMicrophone();
     listening.stop();
-  }, [stopMicrophone, listening]);
+    recorder.finish("cancelled");
+  }, [stopMicrophone, listening, recorder]);
   useImperativeHandle(
     ref,
     () => ({
+      stopAll: () => { stop(); stopCaptionsPreview(); setLingering(null); void video.stop(); },
       stop: (sessionId: string) => {
         // The parent/native snapshot may still describe the previous session.
         if (overlayId.current === sessionId) stop();
@@ -343,7 +365,7 @@ export function CallPanel({
         runtime.current?.clearConversation();
       },
     }),
-    [stop, listening],
+    [stop, listening, video],
   );
   useEffect(() => {
     // One pill for the call: the microphone direction when active, otherwise the participants'.
@@ -447,6 +469,7 @@ export function CallPanel({
   }
   async function start(demo = false, call?: DetectedCall, requested?: Outputs) {
     if (busyRef.current || state.phase !== "idle") return;
+    const selectedRoute = demo ? benchmarkRoute : route;
     // The audio sample always speaks, and captions the video only when it already runs.
     const outputs = requested ?? {
       voice: demo || callOptions.microphone,
@@ -471,7 +494,7 @@ export function CallPanel({
           throw new Error("This call is no longer active or authorized.");
       }
       let destination: string | null = null;
-      if (outputs.voice && route === "virtual") {
+      if (outputs.voice && selectedRoute === "virtual") {
         if (!native)
           throw new Error(
             "Open the macOS app to use the virtual microphone, or choose the headphone test mode.",
@@ -537,6 +560,7 @@ export function CallPanel({
       beforeStart();
       outputsRef.current = outputs;
       audio.configure(outputs.voice ? destination : null);
+      if (demo) recorder.setOutput(`${destination ? `Virtual microphone: ${destination}` : "Browser audio"}${outputs.camera ? " + video captions" : ""}`);
       await controller.init();
       if (generation !== startGeneration.current) return;
       for (const id of ["a", "b"] as const)
@@ -545,14 +569,14 @@ export function CallPanel({
       // Captions follow the session that asked for them, also on a video started during it.
       if (outputs.camera) feed.attach(controller.getSnapshot().turns);
       else feed.clear();
-      setSession({ mode: route, demo, callId: call?.id, voice: outputs.voice });
+      setSession({ mode: selectedRoute, demo, callId: call?.id, voice: outputs.voice });
       await controller.start("a", demo);
       // Cancellation already stopped this attempt; a newer attempt may now own the controller.
       if (generation !== startGeneration.current) return;
       if (
         !demo &&
         outputs.voice &&
-        route === "virtual" &&
+        selectedRoute === "virtual" &&
         autoSystemMicrophone &&
         controller.getSnapshot().phase === "listening"
       ) {
@@ -586,7 +610,7 @@ export function CallPanel({
     }
     if (!native && !demo) {
       setError(
-        "Call audio can only be captured in the macOS app. Use “Start the recording test” under “Test without joining a call”.",
+        "Call audio can only be captured in the macOS app. Open Benchmark to test a recording.",
       );
       return;
     }
@@ -607,6 +631,30 @@ export function CallPanel({
       demo,
       sample,
     });
+  }
+  async function runBenchmark(direction: "incoming" | "outgoing") {
+    if (anyBusy) return;
+    const incomingTest = direction === "incoming";
+    const source = profiles[incomingTest ? "b" : "a"].language;
+    const target = profiles[incomingTest ? "a" : "b"].language;
+    const fixture = incomingTest && source === "en"
+      ? sample === "group" ? "nasa-three-speakers-en.wav" : "nasa-en.wav"
+      : `${source}.wav`;
+    let api = "Same-origin API";
+    try { api = new URL(import.meta.env.VITE_API_URL || window.location.origin).origin; } catch {}
+    const runId = recorder.begin({ fixture, direction, source, target,
+      voice: incomingTest ? benchmarkVoice : true,
+      originalAudible: incomingTest && sampleAudible,
+      output: incomingTest ? native ? "System audio (native)" : "Browser audio" : benchmarkRoute === "virtual" ? output : "Browser audio",
+      api,
+    });
+    if (incomingTest) {
+      await startListening({ demo: true, options: { ...callOptions, captions: true, voice: benchmarkVoice } });
+      if (recorder.getSnapshot()[0]?.id === runId && listening.controller.getSnapshot().phase === "idle") recorder.finish("error", listening.controller.getSnapshot().error || "The recording did not start.");
+    } else {
+      await start(true);
+      if (recorder.getSnapshot()[0]?.id === runId && controller.getSnapshot().phase === "idle") recorder.finish("error", controller.getSnapshot().error || "The outgoing test did not start. Check the output route.");
+    }
   }
   handleAccept.current = (call) => {
     setAccepted(call);
@@ -864,6 +912,28 @@ export function CallPanel({
       : []),
     ...outputs.map((d) => ({ value: d.name, label: d.name })),
   ];
+  const videoSettings = (
+    <VideoSettings
+      native={native}
+      devices={cameras}
+      camera={camera}
+      video={videoState}
+      busy={anyBusy}
+      testing={videoTest}
+      onCamera={selectCamera}
+      onAllow={() =>
+        void requestCameraAccess()
+          .catch((e) => video.report(errorMessage(e)))
+          .finally(() => void refreshCameras())
+      }
+      onRefresh={() => void refreshCameras()}
+      onPreview={() => {
+        video.dismissError();
+        void ensureVideo(monitor?.call?.id ?? null).catch(() => {});
+      }}
+      onTest={benchmark ? testVideoCaptions : undefined}
+    />
+  );
   return (
     <section
       className="call-panel"
@@ -871,10 +941,9 @@ export function CallPanel({
       aria-labelledby="calls-title"
     >
       <div className="call-intro">
-        <h1 id="calls-title">Understand and be understood.</h1>
+        <h1 id="calls-title">{benchmark ? "Benchmark" : "Understand and be understood."}</h1>
         <p>
-          Caption or listen to the other participants in your language, and
-          send your translated voice to Meet, Zoom, or Teams.
+          {benchmark ? "Replay recordings, inspect delays and compare results with the same translation engine used in calls." : "Caption or listen to the other participants in your language, and send your translated voice to Meet, Zoom, or Teams."}
         </p>
       </div>
       {monitor?.call && !monitor.accepted && !monitor.dismissed && (
@@ -944,6 +1013,7 @@ export function CallPanel({
           />
         </div>
       </div>
+      {!benchmark && <>
       <div className="call-section">
         <h2>Their voice</h2>
         <div className="call-section-body">
@@ -1242,28 +1312,7 @@ export function CallPanel({
               </button>
             </div>
           </details>
-          {(callOptions.camera || videoLive) && (
-            <VideoSettings
-              native={native}
-              devices={cameras}
-              camera={camera}
-              video={videoState}
-              busy={busy}
-              testing={videoTest}
-              onCamera={selectCamera}
-              onAllow={() =>
-                void requestCameraAccess()
-                  .catch((e) => video.report(errorMessage(e)))
-                  .finally(() => void refreshCameras())
-              }
-              onRefresh={() => void refreshCameras()}
-              onPreview={() => {
-                video.dismissError();
-                void ensureVideo(monitor?.call?.id ?? null).catch(() => {});
-              }}
-              onTest={testVideoCaptions}
-            />
-          )}
+          {(callOptions.camera || videoLive) && videoSettings}
         </div>
       </div>
       {callMessages.length > 0 && (
@@ -1282,7 +1331,7 @@ export function CallPanel({
             </div>
             <DiscussionTurns
               messages={callMessages}
-              live={[...incoming.turns, ...state.turns]}
+              live={callTurns}
               follow
             />
           </div>
@@ -1309,16 +1358,13 @@ export function CallPanel({
           </span>
         </label>
       </div>
+      </>}
       {((error && error !== videoState.error) || state.error || state.warning) && (
         <p className="call-error" role="alert">
           {(error !== videoState.error && error) || state.error || state.warning}
         </p>
       )}
-      <details className="call-test">
-        <summary>
-          Test without joining a call
-          <ChevronDown size={16} aria-hidden="true" />
-        </summary>
+      {benchmark && <section className="call-test" aria-label="Recording tests">
         <div className="call-test-recording">
           <div>
             <h3>Translate a recording</h3>
@@ -1344,7 +1390,7 @@ export function CallPanel({
                   { value: "solo", label: "One voice · 23 seconds" },
                   { value: "group", label: "Three voices · 24 seconds" },
                 ]}
-                disabled={listenBusy}
+                disabled={anyBusy}
                 onChange={(next) => setSample(next === "group" ? "group" : "solo")}
               />
               {sample === "group" && (
@@ -1355,6 +1401,7 @@ export function CallPanel({
           <label className="check">
             <Checkbox
               checked={sampleAudible}
+              disabled={anyBusy}
               onCheckedChange={(audible) => {
                 setSampleAudible(audible);
                 listening.setSampleAudible(audible);
@@ -1362,14 +1409,14 @@ export function CallPanel({
             />
             <span>
               <strong>Play the original {languageName(profiles.b.language)} audio</strong>
-              <small>Hear the recording while reading the captions. You can mute or unmute it during the test.</small>
+              <small>Hear the recording while reading the captions. Keep this setting identical when comparing runs.</small>
             </span>
           </label>
           <label className="check">
             <Checkbox
-              checked={callOptions.voice}
-              disabled={listenBusy}
-              onCheckedChange={(voice) => chooseOptions({ ...callOptions, voice })}
+              checked={benchmarkVoice}
+              disabled={anyBusy}
+              onCheckedChange={setBenchmarkVoice}
             />
             <span>
               <strong>Also read the {languageName(profiles.a.language)} translation aloud</strong>
@@ -1379,10 +1426,10 @@ export function CallPanel({
           <button
             type="button"
             className={`btn ${listenBusy && listen.demo ? "call-stop" : "call-primary"}`}
-            disabled={(listenBusy && !listen.demo) || !["en", "fr"].includes(profiles.b.language)}
+            disabled={busy || (listenBusy && !listen.demo) || !["en", "fr"].includes(profiles.b.language)}
             onClick={() => listenBusy && listen.demo
-              ? listening.stop()
-              : void startListening({ demo: true, options: { ...callOptions, captions: true } })}
+              ? stop()
+              : void runBenchmark("incoming")}
           >
             {listenBusy && listen.demo
               ? <Square size={15} fill="currentColor" aria-hidden="true" />
@@ -1392,11 +1439,13 @@ export function CallPanel({
           {!["en", "fr"].includes(profiles.b.language) ? (
             <p className="note">Choose English or French under “They speak” to use a test recording.</p>
           ) : listenBusy && !listen.demo ? (
-            <p className="note">Stop the incoming call translation above before starting a recording test.</p>
+            <p className="note">Stop the current translation before starting a recording test.</p>
           ) : (
             <p className="note">Uses live translation and requires an internet connection. Headphones recommended when playing audio.</p>
           )}
         </div>
+        <BenchmarkResults recorder={recorder} />
+        {videoSettings}
         <details className="call-test-tools">
           <summary>Other checks <ChevronDown size={14} aria-hidden="true" /></summary>
           <div className="call-test-item">
@@ -1411,11 +1460,14 @@ export function CallPanel({
           <div className="call-test-item">
             <div>
               <h3>Test your outgoing translation</h3>
-              <p>A {languageName(profiles.a.language)} recording replaces your microphone. Its {languageName(profiles.b.language)} translation is sent to {route === "virtual" ? "the Interprete virtual microphone configured above" : "your Mac’s audio output"}. Your real microphone stays off.</p>
+              <p>A {languageName(profiles.a.language)} recording replaces your microphone. Its {languageName(profiles.b.language)} translation is sent to {benchmarkRoute === "virtual" ? "the selected virtual microphone" : "your Mac’s audio output"}. Your real microphone stays off.</p>
             </div>
-            <button type="button" className="btn" disabled={busy && !session?.demo} onClick={() => busy && session?.demo ? stopMicrophone() : void start(true)}>
+            <CallSelect id="benchmark-output" label="Outgoing output" value={benchmarkRoute} disabled={anyBusy}
+              options={[{ value: "local", label: "Local audio" }, { value: "virtual", label: "Virtual microphone (macOS)" }]}
+              onChange={value => setBenchmarkRoute(value === "virtual" ? "virtual" : "local")} />
+            <button type="button" className="btn" disabled={listenBusy || (!busy && !["en", "fr"].includes(profiles.a.language))} onClick={() => busy ? stop() : void runBenchmark("outgoing")}>
               <Headphones size={15} aria-hidden="true" />
-              {busy && session?.demo ? "Stop outgoing test" : "Test outgoing audio"}
+              {busy ? "Stop outgoing test" : "Test outgoing audio"}
             </button>
           </div>
           <div className="call-test-item">
@@ -1447,7 +1499,7 @@ export function CallPanel({
             </button>
           </div>
         </details>
-      </details>
+      </section>}
       {!native && captions && (
         <div className="captions-browser">
           <div className="captions-positioned" style={{ ...captionPosition(captionPreferences), width: CAPTION_SIZES[captionPreferences.size].width }}>
