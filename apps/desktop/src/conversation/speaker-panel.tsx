@@ -64,13 +64,11 @@ export function SpeakerPanel({
       data-state={state}
       aria-label={`Person ${letter}`}
     >
-      <div className="speaker-meta">
+      <div className="speaker-head">
         <span className={`mark mark-${profile.id}`} aria-hidden="true">
           {letter}
         </span>
-        <span className="speaker-name">
-          {name}
-        </span>
+        <span className="speaker-name">{name}</span>
         <span
           className={`voice-chip ${voice === "error" ? "is-error" : ""}`}
           title="Voice used for the translation"
@@ -98,39 +96,39 @@ export function SpeakerPanel({
             presetName(profile.voice)
           )}
         </span>
-      </div>
-      <div className="language-field">
-        <Label className="sr-only" htmlFor={`language-${profile.id}`}>
-          Person {letter}’s language
-        </Label>
-        <Select
-          items={LANGUAGES.map((l) => ({ value: l.code, label: l.native }))}
-          value={profile.language}
-          disabled={busy}
-          onValueChange={(value) => {
-            if (!value || !LANGUAGES.some((l) => l.code === value)) return;
-            onProfile({ language: value as Profile["language"] });
-          }}
-        >
-          <SelectTrigger
-            id={`language-${profile.id}`}
-            aria-label={`Person ${letter}’s language`}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent
-            side="top"
-            align="start"
-            alignItemWithTrigger={false}
-            className="min-w-44"
-          >
-            {LANGUAGES.map((l) => (
-              <SelectItem key={l.code} value={l.code} className="pl-2.5">
-                {l.native}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="language-field">
+            <Label className="sr-only" htmlFor={`language-${profile.id}`}>
+              Person {letter}’s language
+            </Label>
+            <Select
+              items={LANGUAGES.map((l) => ({ value: l.code, label: l.native }))}
+              value={profile.language}
+              disabled={busy}
+              onValueChange={(value) => {
+                if (!value || !LANGUAGES.some((l) => l.code === value)) return;
+                onProfile({ language: value as Profile["language"] });
+              }}
+            >
+              <SelectTrigger
+                id={`language-${profile.id}`}
+                aria-label={`Person ${letter}’s language`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                side="top"
+                align="start"
+                alignItemWithTrigger={false}
+                className="min-w-44"
+              >
+                {LANGUAGES.map((l) => (
+                  <SelectItem key={l.code} value={l.code} className="pl-2.5">
+                    {l.native}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+        </div>
       </div>
       <Button
         variant="outline"

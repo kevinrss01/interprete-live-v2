@@ -72,6 +72,11 @@ import { CallOptionChecks } from "../components/call-options";
 import { DiscussionTurns } from "./conversation";
 import { CaptionsView } from "../windows/call-captions";
 import { Checkbox } from "@interprete/ui/components/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@interprete/ui/components/collapsible";
 import { CallSelect } from "../components/call-select";
 
 const errorMessage = (error: unknown) =>
@@ -142,6 +147,7 @@ export function CallPanel({
   const [route, setRoute] = useState<"virtual" | "local">(() =>
     savedRoute(preference("interprete-call-route")),
   );
+  const [microphoneSettingsOpen, setMicrophoneSettingsOpen] = useState(false);
   const [autoSystemMicrophone, setAutoSystemMicrophone] = useState(
     () => preference("interprete-system-microphone") !== "off",
   );
@@ -335,9 +341,8 @@ export function CallPanel({
     () => ({
       stopAll: () => { stop(); stopCaptionsPreview(); setLingering(null); },
       openOptions: () => {
+        setMicrophoneSettingsOpen(true);
         const panel = document.querySelector<HTMLElement>(".call-panel");
-        const advanced = panel?.querySelector<HTMLDetailsElement>(".call-advanced");
-        if (advanced) advanced.open = true;
         panel?.scrollIntoView({ block: "start" });
         panel?.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
       },
@@ -1034,130 +1039,141 @@ export function CallPanel({
           </div>
           {microphoneSync.notice && <p className="note" role="status">{microphoneSync.notice}</p>}
           {microphoneSync.permissionRequired && <button className="btn" type="button" onClick={() => void openCallPermissions("accessibility").catch(error => setError(errorMessage(error)))}>Open Accessibility settings</button>}
-          <details className="call-advanced">
-            <summary>Microphone settings and test mode</summary>
-            <fieldset className="segmented" disabled={busy}>
-              <legend className="sr-only">Translation output</legend>
-              <label>
-                <input
-                  type="radio"
-                  name="call-route"
-                  value="virtual"
-                  checked={route === "virtual"}
-                  onChange={() => setRoute("virtual")}
-                />
-                <span>Send to the call</span>
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="call-route"
-                  value="local"
-                  checked={route === "local"}
-                  onChange={() => setRoute("local")}
-                />
-                <span>Test with headphones</span>
-              </label>
-            </fieldset>
-            <div className="call-devices" data-route={route}>
-              <CallSelect
-                id="call-input"
-                label="Microphone"
-                value={input}
-                placeholder="Choose a microphone…"
-                disabled={busy}
-                options={inputs.map((d) => ({ value: d.deviceId, label: microphoneName(d.label) }))}
-                onChange={(value) => {
-                  inputRef.current = value;
-                  setInput(value);
-                  save(MICROPHONE_KEY, value);
-                  save(
-                    "interprete-call-input-label",
-                    inputs.find((device) => device.deviceId === value)?.label ||
-                      "",
-                  );
-                }}
-              />
-              {route === "virtual" && (
-                <CallSelect
-                  id="call-output"
-                  label="Output to the call"
-                  value={output}
-                  placeholder="App microphone…"
-                  disabled={busy}
-                  options={outputOptions}
-                  onChange={(value) => {
-                    outputRef.current = value;
-                    setOutput(value);
-                    save("interprete-call-output", value);
-                  }}
-                />
-              )}
-            </div>
-            <p className="note">
-              {route === "virtual" ? (
-                <>
-                  In the call, choose{" "}
-                  <strong>
-                    {autoSystemMicrophone
-                      ? "System / Default"
-                      : output || APP_MICROPHONE_NAME}
-                  </strong>{" "}
-                  as the microphone and your headphones as the speaker.{" "}
-                  {autoSystemMicrophone &&
-                    "The app switches the system input, then restores your microphone when stopped."}
-                </>
-              ) : (
-                "The translation plays on the Mac’s current output. Nothing is sent to the call."
-              )}
-            </p>
-            {route === "virtual" && !outputs.length && (
-              <div className="call-setup">
-                <p>
-                  Install the BlackHole 2ch driver to present the translation
-                  as a microphone:
-                </p>
-                <code>brew install blackhole-2ch</code>
+          <Collapsible
+            className="call-advanced"
+            open={microphoneSettingsOpen}
+            onOpenChange={setMicrophoneSettingsOpen}
+          >
+            <CollapsibleTrigger className="call-advanced-trigger" type="button">
+              Microphone settings and test mode
+              <ChevronDown size={16} aria-hidden="true" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="call-advanced-panel">
+              <div className="call-advanced-body">
+                <fieldset className="segmented" disabled={busy}>
+                  <legend className="sr-only">Translation output</legend>
+                  <label>
+                    <input
+                      type="radio"
+                      name="call-route"
+                      value="virtual"
+                      checked={route === "virtual"}
+                      onChange={() => setRoute("virtual")}
+                    />
+                    <span>Send to the call</span>
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="call-route"
+                      value="local"
+                      checked={route === "local"}
+                      onChange={() => setRoute("local")}
+                    />
+                    <span>Test with headphones</span>
+                  </label>
+                </fieldset>
+                <div className="call-devices" data-route={route}>
+                  <CallSelect
+                    id="call-input"
+                    label="Microphone"
+                    value={input}
+                    placeholder="Choose a microphone…"
+                    disabled={busy}
+                    options={inputs.map((d) => ({ value: d.deviceId, label: microphoneName(d.label) }))}
+                    onChange={(value) => {
+                      inputRef.current = value;
+                      setInput(value);
+                      save(MICROPHONE_KEY, value);
+                      save(
+                        "interprete-call-input-label",
+                        inputs.find((device) => device.deviceId === value)?.label ||
+                          "",
+                      );
+                    }}
+                  />
+                  {route === "virtual" && (
+                    <CallSelect
+                      id="call-output"
+                      label="Output to the call"
+                      value={output}
+                      placeholder="App microphone…"
+                      disabled={busy}
+                      options={outputOptions}
+                      onChange={(value) => {
+                        outputRef.current = value;
+                        setOutput(value);
+                        save("interprete-call-output", value);
+                      }}
+                    />
+                  )}
+                </div>
                 <p className="note">
-                  Then restart the app and your calling software, and
-                  refresh.
+                  {route === "virtual" ? (
+                    <>
+                      In the call, choose{" "}
+                      <strong>
+                        {autoSystemMicrophone
+                          ? "System / Default"
+                          : output || APP_MICROPHONE_NAME}
+                      </strong>{" "}
+                      as the microphone and your headphones as the speaker.{" "}
+                      {autoSystemMicrophone &&
+                        "The app switches the system input, then restores your microphone when stopped."}
+                    </>
+                  ) : (
+                    "The translation plays on the Mac’s current output. Nothing is sent to the call."
+                  )}
                 </p>
+                {route === "virtual" && !outputs.length && (
+                  <div className="call-setup">
+                    <p>
+                      Install the BlackHole 2ch driver to present the translation
+                      as a microphone:
+                    </p>
+                    <code>brew install blackhole-2ch</code>
+                    <p className="note">
+                      Then restart the app and your calling software, and
+                      refresh.
+                    </p>
+                  </div>
+                )}
+                {native && route === "virtual" && (
+                  <label className="check">
+                    <Checkbox
+                      checked={autoSystemMicrophone}
+                      disabled={busy}
+                      onCheckedChange={setAutoSystemMicrophone}
+                    />
+                    <span>
+                      <strong>Use the app microphone as the system microphone</strong>
+                      <small>Your previous microphone is restored when stopped.</small>
+                    </span>
+                  </label>
+                )}
+                <div className="call-device-actions">
+                  <button
+                    type="button"
+                    className="btn btn-quiet"
+                    disabled={busy}
+                    onClick={() => void refresh(true)}
+                  >
+                    <Mic size={15} aria-hidden="true" />
+                    Allow microphone access
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-quiet"
+                    disabled={busy}
+                    onClick={() => void refresh()}
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
+                    Refresh
+                  </button>
+                </div>
               </div>
-            )}
-            {native && route === "virtual" && (
-              <label className="check">
-                <Checkbox
-                  checked={autoSystemMicrophone}
-                  disabled={busy}
-                  onCheckedChange={setAutoSystemMicrophone}
-                />
-                <span>
-                  <strong>Use the app microphone as the system microphone</strong>
-                  <small>Your previous microphone is restored when stopped.</small>
-                </span>
-              </label>
-            )}
-            <div className="call-device-actions">
-              <button
-                type="button"
-                className="btn btn-quiet"
-                disabled={busy}
-                onClick={() => void refresh(true)}
-              >
-                <Mic size={15} aria-hidden="true" />
-                Allow microphone access
-              </button>
-              <button
-                type="button"
-                className="btn btn-quiet"
-                disabled={busy}
-                onClick={() => void refresh()}
-              >
-                <RefreshCw size={14} aria-hidden="true" />
-                Refresh
-              </button>
-            </div>
-          </details>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
       {callMessages.length > 0 && (

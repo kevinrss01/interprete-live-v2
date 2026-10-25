@@ -1,19 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import {
-  ArrowLeftRight,
-  AudioLines,
-  CircleAlert,
-  History,
-  Gauge,
-  LoaderCircle,
-  MessagesSquare,
-  Mic,
-  MicOff,
-  Phone,
-  Plus,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
+import { X } from "lucide-react";
 import { signOut, readAuthToken } from "../lib/account";
 import type { InterpreterController } from "../lib/interpreter";
 import { clearOnboardingAccount } from "../onboarding/onboarding-account";
@@ -27,14 +13,20 @@ import {
 import { desktopAvailable } from "../lib/calls";
 import { discussionInputs, discussionLog, openDiscussion } from "../lib/discussion";
 import { startDiscussionSync } from "../lib/discussion-sync";
+import { conversationStatus } from "../lib/live-status";
+import { useDockInset } from "../lib/use-dock-inset";
 import { useDiscussion } from "../lib/use-discussion";
 import { Conversation } from "./conversation";
+import { ConversationActions } from "./conversation-actions";
+import { ConversationDock } from "./dock";
 import { HistoryPage } from "./history";
+import { LiveStatus } from "./live-status";
+import { type View } from "./navigation";
 import { SettingsPage } from "./settings";
+import { Sidebar } from "./sidebar";
 import { VoicesPage } from "./voices";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 import { Button } from "@interprete/ui/components/button";
-import logo from "@interprete/ui/assets/logo.png";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,16 +37,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@interprete/ui/components/alert-dialog";
-
-type View = "conversation" | "call" | "benchmark" | "history" | "voices" | "settings";
-
-const NAV: { view: View; label: string; icon: typeof Phone }[] = [
-  { view: "conversation", label: "Conversation", icon: MessagesSquare },
-  { view: "call", label: "Online meeting", icon: Phone },
-  { view: "benchmark", label: "Benchmark", icon: Gauge },
-  { view: "history", label: "History", icon: History },
-  { view: "voices", label: "Voices", icon: AudioLines },
-];
 
 type PendingConfirm =
   | { kind: "clear" }
@@ -94,9 +76,12 @@ export function Interpreter({
   const [callBusy, setCallBusy] = useState(false);
   const [overlayExpanded, setOverlayExpanded] = useState(false);
   const [view, setView] = useState<View>(initialView);
+  const [historyId, setHistoryId] = useState<string | null>(null);
   const callMode = view === "call" || view === "benchmark";
   const mainRef = useRef<HTMLElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
   const shownView = useRef(view);
+  useDockInset(dockRef, view);
   useEffect(() => {
     // The button that changed the view unmounts; give keyboard and screen-reader users a destination.
     if (shownView.current === view) return;
@@ -160,29 +145,15 @@ export function Interpreter({
   }, [controller, view]);
   const busy = state.phase !== "idle" || callBusy;
   const demo = state.input === "demo";
-  const microphoneActive = state.phase === "listening" && state.input === "microphone";
-  const status = callBusy ? "Translating the call…" :
-    demo && state.phase === "listening" && state.connection === "reconnecting"
-      ? "Reconnecting · audio sample"
-      : demo && (state.phase === "connecting" || state.phase === "listening")
-        ? "Playing audio sample…"
-        : state.phase === "connecting"
-          ? "Connecting microphone…"
-          : state.phase === "listening"
-            ? state.connection === "reconnecting"
-              ? "Reconnecting · mic on"
-              : state.outputActive
-                ? "Listening and translating…"
-                : `${state.profiles[state.active].name} is speaking…`
-            : state.phase === "finishing"
-              ? "Finishing the turn…"
-              : state.phase === "translating"
-                ? "Translating…"
-                : state.phase === "playing"
-                  ? "Playing the translation"
-                  : state.ready
-                    ? "Ready"
-                    : "Connecting…";
+  const status = conversationStatus({
+    phase: state.phase,
+    input: state.input,
+    connection: state.connection,
+    outputActive: state.outputActive,
+    ready: state.ready,
+    callBusy,
+    speakerName: state.profiles[state.active].name,
+  });
   function onTalk(id: SpeakerId) {
     if (state.phase === "connecting" && state.active === id)
       controller.cancel();
@@ -216,6 +187,15 @@ export function Interpreter({
     clearOnboardingAccount();
     onLeave();
   }
+  function startNewDiscussion() {
+    const current = openDiscussion(discussions, "conversation");
+    if (current?.messages.length) setPending({ kind: "clear" });
+    else if (view !== "conversation") openView("conversation");
+  }
+  function openHistory(id: string | null) {
+    setHistoryId(id);
+    openView("history");
+  }
   function openView(next: View) {
     if (next !== view && (view === "call" || view === "benchmark")) callPanelRef.current?.stopAll();
     // Leaving the conversation ends any turn in progress; the call panel stops itself when hidden.
@@ -245,78 +225,35 @@ export function Interpreter({
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <aside className="sidebar" aria-label="Navigation">
-        <img className="sidebar-logo" src={logo} alt="Interprète" />
-        <nav className="sidebar-nav">
-          {NAV.map(({ view: id, label, icon: Icon }) => (
-            <button
-              key={id}
-              className="sidebar-item"
-              aria-current={view === id ? "page" : undefined}
-              onClick={() => openView(id)}
-            >
-              <Icon size={16} aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-foot">
-          <button
-            className="sidebar-item"
-            aria-current={view === "settings" ? "page" : undefined}
-            onClick={() => openView("settings")}
-          >
-            <SlidersHorizontal size={16} aria-hidden="true" />
-            Settings
-          </button>
-        </div>
-      </aside>
+      <Sidebar
+        view={view}
+        busy={busy}
+        empty={conversationMessages.length === 0}
+        discussions={discussions.discussions}
+        historyId={historyId}
+        onNewDiscussion={startNewDiscussion}
+        onNavigate={openView}
+        onOpenHistory={openHistory}
+      />
       <div className="app panel">
         <header
           className="topbar"
-          hidden={view === "benchmark" || view === "voices" || view === "settings" || (view === "call" && !callBusy)}
+          hidden={
+            view === "conversation" ||
+            view === "benchmark" ||
+            view === "history" ||
+            view === "voices" ||
+            view === "settings" ||
+            (view === "call" && !callBusy)
+          }
         >
           <div className="frame topbar-inner">
-            {(view === "conversation" || view === "history") && (
-              <div className="topbar-actions">
-                <button
-                  type="button"
-                  className="topbar-action"
-                  disabled={view === "conversation" && (busy || conversationMessages.length === 0)}
-                  onClick={() => {
-                    const current = openDiscussion(discussions, "conversation");
-                    if (current?.messages.length) setPending({ kind: "clear" });
-                    else openView("conversation");
-                  }}
-                >
-                  <Plus size={13} aria-hidden="true" />
-                  New discussion
-                </button>
-                {view === "conversation" && (
-                  <button
-                    type="button"
-                    className="topbar-action"
-                    disabled={busy}
-                    onClick={() => void controller.start(state.active, true)}
-                  >
-                    Audio sample
-                  </button>
-                )}
-              </div>
-            )}
-            <div
-              className="status"
-              data-phase={callBusy ? "listening" : state.phase}
-              data-ready={state.ready}
-              role="status"
-            >
-              {busy && state.phase !== "listening" ? (
-                <LoaderCircle size={13} className="spin" aria-hidden="true" />
-              ) : (
-                <span className="status-dot" aria-hidden="true" />
-              )}
-              <span className="status-text">{status}</span>
-            </div>
+            <LiveStatus
+              phase={callBusy ? "listening" : state.phase}
+              ready={state.ready}
+              spinning={busy && state.phase !== "listening"}
+              label={status}
+            />
           </div>
         </header>
       {overlayError && (
@@ -369,13 +306,21 @@ export function Interpreter({
           onSetupRequired={() => onMacSetup("call")}
         />
         {view === "conversation" && (
-          <Conversation
-            messages={conversationMessages}
-            live={state.turns}
-            onPlay={(id) => void controller.replay(id)}
-            onDemo={() => void controller.start(state.active, true)}
-            busy={busy}
-          />
+          <>
+            <ConversationActions
+              busy={busy}
+              empty={conversationMessages.length === 0}
+              onNewDiscussion={startNewDiscussion}
+              onSample={() => void controller.start(state.active, true)}
+            />
+            <Conversation
+              messages={conversationMessages}
+              live={state.turns}
+              onPlay={(id) => void controller.replay(id)}
+              onDemo={() => void controller.start(state.active, true)}
+              busy={busy}
+            />
+          </>
         )}
         {view === "settings" && (
           <SettingsPage
@@ -393,92 +338,29 @@ export function Interpreter({
             onMacSetup={() => onMacSetup("settings")}
           />
         )}
-        {view === "history" && <HistoryPage />}
+        {view === "history" && (
+          <HistoryPage selectedId={historyId} onSelect={setHistoryId} />
+        )}
         {view === "voices" && (
           <VoicesPage controller={controller} profile={state.profiles.a} busy={busy} />
         )}
       </main>
-      <div className="dock" hidden={view !== "conversation"}>
-        <div className="frame">
-          {(state.error || state.warning) && (
-            <div className="alert" role="alert">
-              <CircleAlert size={16} aria-hidden="true" />
-              <span>{state.error || state.warning}</span>
-              <Button
-                variant="ghost"
-                className="icon-btn"
-                onClick={controller.dismissError}
-                aria-label="Dismiss message"
-              >
-                <X size={16} aria-hidden="true" />
-              </Button>
-            </div>
-          )}
-          <p className="live-controls">
-            <span
-              className="microphone-status"
-              data-active={microphoneActive}
-            >
-              {microphoneActive ? (
-                <Mic size={14} aria-hidden="true" />
-              ) : (
-                <MicOff size={14} aria-hidden="true" />
-              )}
-              {microphoneActive
-                ? "Mic on"
-                : !demo && state.phase === "connecting"
-                  ? "Turning on mic…"
-                  : state.input === "microphone" && state.phase === "finishing"
-                    ? "Turning off mic…"
-                    : "Mic off"}
-            </span>
-            <span id="microphone-help" className="live-controls-help">
-              {demo
-                ? "The sample uses a recording, not your mic."
-                : microphoneActive
-                  ? "The translation follows your voice. Turn off the mic to finish."
-                  : state.phase === "idle"
-                    ? "Turn on the speaker’s mic."
-                    : state.phase === "connecting"
-                      ? "Allow microphone access if asked."
-                      : state.phase === "playing"
-                        ? "Playing the translation…"
-                        : "Finishing the translation…"}
-            </span>
-          </p>
-          <div className="dock-grid">
-            {speaker("a")}
-            <div className="dock-center">
-              {busy ? (
-                <Button
-                  variant="ghost"
-                  className="icon-btn round"
-                  onClick={() => controller.cancel()}
-                  aria-label={
-                    state.phase === "listening" || state.phase === "connecting"
-                      ? "Cancel turn"
-                      : "Stop"
-                  }
-                  title="Stop (Esc)"
-                >
-                  <X size={18} aria-hidden="true" />
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  className="icon-btn round"
-                  onClick={swap}
-                  aria-label="Swap languages"
-                  title="Swap languages"
-                >
-                  <ArrowLeftRight size={16} aria-hidden="true" />
-                </Button>
-              )}
-            </div>
-            {speaker("b")}
-          </div>
-        </div>
-      </div>
+      <ConversationDock
+        dockRef={dockRef}
+        hidden={view !== "conversation"}
+        error={state.error}
+        warning={state.warning}
+        onDismiss={controller.dismissError}
+        phase={state.phase}
+        input={state.input}
+        busy={busy}
+        ready={state.ready}
+        statusLabel={status}
+        onStop={() => controller.cancel()}
+        onSwap={swap}
+        speakerA={speaker("a")}
+        speakerB={speaker("b")}
+      />
       </div>
       <AlertDialog
         open={pending !== null}
@@ -502,9 +384,9 @@ export function Interpreter({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-11 px-4">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="h-9 px-4">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="h-11 px-4"
+              className="h-9 px-4"
               variant={pending?.kind === "remove" ? "destructive" : "default"}
               onClick={confirmPending}
             >

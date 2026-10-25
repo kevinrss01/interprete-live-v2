@@ -574,7 +574,7 @@ function CaptionSettings({ onPreview, busy, previewError }: { onPreview: (visibl
               if (next) change({ x: next.x, y: next.y });
             }}
           >
-            <SelectTrigger id="caption-position" className="h-11"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="caption-position" className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent align="end" alignItemWithTrigger={false}>
               {CAPTION_POSITIONS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
               <SelectItem value="custom" disabled>Custom position</SelectItem>

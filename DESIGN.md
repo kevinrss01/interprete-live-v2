@@ -72,20 +72,20 @@ components:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
     rounded: "{rounded.talk}"
-    padding: "0 14px 0 12px"
-    height: "60px"
+    padding: "0 12px 0 8px"
+    height: "48px"
   talk-next:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.surface}"
     rounded: "{rounded.talk}"
-    padding: "0 14px 0 12px"
-    height: "60px"
+    padding: "0 12px 0 8px"
+    height: "48px"
   talk-live:
     backgroundColor: "{colors.accent}"
     textColor: "{colors.surface}"
     rounded: "{rounded.talk}"
-    padding: "0 14px 0 12px"
-    height: "60px"
+    padding: "0 12px 0 8px"
+    height: "48px"
   field:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -110,7 +110,7 @@ This records the implemented, code-led redesign in `src/app/globals.css` and the
 
 **Key Characteristics:**
 - Warm neutral canvas, white controls and charcoal hierarchy.
-- Compact header, open conversation space and persistent two-person dock.
+- Compact header, open conversation space, and a two-person dock floating over the transcript.
 - One functional red accent for recording and errors.
 - Flat surfaces, subtle corners and brief state transitions.
 
@@ -122,31 +122,35 @@ Charcoal (`ink`) identifies primary text and the next speaking action. Signal re
 
 ### Neutral
 
-`canvas` unifies the page, header and dock. `surface` lifts controls and the sheet through tone alone. `fill` provides hover feedback and microphone wells. `ink-2` carries names and secondary text; `ink-3` carries supporting text. `line` separates regions and turns; `line-2` outlines controls.
+`canvas` unifies the page and header. The dock is a translucent white surface over the conversation. `surface` lifts controls and the sheet through tone alone. `fill` provides hover feedback and microphone wells. `ink-2` carries names and secondary text; `ink-3` carries supporting text. `line` separates regions and turns; `line-2` outlines controls.
 
 **The Functional Accent Rule.** Reserve red for recording and errors; keep idle and working states neutral.
 
 Opaque sRGB contrast, calculated from the source tokens: `ink-3` on `canvas` is **5.13:1**; white on `accent` is **4.99:1**; `accent` on `canvas` is **4.78:1**. These ratios do not describe opacity-reduced elements or constitute a whole-interface accessibility audit.
+
+### Color mode
+
+The desktop app stores `light` or `dark` on the device (`interprete-theme`). Light is the default and uses the tokens above. Dark keeps the same roles on a warm near-black canvas (`#141413`) with a lifted panel (`#1e1e1c`): text inverts to warm off-white, and the recording red lightens to `#f26456` so it stays readable both as text and as dark type on the live control. The wordmark image is inverted so the orange mark stays orange. Captions, the call toast, and the translation pill keep their own colors.
 
 ## Typography
 
 Inter is loaded with `next/font` and exposed as `--font-body`; the CSS fallback is a sans-serif system stack. No separate display face is used.
 
 - **Title:** compact wordmark and sheet heading, using the title token.
-- **Language:** semibold selectors, reducing to (16px) at the compact breakpoint.
-- **Translation:** the strongest reading text, capped at (62ch), reducing to (17px) on compact screens.
-- **Body:** standard text; source transcripts use a slightly looser line height (1.55).
+- **Language:** semibold selectors at (16px), on the line under the name and aligned with the speaker mark.
+- **Translation:** the strongest reading text inside a bubble, (16px), capped at (62ch), reducing to (15px) on compact screens.
+- **Body:** standard text; source lines inside a bubble are (13px) with a slightly looser line height (1.5).
 - **Supporting text:** (12–13px); language codes and compact tags use (11px). Names use medium or semibold weight. Tabular numerals stabilize timings and progress.
 
 **The Translation First Rule.** Give translated speech greater size and contrast than its source transcript or metadata.
 
 ## Layout
 
-The content frame is (760px) plus (24px) gutters on either side. A full-height flex shell leaves conversation space between the sticky header and bottom dock. The header is (56px); the dock has two equal speaker columns around a (44px) swap/stop control, with (16px) gaps. Each speaker stacks metadata, language selection and a speaking button.
+The content frame is (760px) plus (24px) gutters on either side. A full-height flex shell leaves the conversation open to the top of the panel. History, voices, settings, and call pages have no toolbar and share a (28px) top inset. On the discussion, Audio sample is a frosted chip with a play icon, set down from the top of the panel and pulled to its start edge, with the dock’s hairline and (16px) radius. New discussion is the first sidebar action, above Conversation, with a compose icon. The five most recently updated discussions are listed under the navigation. History keeps the full retained list. When the sidebar is hidden, New discussion returns as a chip above Audio sample. The dock floats over the bottom of the transcript. A speech error or warning sits in its own surface just above that dock, outside the speaker card, and its dismiss control has no hover fill. Two equal speaker columns meet at a (36px) swap/stop control, with (10px) gaps. Each column starts at the same edge: mark and name on one line, with the voice at the end of that line, and the language on the next line, aligned with the speaker mark. Then a (48px) speaking button. A caption under the controls shows live status and whether the microphone is on. Longer microphone guidance appears on its own line only while connecting, listening, or playing a sample; the same sentence stays available to assistive tech the rest of the time. The conversation keeps clearance for both floating surfaces so the latest turn can scroll clear of them.
 
-Conversation turns form a single column, with a (20px) speaker mark and (14px) gap. Turns use hairline separators, not cards. New content follows the reader only when they are already near the bottom.
+Conversation turns are bubbles in one column. Speaker A sits at the start and speaker B at the end, with a (14px) gap. The name inside the bubble identifies the speaker. A bubble uses the panel’s (16px) radius, with a (6px) corner toward its side. A new bubble fades and rises over (240ms). While that person is still speaking, the bubble border pulses in the recording color; reduced motion keeps that border still. New content follows the reader only when they are already near the bottom.
 
-At widths of (640px) or less, gutters become (16px), header height (52px), dock gaps (8px), and speaking controls (56px) tall. The two speakers stay side by side. The desktop sheet is a right-hand panel up to (420px) wide; on compact screens it becomes a bottom sheet capped at (90dvh). Safe-area insets protect its content and the dock. Voice status is hidden at (360px) or less; keyboard hints are hidden on devices without hover.
+At widths of (640px) or less, gutters become (16px), header height (52px), dock gaps (8px), and speaking controls (52px) tall. The two speakers stay side by side. The desktop sheet is a right-hand panel up to (420px) wide; on compact screens it becomes a bottom sheet capped at (90dvh). Safe-area insets protect its content and the dock. Voice status is hidden at (360px) or less; keyboard hints are hidden on devices without hover.
 
 ## Elevation & Depth
 
@@ -156,7 +160,7 @@ State transitions use `--ease`: controls change over (150ms), press feedback ove
 
 ## Shapes
 
-Fields have restrained (8px) corners, general controls (10px), and speaking controls and the mobile sheet (14px). Speaker marks, microphone wells and the central dock control are circular. Borders are thin and neutral; maintain the flat rectangular conversation surface.
+Fields have restrained (8px) corners, general controls (10px), and speaking controls and the mobile sheet (14px). The app panel, the floating dock, and discussion bubbles use (16px). Speaker marks, microphone wells and the central dock control are circular. Borders are thin and neutral.
 
 ## Components
 
@@ -166,7 +170,7 @@ Neutral buttons have white fill, a control border and a minimum height of (44px)
 
 ### Speaking controls
 
-Idle is white; next, connecting, working and playback are charcoal. Live recording is red, shows the input meter and offers “Terminer”. During continuous translation, live recording remains active while output plays; the header says “Écoute et traduction…”. Connecting shows a spinner and can be cancelled. Working/playback after capture keep full opacity; the other speaker is disabled at (40%) opacity. Press feedback scales to (0.985). The A mark is outlined; B is charcoal-filled, consistently in the dock and transcript.
+Idle is white; next, connecting, working and playback are charcoal. Live recording is red, shows the input meter and offers “Terminer”. During continuous translation, live recording remains active while output plays; the header says “Écoute et traduction…”. Connecting shows a spinner and can be cancelled. Working/playback after capture keep full opacity; the other speaker is disabled at (40%) opacity. Press feedback scales to (0.985). The A mark is outlined; B is charcoal-filled, in the dock only.
 
 ### Fields and settings
 
@@ -182,7 +186,7 @@ The meeting view is a settings-style form: labelled sections (Langues, Son, Dét
 
 ### Header, transcript and tags
 
-The compact header contains the wordmark on the home screen, or a back control and the view title elsewhere, plus live status and the settings control. Transcript turns pair a small identity mark with metadata, quieter source text and stronger translation. The small outlined “Exemple” tag identifies demo content without creating a competing accent.
+The compact header contains the wordmark on the home screen, or a back control and the view title elsewhere, plus live status and the settings control. Transcript bubbles show the speaker’s name, quieter source text and a stronger translation. Speaker A uses the fill tone; speaker B stays white. The small outlined “Sample” tag identifies demo content without creating a competing accent.
 
 ## Do's and Don'ts
 
@@ -194,6 +198,6 @@ The compact header contains the wordmark on the home screen, or a back control a
 
 ### Don't:
 - **Don't** add gradients, glass, decorative shadows, illustrations, emojis or slogans to this neutral instrument.
-- **Don't** wrap transcript turns in cards or add a competing visual identity for each speaker.
+- **Don't** give the two speakers a second brand color. Side and a fill-versus-white bubble are enough in the transcript. The A/B marks stay on the dock.
 - **Don't** use red as a routine action or decorative fill.
 - **Don't** treat opacity-reduced keyboard hints or development-only overlays as normative text or components.

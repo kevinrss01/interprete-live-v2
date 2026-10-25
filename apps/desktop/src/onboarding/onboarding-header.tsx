@@ -18,7 +18,7 @@ export function OnboardingHeader({ action }: { action?: ReactNode }) {
   return (
     <header className="absolute inset-x-0 top-0 z-1 mx-auto flex w-full max-w-[1280px] items-center justify-between px-12 py-7 max-[860px]:px-6 max-[860px]:py-5">
       {/* The PNG has built-in margins. */}
-      <img className="-ml-2.5 block h-14 w-auto" src={logo} alt="Interprète" />
+      <img className="brand-logo -ml-2.5 block h-14 w-auto" src={logo} alt="Interprète" />
       <div>{action}</div>
     </header>
   );

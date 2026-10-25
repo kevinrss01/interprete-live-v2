@@ -106,8 +106,8 @@ function VoicePreviewRow({ voice, language, disabled }: { voice?: string; langua
         </Select>
         <Button
           variant="brand"
-          size="icon"
-          className="size-10 rounded-full"
+          size="icon-sm"
+          className="voice-play rounded-full"
           disabled={disabled || loading || !voice}
           aria-label={failed ? "Try again" : playing ? "Pause" : "Play your voice"}
           onClick={() => {
@@ -118,11 +118,11 @@ function VoicePreviewRow({ voice, language, disabled }: { voice?: string; langua
           }}
         >
           {loading ? (
-            <LoaderCircle className="spin" aria-hidden="true" />
+            <LoaderCircle className="spin size-3.5" aria-hidden="true" />
           ) : playing ? (
-            <Pause fill="currentColor" aria-hidden="true" />
+            <Pause className="size-3.5" fill="currentColor" aria-hidden="true" />
           ) : (
-            <Play fill="currentColor" aria-hidden="true" />
+            <Play className="size-3.5" fill="currentColor" aria-hidden="true" />
           )}
         </Button>
       </div>
@@ -191,7 +191,7 @@ function VoiceReading({ controller, language, length, onClose }: {
   }
 
   return (
-    <div className="flex min-h-full w-full flex-col items-start py-8">
+    <div className="voice-reading flex min-h-full w-full flex-col items-start">
       <Button variant="ghost" className="mb-4 gap-2" onClick={onClose}>
         <ArrowLeft size={16} aria-hidden="true" />
         Back to voices

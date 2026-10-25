@@ -24,6 +24,7 @@ export function CallSelect({
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
+  const selected = options.find((option) => option.value === value)?.label;
   return (
     <div className="field">
       <Label htmlFor={id}>{label}</Label>
@@ -35,10 +36,10 @@ export function CallSelect({
           if (typeof next === "string" && next) onChange(next);
         }}
       >
-        <SelectTrigger id={id}>
+        <SelectTrigger id={id} title={selected}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
-        <SelectContent align="start" alignItemWithTrigger={false}>
+        <SelectContent className="call-select-menu" align="start" alignItemWithTrigger={false}>
           {options.map((option) => (
             <SelectItem key={option.value} value={option.value} className="pl-3">
               {option.label}

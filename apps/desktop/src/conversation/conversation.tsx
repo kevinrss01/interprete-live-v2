@@ -1,102 +1,10 @@
-import { useEffect, useRef, type RefObject } from "react";
-import { LoaderCircle, Play } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { Play } from "lucide-react";
 import type { Turn } from "@interprete/shared/contracts";
-import { languageName } from "@interprete/shared/languages";
 import type { DiscussionMessage } from "../lib/discussion";
 import { readAuthToken } from "../lib/account";
-import { LiveText } from "../components/live-text";
 import { Button } from "@interprete/ui/components/button";
-
-function TurnItem({
-  message,
-  current,
-  onPlay,
-  busy,
-  tail,
-}: {
-  message: DiscussionMessage;
-  current?: Turn;
-  onPlay?: (id: string) => void;
-  busy: boolean;
-  tail?: RefObject<HTMLLIElement | null>;
-}) {
-  const speaker = message.role === "you" ? "a" : "b";
-  const source = current?.source ?? message.source;
-  const translation = current?.translation ?? message.translation;
-  const status = current?.status ?? message.status;
-  const revealing = !!current && (status === "draft" || status === "working");
-  const error = current?.error ?? message.error;
-  const demo = current?.demo ?? message.demo;
-  return (
-    <li className="turn" ref={tail}>
-      <span className={`mark mark-${speaker}`} aria-hidden="true">
-        {speaker.toUpperCase()}
-      </span>
-      <div className="turn-body">
-        <p className="turn-meta">
-          <span className="turn-name">{message.name}</span>
-          <time dateTime={new Date(message.at).toISOString()}>
-            {new Date(message.at).toLocaleTimeString("en-US", {
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-          </time>
-          <span className="turn-lang">
-            <span aria-hidden="true">
-              {message.sourceLanguage.toUpperCase()} → {message.targetLanguage.toUpperCase()}
-            </span>
-            <span className="sr-only">
-              {languageName(message.sourceLanguage)} to {languageName(message.targetLanguage)}
-            </span>
-          </span>
-          {demo && <span className="tag">Sample</span>}
-        </p>
-        {(source || status === "draft") && (
-          <p className="turn-source">
-            {source ? <LiveText text={source} language={message.sourceLanguage} live={revealing} /> : <span className="pending">Listening…</span>}
-          </p>
-        )}
-        {(translation || (source && status !== "error")) && (
-          <p className="turn-translation">
-            {translation ? <LiveText text={translation} language={message.targetLanguage} live={revealing} /> : <span className="pending">Translating…</span>}
-            {status === "working" && (
-              <LoaderCircle size={15} className="spin" aria-label="Translating" />
-            )}
-          </p>
-        )}
-        {status === "error" && <p className="turn-error">{error}</p>}
-        {status === "done" &&
-          (current?.audioUrl ||
-            current?.metrics.firstAudioMs !== undefined ||
-            current?.metrics.playbackMs !== undefined) && (
-          <div className="turn-actions">
-            {current?.audioUrl && onPlay && (
-              <Button
-                variant="ghost"
-                className="btn btn-quiet btn-inline"
-                disabled={busy}
-                onClick={() => onPlay(message.id)}
-              >
-                <Play size={12} fill="currentColor" aria-hidden="true" />
-                Replay
-              </Button>
-            )}
-            {(current?.metrics.firstAudioMs !== undefined ||
-              current?.metrics.playbackMs !== undefined) && (
-              <span className="tabular">
-                First audio at{" "}
-                {(
-                  (current.metrics.firstAudioMs ?? current.metrics.playbackMs ?? 0) / 1000
-                ).toLocaleString("en-US", { maximumFractionDigits: 1 })}{" "}
-                s
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    </li>
-  );
-}
+import { TurnItem } from "./turn-item";
 
 export function DiscussionTurns({
   messages,
