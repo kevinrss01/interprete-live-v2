@@ -1,0 +1,11 @@
+Use case: compositing, ads-marketing.
+Create the finished social sharing / Open Graph banner for Interprète by recomposing the two supplied brand assets into a new landscape artboard. Output a wide 1200 × 630 px image (1.905:1), opaque background, ready for Discord, LinkedIn and X previews.
+Image 1 is the official transparent Interprète logo: reuse its orange paired speech-shaped mark and dark serif wordmark faithfully, including the grave accent in Interprète. Image 2 is the existing landing page's cloud artwork and is the visual-world reference.
+Art direction: exquisitely restrained, premium editorial design. Warm ivory #fafaf9, atmospheric peach and apricot sunrise clouds, rich charcoal #24282b, a small controlled vivid burnt-orange #d33a0c accent. Subtle fine photographic grain. Airy but intentional, high-end French brand. The cloud landscape occupies the lower third, spilling softly into the side edges; the upper two thirds stay very light and calm for exceptionally legible typography.
+Composition: generous 70px safe margins. A modest official logo near the upper left. Below it, a commanding two-line typographic headline, optically balanced and spacious: first line in a bold clean geometric sans serif close to Manrope, second line in elegant expressive italic serif close to Instrument Serif, using the orange accent. Typography leads the entire card; no mock browser, no devices, no interface screenshots, no extra decorative icons.
+Exact text, with no changes:
+"Your voice."
+"In their language."
+"tryinterprete.com"
+The two headline lines should read at thumbnail size. The small domain is placed neatly near the lower right, in charcoal with a clear light cloud-free backing. All essential elements remain inside the central 85% so platform cropping never clips the logo or text.
+Constraints: preserve the official logo's identity; no extra brand, no personal name, no signature, no watermark, no fake badges, no invented claims. Do not include any text beyond the logo wordmark, the two headline lines and the domain. Finish with precise kerning, crisp text, beautiful tonal transitions and a cohesive composition that looks like a designed launch campaign rather than an AI collage.
