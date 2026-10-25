@@ -11,7 +11,8 @@ in their initial HTML. Both use the same public image:
 
 The landing and app retain separate canonical URLs. SPA routes receive the app's
 HTML metadata through the existing Vercel rewrite. `www` and the former public
-Vercel hostnames follow their existing redirects. API JSON responses and binary
+Vercel hostnames follow their existing redirects, configured in each Vercel
+project's Domains settings rather than in repository rewrite rules. API JSON responses and binary
 downloads are not web pages and do not receive social metadata.
 
 When replacing the image, use a new versioned filename and update both HTML
@@ -37,3 +38,7 @@ Protocol reference: [Open Graph](https://ogp.me/).
 - Existing landing `noindex` is intentionally preserved. This task does not
   change search-engine indexing, authentication, speech or native packaging.
 - No real microphone, playback or provider benchmark was used.
+- Production landing verification: the image returned HTTP 200 with
+  `Content-Type: image/jpeg` and byte-for-byte matched the checked-in asset.
+  A simulated Discord crawler received the metadata at the canonical landing,
+  `www` and former landing hostname after their redirects.
