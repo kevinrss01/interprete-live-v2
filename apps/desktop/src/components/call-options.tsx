@@ -31,8 +31,12 @@ export function CallOptionChecks({
       detail: "Replaces their voice with a similar one in your language. Headphones recommended.",
     },
     microphone: {
-      title: "My voice in the call",
+      title: "My translated voice",
       detail: route ?? "Your translated microphone, sent through the virtual microphone.",
+    },
+    camera: {
+      title: "Captions on my video",
+      detail: "Your translation written on your video, through OBS Virtual Camera.",
     },
   };
   return (

@@ -4,8 +4,9 @@ import { AudioPlayer, bytesToBase64 } from "./audio";
 import { APP_MICROPHONE_NAME } from "./call-preferences";
 
 export type DetectedCall = { id: string; app: string; simulated: boolean };
-// Their speech as captions and/or a translated voice on this Mac; the user's microphone into the call.
-export type CallOptions = { captions: boolean; voice: boolean; microphone: boolean };
+// Their speech as captions and/or a translated voice on this Mac; the user's translated
+// microphone and/or captions on their video, into the call.
+export type CallOptions = { captions: boolean; voice: boolean; microphone: boolean; camera: boolean };
 export type AcceptedCall = DetectedCall & { options: CallOptions };
 const optionsKey = "interprete-call-options-v1";
 // Captions start enabled. The microphone route stays on for people who already configured it.
@@ -14,13 +15,19 @@ export function loadCallOptions(): CallOptions {
     captions: true,
     voice: false,
     microphone: Boolean(storedPreference("interprete-call-input-label")),
+    camera: false,
   };
   try {
     const saved = JSON.parse(localStorage.getItem(optionsKey) || "null");
     if (!saved || typeof saved !== "object") return fallback;
     const read = (key: keyof CallOptions) =>
       typeof saved[key] === "boolean" ? saved[key] : fallback[key];
-    return { captions: read("captions"), voice: read("voice"), microphone: read("microphone") };
+    return {
+      captions: read("captions"),
+      voice: read("voice"),
+      microphone: read("microphone"),
+      camera: read("camera"),
+    };
   } catch {
     return fallback;
   }

@@ -221,11 +221,13 @@ test("voice measurements track pitch and ignore silence", () => {
 
 test("toast choices default to captions and are remembered between calls", () => {
   store.clear();
-  assert.deepEqual(loadCallOptions(), { captions: true, voice: false, microphone: false });
+  assert.deepEqual(loadCallOptions(), { captions: true, voice: false, microphone: false, camera: false });
   store.set("interprete-call-input-label", "MacBook Pro Microphone");
   assert.equal(loadCallOptions().microphone, true, "a configured microphone route stays on");
-  saveCallOptions({ captions: false, voice: true, microphone: false });
-  assert.deepEqual(loadCallOptions(), { captions: false, voice: true, microphone: false });
+  saveCallOptions({ captions: false, voice: true, microphone: false, camera: true });
+  assert.deepEqual(loadCallOptions(), { captions: false, voice: true, microphone: false, camera: true });
+  store.set("interprete-call-options-v1", JSON.stringify({ captions: true, voice: false, microphone: true }));
+  assert.equal(loadCallOptions().camera, false, "choices saved before video captions keep it off");
   store.set("interprete-call-options-v1", "{broken");
   assert.equal(loadCallOptions().captions, true);
 });
