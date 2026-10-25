@@ -5,6 +5,7 @@ import { applyTheme, loadTheme } from "./lib/theme";
 
 applyTheme(loadTheme());
 import { App } from "./components/app";
+import { WindowScrollbar } from "./components/window-scrollbar";
 import { CallToast } from "./windows/call-toast";
 import { CallCaptions } from "./windows/call-captions";
 import { ErrorBoundary } from "./components/error-boundary";
@@ -14,7 +15,12 @@ function Root() {
   if (location.hash === "#translation-overlay") return <TranslationOverlay />;
   if (location.hash === "#call-toast") return <CallToast />;
   if (location.hash === "#call-captions") return <CallCaptions />;
-  return <App />;
+  return (
+    <>
+      <App />
+      <WindowScrollbar />
+    </>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
