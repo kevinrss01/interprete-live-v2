@@ -93,8 +93,9 @@ réapparaissent à la remontée ou au focus clavier. Ils restent visibles près 
 Leur contraste s'adapte au fond par composition CSS ; la réduction des animations supprime
 leur transition.
 Un libellé « Live translation. Human connection. » encadré de lauriers dorés précède
-le titre. La hero ne contient pas de bouton d'ouverture de l'application, et aucun
-bouton flottant ne réapparaît sur mobile.
+le titre. Un bouton sombre « Download for Mac », avec le logo Apple, apparaît sous la
+description de la hero et télécharge directement le DMG public. Le prérequis macOS
+14.2+ / Apple Silicon est indiqué juste dessous. Aucun bouton flottant ne réapparaît sur mobile.
 
 Après la hero, la page se limite à deux blocs interactifs puis au CTA Download et au
 footer. Les sections séparées de procédure, de voix et de FAQ ont été retirées, ainsi
@@ -124,7 +125,7 @@ automatiques ne déclenchent pas d'annonces répétées pour les lecteurs d'écr
 Le CTA affiche un panorama alpin généré, en ivoire et orange, avec un premier plan sombre
 pour le texte. Les deux WebP `download-landscape.webp` (1983 × 793 px natifs) et
 `download-landscape-1280.webp` sont chargés paresseusement avec `srcset`. Le grain existant
-est réutilisé à l'échelle de l'écran. Le bouton « Download for macOS » cible le DMG
+est réutilisé à l'échelle de l'écran. Le bouton « Download for Mac », également accompagné du logo Apple, cible le DMG
 Apple Silicon (`Interprete-macOS-arm64.dmg`) hébergé publiquement sur Vercel Blob
 (store `interprete-downloads`, projet `interprete-landing`), sans authentification GitHub.
 Le prérequis macOS 14.2+ / Apple Silicon apparaît sous le bouton. C'est l'unique action du CTA ; le contour visible de
