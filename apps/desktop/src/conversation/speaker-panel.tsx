@@ -1,7 +1,7 @@
 import { Check, LoaderCircle, Mic, Square, Volume2 } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { Phase, Profile } from "@interprete/shared/contracts";
-import { LANGUAGES, VOICE_PRESETS, languageNative } from "@interprete/shared/languages";
+import { LANGUAGES, VOICE_PRESETS, languageName } from "@interprete/shared/languages";
 import { Button } from "@interprete/ui/components/button";
 import { Label } from "@interprete/ui/components/label";
 import {
@@ -101,7 +101,7 @@ export function SpeakerPanel({
               Person {letter}’s language
             </Label>
             <Select
-              items={LANGUAGES.map((l) => ({ value: l.code, label: l.native }))}
+              items={LANGUAGES.map((l) => ({ value: l.code, label: l.name }))}
               value={profile.language}
               disabled={busy}
               onValueChange={(value) => {
@@ -123,7 +123,7 @@ export function SpeakerPanel({
               >
                 {LANGUAGES.map((l) => (
                   <SelectItem key={l.code} value={l.code} className="pl-2.5">
-                    {l.native}
+                    {l.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -148,7 +148,7 @@ export function SpeakerPanel({
                 ? "Translating"
                 : playing
                   ? "Playing the translation"
-                  : `Turn on microphone · ${name} · ${languageNative(profile.language)}`
+                  : `Turn on microphone · ${name} · ${languageName(profile.language)}`
         }
       >
         <span className="talk-icon" aria-hidden="true">
