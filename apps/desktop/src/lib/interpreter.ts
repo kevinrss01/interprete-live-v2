@@ -19,6 +19,7 @@ import { LANGUAGES } from "@interprete/shared/languages";
 import {
   appendTranslation,
   nextSegment,
+  prefixEnd,
   reconcileConsumed,
   usablePrefix,
   type LiveSegment,
@@ -86,6 +87,18 @@ type Block = {
   reconcile: boolean;
   replaying: boolean;
   emptyAttempt: string;
+  // When the transcript text last changed; a quiet transcript has complete words.
+  updatedAt: number;
+};
+type Flight = {
+  block: Block;
+  text: string;
+  // Transcript up to the end of the fragment, while none of it has been spoken.
+  prefix: string | null;
+  // Its last word was only assumed complete, after a pause.
+  tentative: boolean;
+  abort: AbortController;
+  superseded: boolean;
 };
 type Runtime = {
   id: string;
@@ -99,6 +112,8 @@ type Runtime = {
   abort: AbortController;
   segmentTimer: ReturnType<typeof setTimeout> | null;
   inFlight: Promise<void> | null;
+  // The fragment in flight while it can still be withdrawn: no audio has been played yet.
+  flight: Flight | null;
   blocks: Block[];
   previousSource: string;
   previousTranslation: string;
@@ -144,6 +159,12 @@ const initial: Snapshot = {
   volume: 1,
   services: null,
 };
+// While the speaker keeps talking, the last word waits for the next one to start: it may be
+// incomplete, and it gives the readiness gate one word of look-ahead. A pause this long marks
+// it complete, so a phrase whose punctuation the ASR adds late is not held back.
+const WORD_SETTLE_MS = 250;
+// Minimum gap between two segment requests of the same turn.
+const SEGMENT_SPACING_MS = 120;
 const storageKey = "interprete-profiles-v1";
 const volumeKey = "interprete-volume-v1";
 const message = (error: unknown) =>
@@ -378,7 +399,7 @@ export class InterpreterController {
     const r: Runtime = {
       id, speaker, profile, target, demo,
       capture: null, startup: null, transcriber: null,
-      abort: new AbortController(), segmentTimer: null, inFlight: null,
+      abort: new AbortController(), segmentTimer: null, inFlight: null, flight: null,
       blocks: [this.newBlock(id, 0, clickedAt)],
       previousSource: "", previousTranslation: "",
       lastSegmentAt: 0, retryAt: 0, retries: 0, hadSpeech: false, finishing: false,
@@ -439,6 +460,7 @@ export class InterpreterController {
       id, sequence, startedAt, text: "", translation: "", sourceCommitted: "",
       consumed: 0, rejectedThrough: 0, lastAttempt: "", pcm: [], pcmBytes: 0,
       metrics: {}, firstPlaybackAt: null, final: false, reconcile: false, replaying: false, emptyAttempt: "",
+      updatedAt: startedAt,
     };
   }
   private addTurn(r: Runtime, block: Block) {
@@ -459,7 +481,19 @@ export class InterpreterController {
       r.blocks.push(block);
       r.blocks.sort((a, b) => a.sequence - b.sequence);
     }
+    if (block.text !== item.text) block.updatedAt = performance.now();
     block.text = item.text;
+    const flight = r.flight;
+    // An unspoken fragment can still be wrong: the ASR may revise its words or keep extending
+    // a last word assumed complete after a pause, and the next words can reveal a negation or
+    // the rest of an amount. It is withdrawn and offered again with that context.
+    if (flight?.block === block && flight.prefix !== null) {
+      const end = prefixEnd(flight.prefix, block.text, r.profile.language);
+      if (end === null || !usablePrefix(flight.text, block.text.slice(end), r.profile.language)) {
+        flight.superseded = true;
+        flight.abort.abort();
+      }
+    }
     block.final = item.final;
     block.replaying = item.replaying;
     block.reconcile ||= item.revised;
@@ -479,10 +513,11 @@ export class InterpreterController {
   }
   private scheduleSegment(r: Runtime) {
     if (!this.isCurrent(r) || r.finishing || r.inFlight || r.segmentTimer) return;
+    const now = performance.now();
     r.segmentTimer = setTimeout(() => {
       r.segmentTimer = null;
       if (this.isCurrent(r) && !r.finishing) void this.pumpSegment(r);
-    }, Math.max(80, r.lastSegmentAt + 250 - performance.now(), r.retryAt - performance.now()));
+    }, Math.max(10, r.lastSegmentAt + SEGMENT_SPACING_MS - now, r.retryAt - now));
   }
   private pumpSegment(r: Runtime): Promise<void> {
     if (r.inFlight) return r.inFlight;
@@ -508,16 +543,21 @@ export class InterpreterController {
       block.rejectedThrough = block.consumed;
       block.reconcile = false;
     }
-    const candidate = nextSegment(block.text, block.consumed, block.final, r.profile.language, block.rejectedThrough);
+    const quiet = performance.now() - block.updatedAt;
+    const paused = !block.final && quiet >= WORD_SETTLE_MS;
+    // Look again once a pause would release the last word.
+    if (!block.final && !paused && !r.finishing) setTimeout(() => this.scheduleSegment(r), WORD_SETTLE_MS - quiet);
+    let candidate = nextSegment(block.text, block.consumed, block.final, r.profile.language, block.rejectedThrough, paused);
+    // A fragment that cannot be spoken yet must not hide a later one that can.
+    while (candidate && !block.final && !usablePrefix(candidate.text, candidate.followingText, r.profile.language)) {
+      block.rejectedThrough = candidate.endUnits;
+      candidate = nextSegment(block.text, block.consumed, false, r.profile.language, block.rejectedThrough, paused);
+    }
     if (!candidate) {
       if (block.final) {
         this.completeBlock(r, block);
         if (!r.finishing) setTimeout(() => this.scheduleSegment(r), 0);
       }
-      return;
-    }
-    if (!block.final && !usablePrefix(candidate.text, candidate.followingText, r.profile.language)) {
-      block.rejectedThrough = candidate.endUnits;
       return;
     }
     const attempt = candidate.text + "|" + candidate.followingText;
@@ -542,6 +582,12 @@ export class InterpreterController {
   private async translateSegment(r: Runtime, block: Block, candidate: LiveSegment) {
     const previous = block.translation;
     let translation = "", accepted = false, allowed = block.final;
+    const flight: Flight = {
+      block, text: candidate.text, abort: new AbortController(), superseded: false,
+      prefix: block.final ? null : block.text.slice(0, candidate.end),
+      tentative: !block.final && candidate.end === block.text.length && /[\p{L}\p{N}]$/u.test(block.text),
+    };
+    r.flight = flight;
     const choice = (await this.speech?.(r.speaker)) ?? { speak: true };
     if (!this.isCurrent(r)) return;
     const speak = choice.speak;
@@ -549,6 +595,7 @@ export class InterpreterController {
     const accept = () => {
       if (accepted) return;
       accepted = true;
+      flight.prefix = null;
       block.consumed = candidate.endUnits;
       block.rejectedThrough = block.consumed;
     };
@@ -565,7 +612,9 @@ export class InterpreterController {
         sourceLanguage: r.profile.language, targetLanguage: r.target.language,
         speaker: r.speaker, voice: choice.voice ?? this.state.profiles[r.speaker].voice,
         isFinal: block.final, speak, context: context.slice(-6),
-      }, r.abort.signal, async (event) => {
+        // Translated speech still waiting to play lets the server voice this fragment faster.
+        ...(speak ? { queued: Math.round(100 * (this.player.pendingSeconds ?? 0)) / 100 } : {}),
+      }, AbortSignal.any([r.abort.signal, flight.abort.signal]), async (event) => {
         if (!this.isCurrent(r)) return;
         const display = () => this.turn(block.id, {
           translation: appendTranslation(previous, translation, r.target.language),
@@ -606,13 +655,18 @@ export class InterpreterController {
             display();
           }
           if (event.spoken && !accepted) throw new Error("Aucun son reçu. Réessaie avec une voix provisoire.");
-          if (!accepted) block.rejectedThrough = candidate.endUnits;
+          // A last word held back after a pause is offered again if punctuation now ends it.
+          if (!accepted) block.rejectedThrough = candidate.endUnits - (flight.tentative ? 1 : 0);
           block.metrics.translationMs ??= event.metrics.translationMs;
           block.metrics.gateMs ??= event.metrics.gateMs;
           block.metrics.ttsFirstMs ??= event.metrics.ttsFirstMs;
         }
       });
+    } catch (error) {
+      if (!flight.superseded || accepted) throw error;
+      block.lastAttempt = "";
     } finally {
+      if (r.flight === flight) r.flight = null;
       // Once audio was played, never replay this source prefix on a network retry.
       if (accepted) {
         block.translation = appendTranslation(previous, translation, r.target.language);

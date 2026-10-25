@@ -79,12 +79,15 @@ test("translation inputs must use different supported languages and bounded text
     isFinal: true,
   };
   assert.equal(interpretSchema.safeParse(good).success, true);
+  assert.equal(interpretSchema.safeParse({ ...good, queued: 2.5 }).success, true);
   for (const patch of [
     { text: "" },
     { text: "x".repeat(4001) },
     { targetLanguage: "fr" },
     { sourceLanguage: "unknown" },
     { speaker: "c" },
+    { queued: -1 },
+    { queued: 31 },
   ])
     assert.equal(
       interpretSchema.safeParse({ ...good, ...patch }).success,

@@ -15,6 +15,8 @@ export const interpretSchema = z
     // Captions only need the translated text (false); skipping synthesis saves time and voice credits.
     speak: z.boolean().optional(),
     followingText: z.string().max(512).default(""),
+    // Seconds of translated speech already waiting to play on the client.
+    queued: z.number().min(0).max(30).optional(),
     context: z
       .array(
         z.object({

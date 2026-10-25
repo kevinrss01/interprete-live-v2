@@ -1,5 +1,32 @@
 # Vérifications de l’app — 24 octobre 2026
 
+## Latence de la traduction des interlocuteurs — 25 octobre
+
+Mesures silencieuses avec les vrais fournisseurs (transcription `gpt-live-transcribe`, Jev, `gpt-5.4-nano`, ElevenLabs Flash v2.5), sans micro ni haut-parleur. Source : 6 passages anglais et 4 passages français synthétiques (voix ElevenLabs, horodatage exact de chaque mot), joués en temps réel en trames de 20 ms, une session par langue avec 2,5 s de pause entre les passages et la connexion déjà ouverte, comme pendant un appel. Une pause de 450 ms ferme l’item ASR comme la capture système ; la file de lecture est simulée. Le code d’origine (`277ea77`) et le nouveau code tournaient sur deux API locales, en alternance, 3 répétitions chacun : 30 passages, environ 90 segments et 450 mots par variante et par série.
+
+Définitions : **début** = début de la parole → début de sa voix traduite ; **retard de segment** = fin du dernier mot d’un segment → début de sa voix traduite ; **décalage par mot** = fin de chaque mot → début de la voix de son segment ; **fin** = fin du passage → fin de sa voix traduite.
+
+| Série finale, P50 (P90) | Code d’origine | Nouveau code |
+| --- | --- | --- |
+| Début | 3,17 s (4,61 s) | 2,87 s (4,09 s) |
+| Retard de segment | 1,65 s (3,61 s) | 1,26 s (3,37 s) |
+| Décalage par mot | 2,62 s (4,04 s) | 2,17 s (3,58 s) |
+| Fin du dernier segment → sa voix | 2,53 s (5,05 s) | 2,03 s (4,14 s) |
+| Fin | 4,20 s (6,32 s) | 3,38 s (5,56 s) |
+
+Étapes P50 du nouveau code : mot reconnu par l’ASR 0,34 s après sa fin ; envoi du segment 0,26 s plus tard (0,58 s avant) ; premier texte traduit 0,40 s et premier audio 0,58 s après la requête. La file atteint encore ~1,9 s au P90 dans les passages anglais → français, plus longs à prononcer : l’accélération limitée à 1,2 la réduit sans l’annuler. Une première série avec chaque mot considéré complet après 80 ms donnait un décalage par mot de 1,94 s, mais des coupures moins fluides (voir ci-dessous) ; elle n’a pas été retenue.
+
+Qualité, notée par `gpt-6.1-sol` :
+
+- Découpage rejoué mot à mot sur les 10 passages, avec le vrai Jev et le prompt de traduction : abaisser le seuil de Jev de 0,6 à 0,45, 0,3 ou le supprimer réduit l’attente moyenne de 1,8 à 1,1 puis 0,6 mot, mais la fidélité chute de 3,9 à 2,9–3,1/5 (« running » traduit par « courir », montants coupés). Le seuil reste 0,6. Avec un mot d’anticipation, la fluidité est de 3,8–4,1/5 contre 3,1–3,3/5 sans (deux essais chacun) : le dernier mot attend donc le suivant, sauf après 250 ms de pause.
+- Fragments isolés (34 cas de continuation) : le nouveau prompt obtient 59/68 contre 42/68 pour l’ancien, qui retraduisait les mots d’anticipation.
+- Traductions complètes des sessions mesurées : le nouveau code est au moins au niveau du code d’origine dans les deux séries (6 sessions par variante ; notation bruitée). Les erreurs restantes viennent surtout de coupures entre deux fragments traduits par un petit modèle.
+- Silences retirés autour des fragments ElevenLabs : crête ≤ −60 dBFS en fin de fragment ; un seul début retiré dépassait ce niveau (souffle de 48 ms, −51 dBFS RMS).
+
+Plancher de cette architecture : environ 0,34 s d’ASR, 0,40 s avant le premier mot traduit et 0,18 s de synthèse, soit ~0,9 s après la fin d’un mot avant tout découpage ou file d’attente. Passer sous une seconde de retard de segment demanderait de renoncer au mot d’anticipation ou au feu vert de Jev, ce que les essais de qualité déconseillent. Les voix sont synthétiques, la latence acoustique d’un vrai appel n’a pas été mesurée et l’outil de mesure n’est pas versionné. La latence des fournisseurs a varié entre les séries ; seules les variantes mesurées en alternance sont comparées.
+
+La série finale précède les corrections issues de la revue croisée : retrait d’un fragment non prononcé quand l’ASR révise ses mots ou que la suite annonce une négation, un montant ou un mot composé ; pauses déjà écoulées retirées ; `queued` envoyé par l’app au lieu de `pace`, avec la même courbe d’accélération. Ces corrections sont couvertes par des tests unitaires, et une session réelle de contrôle s’est terminée sans erreur, mais elles n’ont pas été remesurées en A/B : la machine de mesure gelait alors tous ses processus pendant 10 s à près de 2 min (mesuré sur une simple boucle de minuteurs Node), ce qui fausse toute mesure de latence. Les deux séries retenues ne montrent pas ce gel : aucun mot n’y a été reconnu plus de 1,8 s après sa fin.
+
 ## Micro au nom de l’app et activation simplifiée — 24 octobre
 
 Le microphone public **Interprete** utilise le nom configuré de l’app, un UID propre et un agrégat limité au pilote BlackHole 2ch. Un test natif a confirmé sa présence avec deux canaux d’entrée et deux de sortie à 48 kHz. Le chemin de lecture injecte directement le pilote sous-jacent, sans imposer la période de l’agrégat : cela corrige un blocage observé lors d’une répétition d’ouverture concurrente entrée/sortie.

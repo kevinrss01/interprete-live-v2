@@ -5,6 +5,7 @@ import { InterpreterController, type SpeechChoice } from "../src/lib/interpreter
 import {
   nextSegment,
   appendTranslation,
+  prefixEnd,
   reconcileConsumed,
   usablePrefix,
 } from "@interprete/shared/live-segments";
@@ -35,6 +36,7 @@ function harness(
     isFinal: boolean;
     speak?: boolean;
     voice: string;
+    queued?: number;
   }> = [];
   let socket: Socket;
   class Socket {
@@ -325,6 +327,178 @@ test("rejected prefixes grow with new speech instead of being spoken or blocking
   }
 });
 
+test("a pause completes the last word without waiting for the next one", async () => {
+  const h = harness();
+  try {
+    await h.controller.start("a");
+    const spokeAt = performance.now();
+    h.socket.delta("Bonjour tout le monde");
+    await waitFor(() => h.player.chunks === 1);
+    assert.ok(performance.now() - spokeAt >= 240, "fluent speech keeps the last word as look-ahead");
+    assert.deepEqual(h.requests.map((r) => [r.text, r.followingText]), [["Bonjour tout le monde", ""]]);
+    await h.controller.stop();
+  } finally {
+    h.cleanup();
+  }
+});
+
+// Keeps the translation of matching fragments in progress, with nothing spoken, until the
+// controller withdraws it.
+function holdInterpretation(h: ReturnType<typeof harness>, held: (text: string) => boolean) {
+  const answer = globalThis.fetch;
+  const withdrawn: string[] = [];
+  globalThis.fetch = async (url, init) => {
+    const body = String(url) === "/api/interpret" ? JSON.parse(String(init?.body)) : null;
+    if (!body || !held(body.text)) return answer(url, init);
+    h.requests.push(body);
+    return new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(
+          'data: {"type":"gate","decision":"ready","probability":0.9,"elapsedMs":1}\n\n'));
+        init?.signal?.addEventListener("abort", () => {
+          withdrawn.push(body.text);
+          controller.error(init.signal!.reason);
+        });
+      },
+    }), { headers: { "Content-Type": "text/event-stream" } });
+  };
+  return withdrawn;
+}
+
+test("a fragment cut inside a word is withdrawn before it is spoken", async () => {
+  const h = harness();
+  const withdrawn = holdInterpretation(h, (text) => text.endsWith(" cham"));
+  try {
+    await h.controller.start("a");
+    // The ASR paused inside "chambre" long enough for "cham" to look complete.
+    h.socket.delta("Je réserve une cham");
+    await waitFor(() => h.requests.length === 1);
+    h.socket.delta("bre");
+    await waitFor(() => h.player.chunks === 1);
+    assert.deepEqual(withdrawn, ["Je réserve une cham"]);
+    assert.deepEqual(h.requests.map((r) => r.text), ["Je réserve une cham", "Je réserve une chambre"]);
+    assert.equal(h.controller.getSnapshot().warning, null);
+    await h.controller.stop();
+    assert.equal(h.controller.getSnapshot().turns[0].translation, "translation Je réserve une chambre");
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("an unspoken fragment is withdrawn when the next words negate it", async () => {
+  const h = harness();
+  const withdrawn = holdInterpretation(h, (text) => text === "Je veux");
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Je veux");
+    await waitFor(() => h.requests.length === 1);
+    h.socket.delta(" pas annuler");
+    await waitFor(() => h.player.chunks === 1);
+    assert.deepEqual(withdrawn, ["Je veux"]);
+    assert.deepEqual(h.requests.map((r) => [r.text, r.followingText]), [["Je veux", ""], ["Je veux pas", "annuler"]]);
+    await h.controller.stop();
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("an unspoken fragment is withdrawn when the next words continue its amount", async () => {
+  const h = harness((text) => text === "Ça coûte");
+  const withdrawn = holdInterpretation(h, (text) => text === "Ça coûte soixante");
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Ça coûte soixante");
+    await waitFor(() => h.requests.length === 2);
+    // The rest of the amount arrives in pieces, the first one a bare hyphen.
+    h.socket.delta("-d");
+    await waitFor(() => withdrawn.length === 1);
+    h.socket.delta("ix euros");
+    await waitFor(() => h.player.chunks === 1);
+    assert.deepEqual(withdrawn, ["Ça coûte soixante"]);
+    assert.deepEqual(h.requests.map((r) => r.text), ["Ça coûte", "Ça coûte soixante", "Ça coûte soixante-dix"]);
+    await h.controller.stop();
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("an unspoken fragment is withdrawn when the final transcript revises its words", async () => {
+  const h = harness();
+  const withdrawn = holdInterpretation(h, (text) => text === "Je veux");
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Je veux");
+    await waitFor(() => h.requests.length === 1);
+    h.socket.emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      item_id: "item-0",
+      transcript: "Je ne veux pas annuler.",
+    });
+    await waitFor(() => h.player.chunks === 1);
+    assert.deepEqual(withdrawn, ["Je veux"]);
+    assert.deepEqual(h.requests.map((r) => r.text), ["Je veux", "Je ne veux pas annuler."]);
+    await h.controller.stop();
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("a fragment that cannot be spoken yet does not hide a later one that can", async () => {
+  const h = harness();
+  try {
+    await h.controller.start("a");
+    const spokeAt = performance.now();
+    h.socket.delta("Il reste vingt, deux places.");
+    await waitFor(() => h.player.chunks === 1);
+    assert.ok(performance.now() - spokeAt < 200, "no pause needed to reach the sentence");
+    assert.deepEqual(h.requests.map((r) => r.text), ["Il reste vingt, deux places."]);
+    await h.controller.stop();
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("a last word held back after a pause is spoken once punctuation ends its sentence", async () => {
+  const h = harness((text) => text === "Je voudrais une table");
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Je voudrais une table");
+    await waitFor(() => h.requests.length === 1);
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(h.player.chunks, 0);
+    // The ASR adds the period late, after the pause.
+    h.socket.delta(".");
+    await waitFor(() => h.player.chunks === 1);
+    assert.deepEqual(h.requests.map((r) => r.text), ["Je voudrais une table", "Je voudrais une table."]);
+    await h.controller.stop();
+    assert.equal(h.requests.length, 2);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("translated speech still waiting to play is reported so the voice can catch up", async () => {
+  const h = harness();
+  let queued = 0;
+  Object.defineProperty(h.player, "pendingSeconds", { get: () => queued });
+  try {
+    await h.controller.start("a");
+    h.socket.delta("Bonjour à tous. ");
+    await waitFor(() => h.requests.length === 1);
+    queued = 1.5;
+    h.socket.delta("Merci d’être là. ");
+    await waitFor(() => h.requests.length === 2);
+    queued = 5;
+    h.socket.delta("On commence ?");
+    await waitFor(() => h.requests.length === 3);
+    assert.deepEqual(h.requests.map((r) => r.queued), [0, 1.5, 5]);
+    queued = 0;
+    await h.controller.stop();
+  } finally {
+    h.cleanup();
+  }
+});
+
 test("microphone setup runs before session credentials return and retains initial audio", async () => {
   let release!: (r: Response) => void;
   const pending = new Promise<Response>((r) => {
@@ -401,12 +575,33 @@ test("final ASR changes to the spoken prefix do not drop or replay its remaining
   assert.equal(reconcileConsumed("Bonjour,", "Bonjour ! Le monde.", "fr"), 1);
 });
 
+test("an unspoken fragment is found again in a later transcript only if its words still stand", () => {
+  // Case and spacing may change; its words and closing punctuation may not.
+  assert.equal(prefixEnd("je veux,", "Je veux, pas maintenant", "fr"), "Je veux,".length);
+  assert.equal(prefixEnd("Je veux.", "Je veux pas annuler.", "fr"), null);
+  assert.equal(prefixEnd("Je veux", "Je ne veux pas", "fr"), null);
+  assert.equal(prefixEnd("Je réserve une cham", "Je réserve une chambre", "fr"), null);
+  // Without spaces between words, the next word does not extend the last one.
+  assert.equal(prefixEnd("今日はいい", "今日はいい天気", "ja"), "今日はいい".length);
+  assert.equal(prefixEnd("我喜欢北京", "我喜欢北京大学", "zh"), "我喜欢北京".length);
+});
+
 test("early output still waits for dangling prepositions, known negation and unfinished amounts", () => {
   assert.equal(usablePrefix("Ceci est", "un échantillon", "fr"), true);
   assert.equal(usablePrefix("un échantillon de", "voix", "fr"), false);
   assert.equal(usablePrefix("Je veux", "pas annuler", "fr"), false);
   assert.equal(usablePrefix("I want", "not now", "en"), false);
   assert.equal(usablePrefix("Le prix est cent", "vingt euros", "fr"), false);
+  assert.equal(usablePrefix("The price is two", "hundred and fifty", "en"), false);
+  assert.equal(usablePrefix("The price is two hundred", "and fifty thousand euros", "en"), false);
+  assert.equal(usablePrefix("Il reste vingt", "-deux places", "fr"), false);
+  assert.equal(usablePrefix("I have two", "tents", "en"), true);
+  assert.equal(usablePrefix("Le prix est de 250", "euros", "fr"), true);
+  assert.equal(usablePrefix("Ça coûte soixante", "-dix euros", "fr"), false);
+  assert.equal(usablePrefix("Est", "-ce que vous", "fr"), false);
+  // Counting in separate sentences is not one unfinished amount, nor a dash after a sentence a compound.
+  assert.equal(usablePrefix("One.", "Two. Three.", "en"), true);
+  assert.equal(usablePrefix("All done.", "-Next item.", "en"), true);
   assert.equal(usablePrefix("Bonjour.", "pas de problème", "fr"), true);
 });
 
@@ -468,6 +663,7 @@ test("captions commit approved text without audio and continue after the shown p
     await waitFor(() => h.controller.getSnapshot().turns[0].translation.includes("tous"));
     assert.equal(h.player.chunks, 0);
     assert.ok(h.requests.every((request) => request.speak === false));
+    assert.ok(h.requests.every((request) => request.queued === undefined), "captions request no voice");
     h.options.onBoundary?.();
     await waitFor(() => h.controller.getSnapshot().turns[0].status === "done");
     const turn = h.controller.getSnapshot().turns[0];

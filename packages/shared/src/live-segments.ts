@@ -15,6 +15,8 @@ export type LiveSegment = {
   text: string;
   followingText: string;
   endUnits: number;
+  // Offset in the transcript where the segment ends.
+  end: number;
 };
 
 const weakEndings: Record<string, Set<string>> = Object.fromEntries(
@@ -28,6 +30,12 @@ const weakEndings: Record<string, Set<string>> = Object.fromEntries(
     nl: "de het een van voor met zonder naar en of als dat",
   }).map(([language, words]) => [language, new Set(words.split(" "))]),
 );
+// A number word followed by another one ("two" + "hundred", "cent" + "vingt", "hundred" +
+// "and fifty") is still an incomplete amount.
+const numberWords =
+  "\\d[\\d.,]*|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt|trente|quarante|cinquante|soixante|cents?|mille|millions?|milliards?";
+const numberTail = new RegExp(`^(${numberWords})$`, "iu");
+const numberNext = new RegExp(`^((and|et)\\s+|-)?(${numberWords})(?![\\p{L}\\p{N}])`, "iu");
 const negations: Record<string, RegExp> = {
   fr: /^(pas|plus|jamais|rien|aucun|ni)\b/iu,
   en: /^(not|never|no|n't)\b/iu,
@@ -47,26 +55,52 @@ export function usablePrefix(
   if (!last) return false;
   const tail = text.slice(last.start, last.end).toLocaleLowerCase();
   if (weakEndings[language]?.has(tail)) return false;
+  // A hyphenated compound ("soixante-dix", "Est-ce") is one unit of meaning.
+  if (!/[.!?。！？]$/u.test(text) && /^-\p{L}/u.test(following)) return false;
   if (
     !/[.!?。！？]$/u.test(text) &&
     negations[language]?.test(following.trim())
   )
     return false;
   if (
-    /^(\d+|cent|vingt|mille|hundred|thousand)$/iu.test(tail) &&
-    /^(\d+|cent|vingt|mille|hundred|thousand)/iu.test(following.trim())
+    !/[.!?。！？]$/u.test(text) &&
+    numberTail.test(tail) &&
+    numberNext.test(following.trim())
   )
     return false;
   return true;
 }
 
+// Where `prefix` ends in a later version of the transcript, if its words and closing
+// punctuation are unchanged (case and spacing may differ); null once the ASR revised them
+// or extended its last word.
+export function prefixEnd(prefix: string, text: string, language: string) {
+  const token = (value: string, unit: Word) =>
+    value.slice(unit.start, unit.end).normalize("NFKC").toLocaleLowerCase().replace(/’/g, "'");
+  const before = words(prefix, language),
+    after = words(text, language);
+  if (!before.length || after.length < before.length) return null;
+  for (let i = 0; i < before.length; i++)
+    if (token(prefix, before[i]) !== token(text, after[i])) return null;
+  let end = after[before.length - 1].end;
+  const closing = prefix.slice(before.at(-1)!.end).trim();
+  if (closing) {
+    const at = text.slice(end).search(/\S/);
+    if (at < 0 || !text.startsWith(closing, end + at)) return null;
+    end += at + closing.length;
+  }
+  return end;
+}
+
 // Count lexical units, not characters: final ASR punctuation/spacing can change.
+// lastWordSettled: the transcript has been quiet long enough that its last word is complete.
 export function nextSegment(
   text: string,
   consumed: number,
   final: boolean,
   language: string,
   rejectedThrough = consumed,
+  lastWordSettled = false,
 ): LiveSegment | null {
   const units = words(text, language);
   if (consumed >= units.length) return null;
@@ -77,12 +111,15 @@ export function nextSegment(
     (units[rejectedThrough - 1]?.end ?? start) - start + 200));
   const limit = Math.max(consumed + 1,
     units.filter((unit) => unit.end <= start + maxChars).length);
-  if (final)
+  if (final) {
+    const end = limit < units.length ? units[limit - 1].end : text.length;
     return {
-      text: text.slice(start, limit < units.length ? units[limit - 1].end : text.length).trim(),
-      followingText: limit < units.length ? text.slice(units[limit - 1].end).trim().slice(0, 512) : "",
+      text: text.slice(start, end).trim(),
+      followingText: text.slice(end).trim().slice(0, 512),
       endUnits: limit,
+      end,
     };
+  }
 
   for (const match of text
     .slice(start)
@@ -95,17 +132,19 @@ export function nextSegment(
         text: text.slice(start, end).trim(),
         followingText: text.slice(end).trim().slice(0, 512),
         endUnits,
+        end,
       };
     }
   }
   // The last word may still be arriving. Don't speak a partial lexical token.
-  const endUnits = Math.min(limit, units.length - (/\s$/u.test(text) ? 0 : 1));
+  const endUnits = Math.min(limit, units.length - (lastWordSettled || /\s$/u.test(text) ? 0 : 1));
   if (endUnits <= rejectedThrough || endUnits - consumed < 2) return null;
   const end = units[endUnits - 1].end;
   return {
     text: text.slice(start, end).trim(),
     followingText: text.slice(end).trim().slice(0, 512),
     endUnits,
+    end,
   };
 }
 
