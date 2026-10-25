@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Turn } from "@interprete/shared/contracts";
-import { MAX_DISCUSSIONS } from "@interprete/shared/discussions";
+import { MAX_DISCUSSION_MESSAGES, MAX_DISCUSSIONS } from "@interprete/shared/discussions";
 import {
   DiscussionLog,
   discussionInput,
@@ -73,6 +73,74 @@ test("blank speech is ignored and an unchanged record does not notify", () => {
   log.record("conversation", [input("a")]);
   log.record("conversation", [input("a")]);
   assert.equal(notices, 1);
+});
+
+test("the title grows with the first reply instead of keeping the first draft", () => {
+  const log = new DiscussionLog(memory());
+  log.record("conversation", [input("a", { source: "bon", status: "draft" })]);
+  assert.equal(openDiscussion(log.getSnapshot(), "conversation")?.title, "bon");
+  log.record("conversation", [
+    input("a", { source: "Bonjour, je voudrais réserver", status: "done" }),
+  ]);
+  assert.equal(
+    openDiscussion(log.getSnapshot(), "conversation")?.title,
+    "Bonjour, je voudrais réserver",
+  );
+});
+
+test("a saved partial title is replaced by the first reply", () => {
+  const store = memory();
+  const log = new DiscussionLog(store);
+  log.record("conversation", [input("a", { source: "Bonjour, je voudrais réserver", status: "done" })]);
+  log.close("conversation");
+  const saved = JSON.parse(store.getItem("interprete-discussions-v1") ?? "{}") as {
+    discussions: Array<{ title: string }>;
+  };
+  saved.discussions[0].title = "bon";
+  store.setItem("interprete-discussions-v1", JSON.stringify(saved));
+  const restored = new DiscussionLog(store);
+  assert.equal(restored.getSnapshot().discussions[0]?.title, "Bonjour, je voudrais réserver");
+});
+
+test("a named call keeps its title when the first line starts with that name", () => {
+  const store = memory();
+  const log = new DiscussionLog(store);
+  const line = (source: string, status: DiscussionInput["status"]) =>
+    input("a", { source, role: "them", name: "Other person", status });
+  log.record("call", [line("Zoom", "draft")], { title: "Zoom", callId: "call-1" });
+  log.record("call", [line("Zoom, can you hear me?", "done")], { title: "Zoom", callId: "call-1" });
+  log.record("call", [line("Zoom, can you hear me now?", "done")], { callId: "call-1" });
+  assert.equal(openDiscussion(log.getSnapshot(), "call")?.title, "Zoom");
+  const restored = new DiscussionLog(store);
+  assert.equal(restored.getSnapshot().discussions[0]?.title, "Zoom");
+});
+
+test("an untitled call title still grows with the first line", () => {
+  const log = new DiscussionLog(memory());
+  const line = (source: string, status: DiscussionInput["status"]) =>
+    input("a", { source, role: "them", name: "Other person", status });
+  log.record("call", [line("bon", "draft")], { callId: "call-1" });
+  log.record("call", [line("Bonjour tout le monde", "done")], { callId: "call-1" });
+  assert.equal(openDiscussion(log.getSnapshot(), "call")?.title, "Bonjour tout le monde");
+});
+
+test("a trimmed discussion keeps the opening title", () => {
+  const store = memory();
+  const log = new DiscussionLog(store);
+  log.record(
+    "conversation",
+    Array.from({ length: MAX_DISCUSSION_MESSAGES + 1 }, (_, index) =>
+      input(`m${index}`, { source: `Line ${index}`, status: "done" }),
+    ),
+  );
+  const open = openDiscussion(log.getSnapshot(), "conversation");
+  assert.equal(open?.title, "Line 0");
+  assert.equal(open?.messages[0].source, "Line 1");
+  log.record("conversation", [input("m1", { source: "Line 1, continued", status: "done" })]);
+  assert.equal(openDiscussion(log.getSnapshot(), "conversation")?.title, "Line 0");
+  const restored = new DiscussionLog(store);
+  assert.equal(restored.getSnapshot().discussions[0]?.title, "Line 0");
+  assert.equal(restored.getSnapshot().discussions[0]?.messages[0].source, "Line 1, continued");
 });
 
 test("closing keeps the text and the next message starts a new discussion", () => {
@@ -165,6 +233,36 @@ test("only the newest discussions and messages are kept", () => {
   const call = openDiscussion(log.getSnapshot(), "call");
   assert.equal(call?.messages.length, 200);
   assert.equal(call?.messages[0].source, "Line 5");
+});
+
+test("a newer remote copy repairs a conversation draft and keeps a call name", () => {
+  const log = new DiscussionLog(memory());
+  log.record("conversation", [input("a", { source: "Bonjour, je voudrais réserver", status: "done" })]);
+  log.close("conversation");
+  log.record(
+    "call",
+    [input("b", { source: "Zoom, can you hear me?", role: "them", name: "Other person", status: "done" })],
+    { title: "Zoom", callId: "call-1" },
+  );
+  const snapshot = log.getSnapshot();
+  const conversation = snapshot.discussions.find((item) => item.kind === "conversation");
+  const call = snapshot.discussions.find((item) => item.kind === "call");
+  assert.ok(conversation && call);
+  const newer = (discussion: Discussion) => ({
+    ...discussion,
+    updatedAt: discussion.updatedAt + 1,
+    messages: discussion.messages.map((message) => ({ ...message, updatedAt: message.updatedAt + 1 })),
+  });
+  log.ingest([
+    { ...newer(conversation), title: "bon" },
+    newer(call),
+  ]);
+  const next = log.getSnapshot();
+  assert.equal(
+    next.discussions.find((item) => item.kind === "conversation")?.title,
+    "Bonjour, je voudrais réserver",
+  );
+  assert.equal(next.discussions.find((item) => item.kind === "call")?.title, "Zoom");
 });
 
 test("retention keeps the most recently updated closed discussions", () => {

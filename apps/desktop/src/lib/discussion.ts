@@ -188,6 +188,44 @@ function titleFor(kind: DiscussionKind, options: DiscussionOptions | undefined, 
   if (kind === "call") return named || spoken || DEFAULT_TITLE.call;
   return spoken || named || DEFAULT_TITLE.conversation;
 }
+// A draft transcript can save "bon" before the rest of the sentence arrives.
+function isPartialTitle(title: string, source: string) {
+  const head = title.replace(/…$/u, "").trim().toLocaleLowerCase();
+  const body = source.replace(/…$/u, "").trim().toLocaleLowerCase();
+  return head.length > 0 && head.length < body.length && body.startsWith(head);
+}
+// The title follows the opening line only while it still is that line.
+// Once retention drops the opening, the title no longer matches the first
+// stored line, so a later sentence cannot replace it. A call app name is kept
+// even when the utterance starts with the same word.
+function titleAfterOpeningChange(
+  discussion: Pick<Discussion, "kind" | "title">,
+  previousSource: string,
+  nextSource: string,
+  options: DiscussionOptions | undefined,
+) {
+  const named = discussion.kind === "call" ? namedTitle(options) : "";
+  if (named && (discussion.title === named || discussion.title === DEFAULT_TITLE.call)) return named;
+  const ownsOpening =
+    discussion.title === snippet(previousSource) || discussion.title === DEFAULT_TITLE[discussion.kind];
+  if (!ownsOpening) return discussion.title;
+  return snippet(nextSource) || discussion.title;
+}
+function storedOpeningTitle(discussion: Pick<Discussion, "kind" | "title" | "messages">) {
+  const spoken = snippet(discussion.messages[0]?.source ?? "");
+  const fallback = DEFAULT_TITLE[discussion.kind];
+  const openingStillStored = discussion.messages.length < MAX_DISCUSSION_MESSAGES;
+  if (
+    discussion.kind === "conversation" &&
+    openingStillStored &&
+    spoken &&
+    isPartialTitle(discussion.title, spoken)
+  ) {
+    return spoken;
+  }
+  if ((discussion.title === fallback || !discussion.title) && spoken) return spoken;
+  return discussion.title || spoken || fallback;
+}
 function cloneDiscussion(discussion: Discussion): Discussion {
   return { ...discussion, messages: discussion.messages.map((message) => ({ ...message })) };
 }
@@ -208,7 +246,11 @@ function storedDiscussion(item: unknown): Discussion | null {
   return {
     id: record.id,
     kind: record.kind,
-    title: snippet(record.title) || DEFAULT_TITLE[record.kind],
+    title: storedOpeningTitle({
+      kind: record.kind,
+      title: snippet(record.title) || DEFAULT_TITLE[record.kind],
+      messages,
+    }),
     startedAt: typeof record.startedAt === "number" ? record.startedAt : messages[0].at,
     updatedAt,
     closedAt,
@@ -220,9 +262,11 @@ function storedDiscussion(item: unknown): Discussion | null {
 function storedOpen(discussions: Discussion[], open: DiscussionState["open"] | undefined) {
   const known = (id: unknown): id is string =>
     typeof id === "string" && discussions.some((discussion) => discussion.id === id);
+  const conversation = open?.conversation;
+  const call = open?.call;
   return {
-    conversation: known(open?.conversation) ? open.conversation : null,
-    call: known(open?.call) ? open.call : null,
+    conversation: known(conversation) ? conversation : null,
+    call: known(call) ? call : null,
   };
 }
 function load(storage: Storage | null): DiscussionState {
@@ -230,11 +274,23 @@ function load(storage: Storage | null): DiscussionState {
   try {
     const raw = JSON.parse(storage.getItem(STORAGE_KEY) || "null") as Partial<DiscussionState> | null;
     if (!raw || !Array.isArray(raw.discussions)) return empty();
+    let healed = false;
     const discussions = raw.discussions.flatMap((item) => {
       const stored = storedDiscussion(item);
-      return stored ? [stored] : [];
+      if (!stored) return [];
+      const savedTitle = snippet((item as Partial<Discussion>).title ?? "");
+      if (stored.title !== savedTitle) healed = true;
+      return [stored];
     });
-    return { discussions, open: storedOpen(discussions, raw.open) };
+    const state = { discussions, open: storedOpen(discussions, raw.open) };
+    if (healed) {
+      try {
+        storage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {
+        // The repaired title still shows for this session.
+      }
+    }
+    return state;
   } catch {
     return empty();
   }
@@ -348,6 +404,14 @@ function placeTurn(
     if (same(previous, next)) return current;
     found.discussion.messages[found.messageIndex] = next;
     found.discussion.updatedAt = now;
+    if (found.messageIndex === 0) {
+      found.discussion.title = titleAfterOpeningChange(
+        found.discussion,
+        previous.source,
+        next.source,
+        options,
+      );
+    }
     retitleCall(found.discussion, options);
     draft.touched.add(found.discussion.id);
     draft.changed = true;
@@ -411,13 +475,17 @@ function mergeRemote(current: Discussion, item: Discussion) {
     if (!existing || message.updatedAt >= existing.updatedAt) messages.set(message.id, { ...message });
   }
   current.messages = [...messages.values()].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
-  if (item.updatedAt < current.updatedAt) return;
+  if (item.updatedAt < current.updatedAt) {
+    current.title = storedOpeningTitle(current);
+    return;
+  }
   current.title = item.title;
   current.closed = item.closed;
   current.closedAt = item.closedAt;
   current.callId = item.callId;
   current.updatedAt = item.updatedAt;
   current.kind = item.kind;
+  current.title = storedOpeningTitle(current);
 }
 function reopen(discussions: Discussion[], open: DiscussionState["open"]) {
   const next = { ...open };
@@ -484,6 +552,7 @@ export class DiscussionLog {
       const current = byId.get(item.id);
       if (!current) {
         const added = cloneDiscussion(item);
+        added.title = storedOpeningTitle(added);
         discussions.push(added);
         byId.set(item.id, added);
         continue;
