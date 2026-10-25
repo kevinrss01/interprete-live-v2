@@ -4,8 +4,6 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>Interprète listens to the person speaking to translate their voice live.</string>
-  <key>NSCameraUsageDescription</key>
-  <string>Interprète shows your camera to your call with your translated words as captions.</string>
   <key>NSAudioCaptureUsageDescription</key>
   <string>Interprète listens to your call audio to show or play the translation of the other participants.</string>
 </dict>

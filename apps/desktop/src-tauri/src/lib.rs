@@ -4,7 +4,6 @@ mod calls;
 mod system_audio;
 mod system_microphone;
 mod translation_overlay;
-mod virtual_camera;
 mod virtual_microphone;
 use tauri::Manager;
 
@@ -24,7 +23,6 @@ pub fn run() {
         .manage(translation_overlay::State::default())
         .manage(call_captions::State::default())
         .manage(system_audio::SystemAudio::default())
-        .manage(virtual_camera::CameraRelay::default())
         .invoke_handler(tauri::generate_handler![
             translation_overlay::set_translation_overlay,
             translation_overlay::translation_overlay_snapshot,
@@ -46,14 +44,6 @@ pub fn run() {
             audio_route::audio_route_push,
             audio_route::audio_route_close,
             audio_route::audio_route_status,
-            virtual_camera::camera_devices,
-            virtual_camera::camera_access,
-            virtual_camera::camera_relay_page,
-            virtual_camera::camera_relay_start,
-            virtual_camera::camera_relay_caption,
-            virtual_camera::camera_relay_stop,
-            virtual_camera::camera_relay_status,
-            virtual_camera::camera_relay_preview,
         ])
         .setup(|app| {
             app.state::<audio_route::AudioRoute>().configure(app.path().app_data_dir()?.join("microphone-restore.json"))?;
@@ -94,13 +84,6 @@ pub fn run() {
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && payload.event() == tauri::webview::PageLoadEvent::Started {
                 webview.state::<system_audio::SystemAudio>().release_all();
-                // The new page number applies at once; the release waits for a camera still
-                // opening, so it runs off the main thread.
-                let page = webview.state::<virtual_camera::CameraRelay>().next_page();
-                let app = webview.app_handle().clone();
-                tauri::async_runtime::spawn_blocking(move || {
-                    app.state::<virtual_camera::CameraRelay>().release_before(page);
-                });
             }
         })
         .on_window_event(|window, event| {
@@ -119,12 +102,6 @@ pub fn run() {
                 let handle = app.clone();
                 let completed = restore_finished.clone();
                 tauri::async_runtime::spawn(async move {
-                    // Stopping a capture session blocks briefly; keep it off the main thread.
-                    let camera = handle.clone();
-                    let _ = tauri::async_runtime::spawn_blocking(move || {
-                        camera.state::<virtual_camera::CameraRelay>().shutdown();
-                    })
-                    .await;
                     if handle.state::<audio_route::AudioRoute>().shutdown().await.is_err() {
                         eprintln!("Microphone restoration pending; recovery record retained for next launch.");
                     }

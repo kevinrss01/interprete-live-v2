@@ -2,7 +2,7 @@
 
 Traduction vocale en conversation ou pendant un appel sur Mac.
 
-À l’ouverture, l’accueil propose deux choix : **Conversation** (deux personnes, un appareil) ou **Réunion en ligne**. Le mode **Réunion en ligne** détecte les applications d’appel qui utilisent le microphone ou la caméra, dès la salle d’attente, et propose un toast de confirmation au-dessus de toutes les apps : sous-titres en direct de vos interlocuteurs en bas de l’écran (cochés par défaut), lecture de leur traduction avec une voix proche choisie par Jev, et traduction de votre micro vers le microphone virtuel **Interprete** (via BlackHole 2ch) et/ou en sous-titres incrustés dans votre vidéo (via OBS Virtual Camera). Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
+À l’ouverture, l’accueil propose deux choix : **Conversation** (deux personnes, un appareil) ou **Réunion en ligne**. Le mode **Réunion en ligne** détecte les applications d’appel qui utilisent le microphone ou la caméra, dès la salle d’attente, et propose un toast de confirmation au-dessus de toutes les apps : sous-titres en direct de vos interlocuteurs en bas de l’écran (cochés par défaut), lecture de leur traduction avec une voix proche choisie par Jev, et traduction de votre micro vers le microphone virtuel **Interprete** (via BlackHole 2ch). Un mode casque et un exemple synthétique permettent de tester sans réunion. Voir [le guide de test et de configuration](docs/CALL-MODE.md).
 
 **Activer la traduction** retrouve vos réglages et peut basculer le micro système automatiquement ; l’arrêt rétablit le micro précédent. Dans l’application d’appel, choisissez **Système / Par défaut** pour suivre ces changements.
 
@@ -150,7 +150,7 @@ La release est préparée temporairement en brouillon pendant l'envoi du fichier
 
 Le lien permanent de la landing est `https://github.com/kevinrss01/interprete-live-v2/releases/latest/download/Interprete-macOS-arm64.dmg`. Chaque dernière release doit conserver ce nom de fichier. Les téléchargements publics nécessitent un dépôt public ; les brouillons ne rendent pas ce lien disponible.
 
-En local, `pnpm build:desktop:dmg` reconstruit le DMG avec les icônes et les réglages Tauri existants, sans créer de tag ou de release. Configurer `VITE_API_URL` dans `apps/desktop/.env.local` avant le build ; le terminal indique le chemin du fichier produit. Cible : macOS 14.2 minimum, Apple Silicon. La signature et la notarisation ne sont pas ajoutées par ce workflow, et la caméra virtuelle n'est pas encore implémentée.
+En local, `pnpm build:desktop:dmg` reconstruit le DMG avec les icônes et les réglages Tauri existants, sans créer de tag ou de release. Configurer `VITE_API_URL` dans `apps/desktop/.env.local` avant le build ; le terminal indique le chemin du fichier produit. Cible : macOS 14.2 minimum, Apple Silicon. La signature et la notarisation ne sont pas ajoutées par ce workflow.
 
 Le fond du DMG et les positions des icônes sont configurés dans `bundle.macOS.dmg`. Pour modifier le visuel, éditer `apps/desktop/src-tauri/dmg/background.swift`, puis exécuter `swift apps/desktop/src-tauri/dmg/background.swift` sur macOS pour régénérer le PNG avant de reconstruire le DMG. Aucun outil de dessin supplémentaire n'est nécessaire.
 
