@@ -43,7 +43,7 @@ export function CaptionsView({ captions, preferences, onHidden }: { captions: Ca
     return () => clearTimeout(timer);
   }, [captions.sessionId]);
   const waiting = !captions.lines.length;
-  const hidden = waiting ? !intro && captions.status !== "starting" : quiet;
+  const hidden = captions.notice ? false : waiting ? !intro && captions.status !== "starting" : quiet;
   useEffect(() => onHidden?.(hidden), [hidden, onHidden]);
   if (!captions.sessionId || captions.status === "idle") return null;
   return (
@@ -60,7 +60,9 @@ export function CaptionsView({ captions, preferences, onHidden }: { captions: Ca
         {onHidden && <span className="caption-drag-hint"><GripHorizontal size={14} />Drag to move</span>}
       </div>
       <div className="captions-lines" aria-live="polite">
-        {waiting ? (
+        {captions.notice ? (
+          <p className="caption-line caption-waiting" role="status">{captions.notice}</p>
+        ) : waiting ? (
           <p className="caption-line caption-waiting">
             {captions.status === "starting"
               ? "Connecting to the call audio…"

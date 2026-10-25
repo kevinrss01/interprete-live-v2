@@ -64,9 +64,13 @@ type PendingConfirm =
 export function Interpreter({
   controller,
   onLeave,
+  onMacSetup,
+  initialView = "conversation",
 }: {
   controller: InterpreterController;
   onLeave: () => void;
+  onMacSetup: (view: "call" | "settings") => void;
+  initialView?: "conversation" | "call" | "settings";
 }) {
   const state = useSyncExternalStore(
     controller.subscribe,
@@ -89,7 +93,7 @@ export function Interpreter({
   const [overlayError, setOverlayError] = useState<string | null>(null);
   const [callBusy, setCallBusy] = useState(false);
   const [overlayExpanded, setOverlayExpanded] = useState(false);
-  const [view, setView] = useState<View>("conversation");
+  const [view, setView] = useState<View>(initialView);
   const callMode = view === "call" || view === "benchmark";
   const mainRef = useRef<HTMLElement>(null);
   const shownView = useRef(view);
@@ -362,6 +366,7 @@ export function Interpreter({
           profiles={state.profiles}
           onLanguage={(id, language) => controller.setProfile(id, { language })}
           onNewDiscussion={() => setPending({ kind: "clear-call" })}
+          onSetupRequired={() => onMacSetup("call")}
         />
         {view === "conversation" && (
           <Conversation
@@ -385,6 +390,7 @@ export function Interpreter({
             onSignOut={leave}
             onCaptionPreview={previewCaptions}
             captionError={captionError}
+            onMacSetup={() => onMacSetup("settings")}
           />
         )}
         {view === "history" && <HistoryPage />}

@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import type { VoiceFeatures } from "@interprete/shared/contracts";
 import type { CaptureOptions } from "./audio";
 import type { NativeInvoke } from "./calls";
+import { noteSystemAudio } from "./mac-setup";
 
 // "app": only the detected call application. "system": every app except Interprète.
 export type CaptureScope = "app" | "system";
@@ -10,7 +11,7 @@ type ChannelMessage = ArrayBuffer | { type: "stalled" };
 type AudioChannel = { onmessage: (message: ChannelMessage) => void };
 export type SystemAudioOptions = CaptureOptions & {
   source: string | null;
-  // Silence the captured apps on this Mac while capturing, so only the translated voice is heard.
+  // Silence the source only while translated playback is active, after capture has succeeded.
   muteSource?: boolean;
   onStarted?: (started: CaptureStarted) => void;
   onSilence?: (silent: boolean) => void;
@@ -38,21 +39,32 @@ export class SystemAudioCapture {
   private lastSpeech = 0;
   private boundarySent = false;
   private lastLevelAt = 0;
-  private heard = false;
-  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastSoundAt = 0;
+  private silenceTimer: ReturnType<typeof setInterval> | null = null;
+  private muteTail = Promise.resolve();
+  private ready = false;
+  private verified = false;
   constructor(
     private options: SystemAudioOptions,
     private call: NativeInvoke = invoke,
     private channel: () => AudioChannel = () => new Channel<ChannelMessage>(),
   ) {}
-  setOutputActive(_active: boolean) {}
+  setOutputActive(active: boolean) {
+    if (!this.options.muteSource || this.stopped || !this.ready) return;
+    this.muteTail = this.muteTail.then(async () => {
+      if (this.stopped) return;
+      await this.call("system_audio_mute", { id: this.id, muted: active });
+    }).catch((error: unknown) => {
+      if (!this.stopped) this.options.onError(String(error));
+    });
+  }
   async start() {
     const channel = this.channel();
     channel.onmessage = (message) => this.receive(message);
     const started = await this.call<CaptureStarted>("system_audio_start", {
       id: this.id,
       source: this.options.source,
-      mute: this.options.muteSource ?? false,
+      mute: false,
       onAudio: channel,
     });
     if (this.stopped) {
@@ -61,10 +73,12 @@ export class SystemAudioCapture {
       return;
     }
     this.options.onStarted?.(started);
+    this.ready = true;
     // Silence is normal between sentences, but complete digital silence usually means no permission.
-    this.silenceTimer = setTimeout(() => {
-      if (!this.heard && !this.stopped) this.options.onSilence?.(true);
-    }, 12_000);
+    this.lastSoundAt = performance.now();
+    this.silenceTimer = setInterval(() => {
+      if (!this.stopped) this.options.onSilence?.(performance.now() - this.lastSoundAt >= 12_000);
+    }, 1000);
   }
   private receive(message: ChannelMessage) {
     if (this.stopped) return;
@@ -79,8 +93,9 @@ export class SystemAudioCapture {
     if (!bytes.length) return;
     this.options.onAudio(bytes);
     const level = rms(bytes);
-    if (level > 0 && !this.heard) {
-      this.heard = true;
+    if (level > 0) {
+      if (!this.verified) { this.verified = true; noteSystemAudio("verified"); }
+      this.lastSoundAt = performance.now();
       this.options.onSilence?.(false);
     }
     const now = performance.now();
@@ -100,8 +115,9 @@ export class SystemAudioCapture {
   stop() {
     this.stopping ??= (async () => {
       this.stopped = true;
-      if (this.silenceTimer) clearTimeout(this.silenceTimer);
+      if (this.silenceTimer) clearInterval(this.silenceTimer);
       this.options.onLevel(0);
+      await this.muteTail;
       await this.call("system_audio_stop", { id: this.id }).catch(() => {});
       return null;
     })();

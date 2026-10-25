@@ -46,6 +46,8 @@ export function TranslationPill({
       ? "Preview"
       : connecting
         ? "Connecting…"
+        : session.phase === "paused"
+          ? "Microphone paused"
         : session.test
           ? "Testing"
           : "Translation on";
@@ -60,7 +62,7 @@ export function TranslationPill({
           {connecting || stopping ? (
             <LoaderCircle size={13} className="spin" aria-hidden="true" />
           ) : (
-            <span className="translation-pill-dot" aria-hidden="true" />
+            <span className="translation-pill-dot" data-paused={session.phase === "paused"} aria-hidden="true" />
           )}
           <span>
             <strong>{label}</strong>

@@ -12,6 +12,7 @@ pub enum Phase {
     Finishing,
     Translating,
     Playing,
+    Paused,
     Preview,
 }
 #[derive(Clone, Default, Deserialize, Serialize)]

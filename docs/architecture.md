@@ -6,6 +6,20 @@ Le déploiement web utilise deux projets du workspace Vercel VoiceCheap : `inter
 
 ## Vue d'ensemble
 
+### Native device setup
+
+`MacSetup` is shared by first-run onboarding, returning native users and Settings. Device-local versioned preferences store a completed/deferred choice independently of accounts and voice consent. `MacSetupMonitor` performs coalesced metadata reads, refreshes on focus, rejects late reads/actions after unmount and keeps installation failures visible. Browser onboarding does not enter this screen. The setup scroll container starts below the header and keeps its actions reachable in a compact window.
+
+`setup.rs`/`setup.m` expose main-window-only metadata for AVFoundation microphone authorization, Accessibility trust, installed/loaded BlackHole and the app aggregate. Passive checks never request access. Explicit actions request microphone access without a recording session, request system-audio access with an empty inclusive process tap whose frames are discarded, or prepare the aggregate. System-audio permission has no inferred success from opening Settings: local evidence distinguishes user confirmation from a nonzero frame observed by `SystemAudioCapture`. Reviewing audio access resets that evidence and requires confirmation again.
+
+The installer action downloads the pinned publisher package with curl configuration disabled, HTTPS-only redirects and a generic user agent. SHA-256 must match before macOS Installer opens; a process-local lock prevents duplicate downloads. Installer/admin confirmation and reboot remain user actions. No privileged installer command, driver source redistribution, CoreAudio restart, new environment variable or paid-provider setup is introduced. Meeting starts recheck the requirements of the chosen direction and open setup if needed.
+
+### Call audio recovery and microphone mute
+
+`system_audio.m` starts process taps unmuted and refreshes the selected application's process IDs every 500 ms, retaining application scope even before its audio helper exists. `SystemAudioCapture.setOutputActive` serializes session-scoped `system_audio_mute` commands: the original is muted only during translated playback, then restored. Silence warnings also reach `CaptionsView` through the validated optional caption `notice` field and prevent its waiting state from fading out.
+
+`call_microphone.m` uses macOS Accessibility to read only the own-microphone action of a unique Meet document, including document picture-in-picture identified by Chrome's native origin bar. It returns booleans, never page text or meeting URLs. English/French controls are recognized; unknown state pauses outgoing processing. Accessibility requests are made only through the user's settings button. `CallMicrophoneSync` polls without overlapping reads and invalidates late startup work on mute/stop. Pausing cancels the outgoing interpreter while `NativePcmPlayer` retains its route and system-input lease. A callback-acknowledged `audio_route_clear` discards queued PCM before any resumed packets, preventing muted speech from playing after unmute. Other call applications retain manual stop controls.
+
 ```mermaid
 flowchart LR
   subgraph Poste["Poste de l'utilisateur"]

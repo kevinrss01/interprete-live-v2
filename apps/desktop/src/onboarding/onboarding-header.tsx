@@ -5,7 +5,7 @@ import { Button } from "@interprete/ui/components/button";
 import { cn } from "@interprete/ui/lib/utils";
 
 // Voice first, account last: the person hears their voice before filling any form.
-export type OnboardingStep = "intro" | "voice" | "preview" | "account";
+export type OnboardingStep = "intro" | "setup" | "voice" | "preview" | "account";
 const STEPS: [OnboardingStep, string][] = [
   ["voice", "Your voice"],
   ["preview", "Listen"],
@@ -25,14 +25,15 @@ export function OnboardingHeader({ action }: { action?: ReactNode }) {
 }
 
 // Floating dock at the bottom, in the page flow so it never covers a button.
-export function OnboardingStepper({ step }: { step: OnboardingStep }) {
-  const at = STEPS.findIndex(([id]) => id === step);
+export function OnboardingStepper({ step, macSetup = false }: { step: OnboardingStep; macSetup?: boolean }) {
+  const steps: [OnboardingStep, string][] = macSetup ? [["setup", "Mac setup"], ...STEPS] : STEPS;
+  const at = steps.findIndex(([id]) => id === step);
   return (
     <ol
       className="mb-6 flex items-center gap-1.5 self-center rounded-full border bg-card p-1.5 shadow-lg shadow-foreground/5"
       aria-label="Onboarding steps"
     >
-      {STEPS.map(([id, label], i) => (
+      {steps.map(([id, label], i) => (
         <li
           key={id}
           aria-current={i === at ? "step" : undefined}
@@ -71,15 +72,17 @@ export function OnboardingPage({
   action,
   children,
   footer,
+  scrollSafe = false,
 }: {
   action?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  scrollSafe?: boolean;
 }) {
   return (
     // One fixed frame the size of the window: screens are designed to fit it, so the
     // page never scrolls. Below the default window size, main scrolls instead of clipping.
-    <div className="relative flex h-dvh flex-col overflow-hidden bg-brand-wash">
+    <div className={cn("relative flex h-dvh flex-col overflow-hidden bg-brand-wash", scrollSafe && "mac-setup-page")}>
       <OnboardingHeader action={action} />
       {/* Room for the floating header above; the stepper follows below. */}
       <main className="flex min-h-0 flex-1 items-center justify-center-safe overflow-y-auto px-12 pt-26 pb-6 max-[860px]:px-6 max-[860px]:pt-22 max-[860px]:pb-6">

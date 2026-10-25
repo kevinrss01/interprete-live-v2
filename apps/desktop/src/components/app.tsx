@@ -3,10 +3,16 @@ import { Interpreter } from "../conversation/interpreter";
 import { InterpreterController } from "../lib/interpreter";
 import { Onboarding } from "../onboarding/onboarding";
 import { loadOnboardingAccount } from "../onboarding/onboarding-account";
+import { isTauri } from "@tauri-apps/api/core";
+import { MacSetup } from "../onboarding/mac-setup";
+import { OnboardingPage } from "../onboarding/onboarding-header";
+import { missingSetup, readMacSetup, setupDecision, systemAudioEvidence } from "../lib/mac-setup";
 
-type Screen = "onboarding" | "app";
+type Screen = "onboarding" | "setup" | "app";
 
-const initialScreen = (): Screen => (loadOnboardingAccount()?.complete ? "app" : "onboarding");
+const initialScreen = (): Screen => loadOnboardingAccount()?.complete
+  ? isTauri() && !setupDecision() ? "setup" : "app"
+  : "onboarding";
 
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -46,10 +52,22 @@ export function App() {
   const [screen, setScreen] = useState<Screen>(initialScreen);
   // True only for the onboarding → app handoff, so a reload into the app stays still.
   const [arriving, setArriving] = useState(false);
+  const [returnView, setReturnView] = useState<"conversation" | "call" | "settings">("conversation");
 
   useEffect(() => {
     void controller.init();
     return () => controller.dispose();
+  }, [controller]);
+  useEffect(() => {
+    if (!isTauri() || !loadOnboardingAccount()?.complete || setupDecision() !== "ready") return;
+    let current = true;
+    void readMacSetup().then(status => {
+      if (current && missingSetup(status, systemAudioEvidence()).length) {
+        controller.cancel();
+        setScreen("setup");
+      }
+    }).catch(() => { if (current) setScreen("setup"); });
+    return () => { current = false; };
   }, [controller]);
 
   useEffect(() => {
@@ -60,17 +78,27 @@ export function App() {
   }, [arriving]);
 
   function enterApp() {
-    if (!reduceMotion()) setArriving(true);
+    if (isTauri() && !setupDecision()) { setScreen("setup"); return; }
+    if (screen === "setup" && setupDecision() === "later" && returnView === "call") setReturnView("conversation");
+    setArriving(screen === "onboarding" && !reduceMotion());
     setScreen("app");
   }
 
   function leaveApp() {
     setArriving(false);
     setScreen("onboarding");
+    setReturnView("conversation");
+  }
+  function openMacSetup(view: "call" | "settings") {
+    controller.cancel();
+    setArriving(false);
+    setReturnView(view);
+    setScreen("setup");
   }
 
   return (
     <>
+      {screen === "setup" && <OnboardingPage scrollSafe><MacSetup onDone={enterApp} /></OnboardingPage>}
       {(screen === "onboarding" || arriving) && (
         <ScreenLeave fading={arriving}>
           <Onboarding controller={controller} onDone={enterApp} />
@@ -78,7 +106,7 @@ export function App() {
       )}
       {screen === "app" && (
         <ScreenEnter fading={arriving} onFaded={() => setArriving(false)}>
-          <Interpreter controller={controller} onLeave={leaveApp} />
+          <Interpreter controller={controller} onLeave={leaveApp} initialView={returnView} onMacSetup={openMacSetup} />
         </ScreenEnter>
       )}
     </>

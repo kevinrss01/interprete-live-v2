@@ -20,6 +20,9 @@ import { OnboardingRecorder } from "./onboarding-recorder";
 import { OnboardingStart } from "./onboarding-start";
 import { useOnboardingRecording } from "./onboarding-recording";
 import { ONBOARDING_TEXTS } from "./onboarding-texts";
+import { isTauri } from "@tauri-apps/api/core";
+import { setupDecision } from "../lib/mac-setup";
+import { MacSetup } from "./mac-setup";
 
 const STATUS = "flex items-center justify-center gap-2 text-base text-(--ink-2)";
 const LINK = "text-[15px] text-(--ink-2) underline underline-offset-3";
@@ -73,7 +76,7 @@ export function Onboarding({
       controller.setProfile("b", { language: next === "en" ? "fr" : "en" });
   }
 
-  function start() {
+  function startVoice() {
     const p = controller.getSnapshot().profiles.a;
     // Back after closing the app: a voice already exists, go straight to hearing it.
     if (p.cloneVoice && (p.cloneStatus === "ready" || p.cloneStatus === "verification")) setStep("preview");
@@ -81,6 +84,10 @@ export function Onboarding({
       setLanguage(systemLanguage());
       setStep("voice");
     }
+  }
+  function start() {
+    if (isTauri() && !setupDecision()) setStep("setup");
+    else startVoice();
   }
 
   // Creates the Better Auth account (email is unique), then saves both languages.
@@ -200,6 +207,7 @@ export function Onboarding({
 
   return (
     <OnboardingPage
+      scrollSafe={!auth && step === "setup"}
       action={
         !auth && step === "intro" && import.meta.env.DEV ? (
           // Dev only: open the app without creating an account each time.
@@ -212,7 +220,7 @@ export function Onboarding({
       }
       footer={
         // Hidden on the intro and while recording: one thing to focus on.
-        !auth && step !== "intro" && recording.status === "idle" && <OnboardingStepper step={step} />
+        !auth && step !== "intro" && recording.status === "idle" && <OnboardingStepper step={step} macSetup={isTauri()} />
       }
     >
       {auth && (
@@ -225,6 +233,7 @@ export function Onboarding({
         />
       )}
       {!auth && step === "intro" && <OnboardingStart onStart={start} onLogin={() => setAuth("login")} />}
+      {!auth && step === "setup" && <MacSetup onDone={startVoice} />}
       {!auth && step === "voice" && (
         <OnboardingReading
           language={language}

@@ -13,6 +13,7 @@ export type CaptionsUpdate = {
   source: string;
   target: string;
   lines: CaptionLine[];
+  notice?: string | null;
   layout?: CaptionLayout;
 };
 export type CaptionsSnapshot = CaptionsUpdate & { revision: number };

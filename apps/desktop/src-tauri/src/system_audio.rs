@@ -85,6 +85,7 @@ unsafe extern "C" {
         handle: *mut *mut std::ffi::c_void,
     ) -> *mut std::ffi::c_char;
     fn interprete_tap_stop(handle: *mut std::ffi::c_void);
+    fn interprete_tap_mute(handle: *mut std::ffi::c_void, muted: bool) -> i32;
     fn free(ptr: *mut std::ffi::c_void);
 }
 #[cfg(target_os = "macos")]
@@ -108,6 +109,15 @@ struct Capture {
     handle: *mut std::ffi::c_void,
     sink: *mut Sink,
     stopped: Arc<AtomicBool>,
+}
+
+// An inclusive tap with no matching processes requests audio access without capturing any app.
+// Its frames are discarded locally and it never enters the meeting capture slot or a provider.
+pub fn request_setup_permission() -> Result<(), String> {
+    let channel = Channel::new(|_| Ok(()));
+    let capture = start(vec!["@interprete-setup-no-processes"], false, channel)?;
+    drop(capture);
+    Ok(())
 }
 // The handle and sink are only touched by start, the serial tap queue and Drop.
 unsafe impl Send for Capture {}
@@ -278,6 +288,35 @@ impl SystemAudio {
     }
 }
 
+#[tauri::command]
+pub async fn system_audio_mute(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, SystemAudio>,
+    id: String,
+    muted: bool,
+) -> Result<(), String> {
+    main_only(&window)?;
+    // Holding the slot prevents stop from freeing the native handle during this synchronous call.
+    // The command runs off the UI thread; the callback never takes this mutex.
+    let slot = state.0.lock().map_err(|e| e.to_string())?;
+    if let Some((current, capture)) = &slot.current
+        && current == &id
+    {
+        #[cfg(target_os = "macos")]
+        {
+            let status = unsafe { interprete_tap_mute(capture.handle, muted) };
+            if status != 0 {
+                return Err(format!(
+                    "Unable to update the call audio (CoreAudio {status})."
+                ));
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (capture, muted);
+    }
+    Ok(())
+}
+
 fn main_only(window: &tauri::WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
         Ok(())
@@ -291,7 +330,7 @@ pub async fn system_audio_start(
     state: tauri::State<'_, SystemAudio>,
     id: String,
     source: Option<String>,
-    // Only the translation is heard: the captured call stays silent until the capture stops.
+    // Legacy argument. Capture starts unmuted; playback controls source muting separately.
     mute: Option<bool>,
     on_audio: Channel<InvokeResponseBody>,
 ) -> Result<Started, String> {

@@ -1,6 +1,8 @@
 mod audio_route;
 mod call_captions;
+mod call_microphone;
 mod calls;
+mod setup;
 mod system_audio;
 mod system_microphone;
 mod translation_overlay;
@@ -34,7 +36,12 @@ pub fn run() {
             call_captions::call_captions_position,
             system_audio::system_audio_start,
             system_audio::system_audio_stop,
+            system_audio::system_audio_mute,
             calls::call_snapshot,
+            call_microphone::call_microphone_state,
+            call_microphone::open_call_permissions,
+            setup::mac_setup_status,
+            setup::mac_setup_action,
             calls::call_monitor_enabled,
             calls::simulate_call,
             calls::answer_call,
@@ -45,6 +52,7 @@ pub fn run() {
             audio_route::audio_route_activate,
             audio_route::audio_route_push,
             audio_route::audio_route_close,
+            audio_route::audio_route_clear,
             audio_route::audio_route_status,
         ])
         .setup(|app| {

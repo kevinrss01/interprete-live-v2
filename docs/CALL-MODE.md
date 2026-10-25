@@ -4,6 +4,17 @@ Le mode **Réunion en ligne** complète le mode conversation existant. Il tradui
 
 ## Activer en un clic
 
+### Première configuration de l’application installée
+
+Après **Get started**, le parcours natif ajoute **Mac setup** avant la voix et le compte. Les comptes déjà configurés voient aussi cette étape une fois sur leur Mac. Elle regroupe :
+
+- **Your microphone** : demande macOS sans enregistrement, ou ouverture des réglages si l’accès a été refusé.
+- **Call audio** : demande d’accès via une capture temporaire sans aucune application source, puis confirmation explicite après le panneau macOS. **Confirmed by you** désigne cette confirmation ; **Audio verified** n’apparaît qu’après réception réelle d’un signal par la capture entrante. L’ouverture du panneau ne valide jamais ce prérequis à elle seule.
+- **Follow Meet’s mute button** : ouverture de l’accès Accessibilité ; l’état réel est revérifié au retour dans l’app.
+- **Virtual microphone** : téléchargement de l’installateur officiel [BlackHole 2ch](https://existential.audio/blackhole/), vérification SHA-256, ouverture de macOS Installer puis préparation du périphérique **Interprete**. L’utilisateur valide lui-même l’installation et le mot de passe administrateur éventuel. Si le pilote est installé mais pas encore disponible dans CoreAudio, l’écran indique de redémarrer le Mac puis de rouvrir Interprète. Aucun terminal ni Homebrew n’est nécessaire dans ce parcours.
+
+**Set up meetings later** conserve l’accès au mode conversation. Les sous-titres entrants demandent seulement l’audio des appels ; la voix sortante demande le micro physique et le micro virtuel, ainsi que l’Accessibilité pour Meet. Les prérequis manquants ramènent à cet écran, sans démarrer de capture. **Settings → Permissions → Review Mac setup** permet de le retrouver, y compris pour revérifier l’audio système. Le parcours web conserve ses étapes de voix et de compte.
+
 ```sh
 pnpm dev
 ```
@@ -17,6 +28,18 @@ Les langues, le microphone physique, la sortie virtuelle, le mode test et l’op
 **Désactiver la traduction**, le carré de la pastille, la fin de l’appel ou la fermeture normale de l’app arrêtent la sortie et rétablissent le micro précédent. Un choix manuel différent effectué dans macOS pendant la session est conservé. Si le micro précédent a été débranché, l’app tente une entrée physique disponible, en privilégiant le micro intégré. Si la restauration échoue, son état est conservé pour être réessayé au prochain lancement. Après un arrêt forcé ou un crash, cette récupération a lieu au prochain lancement, pas pendant que l’app est fermée. Le journal local ne contient que les identifiants de périphériques et de session nécessaires à la restauration, jamais de son.
 
 Pour conserver manuellement le choix du micro système, désactivez l’option de bascule. Vous pouvez alors sélectionner **Interprete** directement dans Meet / Zoom.
+
+### Micro coupé dans Google Meet
+
+La traduction sortante suit maintenant le bouton du micro de Meet, en français ou en anglais, dans les navigateurs reconnus sur macOS. Cela nécessite l’autorisation **Accessibilité** pour Interprète. Le bouton **Open Accessibility settings** ouvre le panneau correspondant ; macOS et l’utilisateur accordent cette autorisation. L’app ne l’accorde jamais elle-même.
+
+Quand Meet est muet, la capture physique, la transcription et la synthèse sortantes sont annulées. Le son déjà en file est vidé, mais la sortie virtuelle et la bascule système restent en place : aucun retour vers le microphone physique pendant cette pause. La traduction reprend après confirmation du démutage. La lecture de l’état est périodique, pas instantanée. Un état illisible, une autre page active ou plusieurs appels ambigus maintiennent la pause. La fenêtre flottante de Meet est reconnue grâce à sa barre d’origine Chrome. Les autres logiciels d’appel ne bénéficient pas encore de cette synchronisation : arrêter leur traduction sortante dans Interprète avant d’y parler en mute.
+
+### Aucun son ni sous-titre entrant
+
+Le son original reste audible au démarrage de la capture et n’est coupé que pendant la lecture effective d’une voix traduite. Une capture silencieuse ou une panne de transcription ne doit donc plus rendre l’appel entièrement silencieux. Les processus audio du navigateur sont réévalués pendant la session pour suivre un service audio créé ou remplacé après le début de l’appel.
+
+Après 12 secondes de silence numérique, l’app affiche l’avertissement dans les réglages et dans la fenêtre des sous-titres, qui reste visible. Si une personne parle à cet instant, utiliser **Open audio recording settings** et vérifier Interprète dans **Confidentialité et sécurité › Enregistrement de l’écran et de l’audio système**, puis relancer la traduction entrante. Le silence entre deux interventions ne prouve pas à lui seul un refus de permission. Le niveau audio entrant permet de voir si un signal arrive.
 
 ## Micro au nom de l’app
 

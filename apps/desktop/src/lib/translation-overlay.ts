@@ -5,7 +5,7 @@ import type { Phase } from "@interprete/shared/contracts";
 
 export type OverlayUpdate = {
   sessionId: string | null;
-  phase: Phase | "preview";
+  phase: Phase | "preview" | "paused";
   source: string;
   target: string;
   test: boolean;

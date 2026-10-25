@@ -56,6 +56,14 @@ test("overlay state updates remain ordered when a stop follows a pending show", 
   await Promise.all([showing, hidden]);
   assert.deepEqual(calls, [live, idleOverlay]);
 });
+test("a muted outgoing session is shown as paused instead of connecting or translating", () => {
+  const html = renderToStaticMarkup(createElement(TranslationPill, {
+    session: { ...live, phase: "paused" },
+    onStop: () => {}, onOptions: () => {}, onExpand: () => {},
+  }));
+  assert.match(html, /Microphone paused/);
+  assert.doesNotMatch(html, /Connecting…|Translation on/);
+});
 test("a failed show cannot prevent the next hide from reaching the native window", async () => {
   const calls: unknown[] = [];
   const publisher = new OverlayPublisher(

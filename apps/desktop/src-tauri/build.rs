@@ -16,16 +16,22 @@ fn main() {
             .file("src/call_probe.m")
             .file("src/virtual_microphone.m")
             .file("src/system_audio.m")
+            .file("src/call_microphone.m")
+            .file("src/setup.m")
             .flag("-fobjc-arc")
             .compile("interprete_call_probe");
         println!("cargo:rustc-link-lib=framework=Foundation");
         println!("cargo:rustc-link-lib=framework=CoreAudio");
         println!("cargo:rustc-link-lib=framework=CoreMediaIO");
         println!("cargo:rustc-link-lib=framework=AppKit");
+        println!("cargo:rustc-link-lib=framework=ApplicationServices");
+        println!("cargo:rustc-link-lib=framework=AVFoundation");
         println!("cargo:rustc-link-lib=framework=QuartzCore");
         println!("cargo:rerun-if-changed=src/call_probe.m");
         println!("cargo:rerun-if-changed=src/virtual_microphone.m");
         println!("cargo:rerun-if-changed=src/system_audio.m");
+        println!("cargo:rerun-if-changed=src/call_microphone.m");
+        println!("cargo:rerun-if-changed=src/setup.m");
     }
     tauri_build::build();
     // `generate_context!` reads the icon files from a proc macro, which Cargo

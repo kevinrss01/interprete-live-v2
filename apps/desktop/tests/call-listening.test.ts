@@ -188,6 +188,48 @@ test("a capture stopped while the tap is starting releases that tap", async () =
   assert.deepEqual(calls, ["system_audio_start", "system_audio_stop", "system_audio_stop"]);
 });
 
+test("translated voice never silences a failed or silent capture; only active playback mutes", async () => {
+  const calls: { name: string; args: Record<string, unknown> }[] = [];
+  const capture = new SystemAudioCapture({
+    onAudio: () => {}, onLevel: () => {}, onEnded: () => {}, onError: assert.fail,
+    recordSample: false, source: "Chrome / Meet", muteSource: true,
+  }, async <T>(name: string, args: Record<string, unknown>) => {
+    calls.push({ name, args });
+    return (name === "system_audio_start" ? { scope: "app", processes: 1 } : undefined) as T;
+  }, () => ({ onmessage: () => {} }));
+  capture.setOutputActive(true);
+  await capture.start();
+  assert.equal(calls[0].args.mute, false);
+  assert.equal(calls.length, 1, "starting a capture must keep the original audible");
+  capture.setOutputActive(true);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  capture.setOutputActive(false);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(calls.filter(call => call.name === "system_audio_mute").map(call => call.args.muted), [true, false]);
+  await capture.stop();
+  capture.setOutputActive(true);
+  assert.equal(calls.at(-1)?.name, "system_audio_stop");
+});
+
+test("stopping during a pending mute releases the tap after that command completes", async () => {
+  const calls: string[] = [];
+  let release!: () => void;
+  const capture = new SystemAudioCapture({
+    onAudio: () => {}, onLevel: () => {}, onEnded: () => {}, onError: assert.fail,
+    recordSample: false, source: "Chrome / Meet", muteSource: true,
+  }, async <T>(name: string) => {
+    calls.push(name);
+    if (name === "system_audio_mute") await new Promise<void>(resolve => { release = resolve; });
+    return (name === "system_audio_start" ? { scope: "app", processes: 1 } : undefined) as T;
+  }, () => ({ onmessage: () => {} }));
+  await capture.start(); capture.setOutputActive(true);
+  await Promise.resolve();
+  const stopping = capture.stop();
+  assert.equal(calls.at(-1), "system_audio_mute");
+  release(); await stopping;
+  assert.equal(calls.at(-1), "system_audio_stop");
+});
+
 test("voice measurements track pitch and ignore silence", () => {
   for (const pitch of [100, 120, 180, 230]) {
     const profiler = new VoiceProfiler();

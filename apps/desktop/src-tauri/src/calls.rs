@@ -112,6 +112,14 @@ pub fn tap_prefixes(app: &str) -> Vec<&'static str> {
     }
     prefixes
 }
+pub fn browser_prefixes() -> Vec<&'static str> {
+    CALL_APPS
+        .iter()
+        .filter_map(|&(prefix, name)| {
+            (name == "Chrome / Meet" || name.ends_with("/ web call")).then_some(prefix)
+        })
+        .collect()
+}
 fn probe() -> Result<Probe, String> {
     #[cfg(target_os = "macos")]
     {

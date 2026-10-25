@@ -56,6 +56,8 @@ import {
 } from "../lib/call-preferences";
 import type { OverlayUpdate } from "../lib/translation-overlay";
 import { CallListening } from "../lib/call-listening";
+import { CallMicrophoneSync, callMicrophoneState, openCallPermissions, type MicrophoneSyncStatus } from "../lib/call-microphone";
+import { meetingSetupReady } from "../lib/mac-setup";
 import { CAPTION_SIZES, captionPosition, useCaptionPreferences } from "../lib/caption-preferences";
 import { useDiscussion } from "../lib/use-discussion";
 import {
@@ -105,6 +107,7 @@ export function CallPanel({
   onOverlayChange,
   onCaptionError,
   onNewDiscussion,
+  onSetupRequired,
   ref,
 }: {
   ref?: Ref<CallPanelHandle>;
@@ -118,6 +121,7 @@ export function CallPanel({
   profiles: Record<SpeakerId, Profile>;
   onLanguage: (id: SpeakerId, language: Profile["language"]) => void;
   onNewDiscussion: () => void;
+  onSetupRequired: () => void;
 }) {
   const native = desktopAvailable();
   const [recorder] = useState(() => new BenchmarkRecorder());
@@ -149,6 +153,8 @@ export function CallPanel({
   );
   const [error, setError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const muteSync = useRef<CallMicrophoneSync | null>(null);
+  const [microphoneSync, setMicrophoneSync] = useState<MicrophoneSyncStatus>({ paused: false, notice: null });
   const [overlayPreview, setOverlayPreview] = useState(false);
   const overlayId = useRef<string | null>(null);
   const [accepted, setAccepted] = useState<AcceptedCall | null>(null);
@@ -211,7 +217,7 @@ export function CallPanel({
     controller.getSnapshot,
     controller.getServerSnapshot,
   );
-  const busy = preparing || state.phase !== "idle";
+  const busy = preparing || state.phase !== "idle" || !!session;
   const anyBusy = busy || listenBusy;
   useEffect(() => {
     if (!benchmark) return;
@@ -245,6 +251,7 @@ export function CallPanel({
   useEffect(() => onBusy(anyBusy), [anyBusy, onBusy]);
   const busyRef = useRef(false);
   const startGeneration = useRef(0);
+  const listenPreparation = useRef(0);
   const handleAccept = useRef<(call: AcceptedCall) => void>(() => {});
 
   async function refresh(permission = false) {
@@ -303,13 +310,18 @@ export function CallPanel({
     busyRef.current = false;
     if (!listening.getSnapshot().sessionId) overlayId.current = null;
     setOverlayPreview(false);
+    muteSync.current?.stop();
+    muteSync.current = null;
+    setMicrophoneSync({ paused: false, notice: null });
+    audio.setHoldOpen(false);
     controller.cancel();
     setPreparing(false);
     setSession(null);
     activeCallRef.current = null;
-  }, [controller, listening]);
+  }, [audio, controller, listening]);
   // The pill, Escape, the end of the call and leaving call mode stop every direction.
   const stop = useCallback(() => {
+    ++listenPreparation.current;
     overlayId.current = null;
     stopMicrophone();
     listening.stop();
@@ -351,6 +363,8 @@ export function CallPanel({
             sessionId: overlayId.current,
             phase: overlayPreview
               ? "preview"
+              : microphoneSync.paused && !listenBusy
+                ? "paused"
               : phase === "idle"
                 ? "connecting"
                 : phase,
@@ -374,6 +388,7 @@ export function CallPanel({
     profiles.b.language,
     session?.mode,
     session?.demo,
+    microphoneSync.paused,
     listen.demo,
     onOverlayChange,
   ]);
@@ -401,6 +416,12 @@ export function CallPanel({
           throw new Error(
             "Open the macOS app to use the virtual microphone, or choose the headphone test mode.",
           );
+        if (!demo) {
+          const app = call?.app ?? monitor?.call?.app;
+          const ready = await meetingSetupReady({ microphone: true, virtualMicrophone: true, accessibility: !app || app === "Chrome / Meet" || app.endsWith("/ web call") });
+          if (generation !== startGeneration.current) return;
+          if (!ready) { stopMicrophone(); onSetupRequired(); return; }
+        }
         const destinations = displayedOutputs(await outputDevices());
         if (generation !== startGeneration.current) return;
         if (!destinations.length)
@@ -413,11 +434,11 @@ export function CallPanel({
         setOutput(destination);
         save("interprete-call-output", destination);
       }
-      if (!demo) {
+      const prepareMicrophone = async (current: () => boolean) => {
         let devices = await navigator.mediaDevices.enumerateDevices();
-        if (generation !== startGeneration.current) return;
+        if (!current()) return false;
         const physicalNames = native ? await physicalInputNames() : undefined;
-        if (generation !== startGeneration.current) return;
+        if (!current()) return false;
         let microphones = physicalMicrophones(devices, physicalNames);
         if (
           !microphones.some((device) => device.deviceId === inputRef.current)
@@ -428,9 +449,9 @@ export function CallPanel({
           });
           const actual = permission.getAudioTracks()[0]?.getSettings().deviceId;
           permission.getTracks().forEach((track) => track.stop());
-          if (generation !== startGeneration.current) return;
+          if (!current()) return false;
           devices = await navigator.mediaDevices.enumerateDevices();
-          if (generation !== startGeneration.current) return;
+          if (!current()) return false;
           microphones = physicalMicrophones(devices, physicalNames);
           const selected =
             microphones.find(
@@ -447,7 +468,8 @@ export function CallPanel({
         }
         setInputs(microphones);
         requirePhysicalMicrophone(devices, inputRef.current, physicalNames);
-      }
+        return current();
+      };
       if (generation !== startGeneration.current) return;
       beforeStart();
       audio.configure(destination);
@@ -456,19 +478,33 @@ export function CallPanel({
       if (generation !== startGeneration.current) return;
       for (const id of ["a", "b"] as const)
         controller.setProfile(id, profiles[id]);
-      activeCallRef.current = call?.id ?? null;
-      setSession({ mode: selectedRoute, demo, callId: call?.id });
-      await controller.start("a", demo);
-      // Cancellation already stopped this attempt; a newer attempt may now own the controller.
-      if (generation !== startGeneration.current) return;
-      if (
-        !demo &&
-        selectedRoute === "virtual" &&
-        autoSystemMicrophone &&
-        controller.getSnapshot().phase === "listening"
-      ) {
-        await audio.activateSystemMicrophone();
-      }
+      const currentCall = call ?? (demo ? undefined : monitor?.call ?? undefined);
+      activeCallRef.current = currentCall?.id ?? null;
+      setSession({ mode: selectedRoute, demo, callId: currentCall?.id });
+      const begin = async (current = () => generation === startGeneration.current) => {
+        if (!current()) return;
+        if (!demo && !await prepareMicrophone(current)) return;
+        if (!current()) return;
+        await controller.start("a", demo);
+        if (!current() || generation !== startGeneration.current) return;
+        if (controller.getSnapshot().phase === "idle")
+          throw new Error(controller.getSnapshot().error || "The microphone translation did not start.");
+        if (!demo && selectedRoute === "virtual" && autoSystemMicrophone && controller.getSnapshot().phase === "listening")
+          await audio.activateSystemMicrophone();
+      };
+      if (!demo && selectedRoute === "virtual" && native && !currentCall?.simulated) {
+        audio.setHoldOpen(true);
+        const sync = new CallMicrophoneSync({
+          // Meet may already be muted and no longer hold a CoreAudio input when starting.
+          read: () => callMicrophoneState(currentCall?.app ?? "@meet"),
+          resume: begin,
+          pause: () => controller.cancel(),
+          changed: setMicrophoneSync,
+          failed: (error) => { stopMicrophone(); setError(errorMessage(error)); },
+        });
+        muteSync.current = sync;
+        await sync.start();
+      } else await begin();
     } catch (e) {
       if (generation === startGeneration.current) {
         stopMicrophone();
@@ -490,6 +526,7 @@ export function CallPanel({
     demo?: boolean;
     options?: CallOptions;
   }) {
+    const preparation = ++listenPreparation.current;
     setError(null);
     if (!options.captions && !options.voice) {
       setError("Choose captions, translated voice, or both.");
@@ -500,6 +537,16 @@ export function CallPanel({
         "Call audio can only be captured in the macOS app. Open Benchmark to test a recording.",
       );
       return;
+    }
+    if (native && !demo) {
+      try {
+        const ready = await meetingSetupReady({ audio: true });
+        if (preparation !== listenPreparation.current) return;
+        if (!ready) { onSetupRequired(); return; }
+      } catch (error) {
+        if (preparation === listenPreparation.current) setError(errorMessage(error));
+        return;
+      }
     }
     stopCaptionsPreview();
     setLingering(null);
@@ -581,6 +628,7 @@ export function CallPanel({
           source: profiles.b.language,
           target: profiles.a.language,
           lines: captionLines(incoming.turns),
+          notice: listen.notice ? "No incoming audio. Check Interprète’s audio recording permission in System Settings." : null,
         }
       : null;
   // When a sample finishes on its own, its last captions stay readable before the window closes.
@@ -697,9 +745,12 @@ export function CallPanel({
   useEffect(
     () => () => {
       ++startGeneration.current;
+      ++listenPreparation.current;
+      muteSync.current?.stop();
+      audio.setHoldOpen(false);
       controller.dispose();
     },
-    [controller],
+    [audio, controller],
   );
   useEffect(() => () => listening.dispose(), [listening]);
   useEffect(
@@ -715,12 +766,20 @@ export function CallPanel({
     return () => window.removeEventListener("storage", changed);
   }, []);
   useEffect(() => {
+    if (state.phase === "idle" && state.error && muteSync.current?.active && !microphoneSync.paused) {
+      const message = state.error;
+      stopMicrophone();
+      setError(message);
+    }
+  }, [state.phase, state.error, microphoneSync.paused, stopMicrophone]);
+  useEffect(() => {
     if (
       state.phase === "idle" &&
       !preparing &&
       !busyRef.current &&
       controller.getSnapshot().phase === "idle"
     ) {
+      if (muteSync.current?.active) return;
       if (session) audio.stop();
       setSession(null);
       activeCallRef.current = null;
@@ -876,6 +935,7 @@ export function CallPanel({
                           ? `Listening to ${listen.app}`
                           : "Listening to all Mac audio"}
               </strong>
+              {listenBusy && <meter min="0" max="1" value={incoming.level} aria-label="Incoming call audio level" />}
               {listenBusy && listen.options.voice && (
                 <span className="note">
                   {listen.voice
@@ -912,9 +972,10 @@ export function CallPanel({
             )}
           </div>
           {listen.notice && listenBusy && (
-            <p className="note" role="status">
-              {listen.notice}
-            </p>
+            <div role="status">
+              <p className="note">{listen.notice}</p>
+              <button className="btn" type="button" onClick={() => void openCallPermissions("audio").catch(error => setError(errorMessage(error)))}>Open audio recording settings</button>
+            </div>
           )}
           {(listen.error || incoming.error || incoming.warning || captionsError) && (
             <p className="call-error" role="alert">
@@ -928,10 +989,12 @@ export function CallPanel({
         <div className="call-section-body">
           <div className="call-session" data-active={busy} aria-live="polite">
             <div className="call-session-status">
-              <span className="status-dot" data-live={busy} aria-hidden="true" />
+              <span className="status-dot" data-live={busy && !microphoneSync.paused} aria-hidden="true" />
               <strong>
                 {preparing || state.phase === "connecting"
-                  ? "Connecting…"
+                    ? "Connecting…"
+                  : microphoneSync.paused
+                    ? "Translation paused"
                   : busy
                     ? session?.mode === "virtual"
                       ? "Translation sent to the call"
@@ -965,6 +1028,8 @@ export function CallPanel({
               </button>
             )}
           </div>
+          {microphoneSync.notice && <p className="note" role="status">{microphoneSync.notice}</p>}
+          {microphoneSync.permissionRequired && <button className="btn" type="button" onClick={() => void openCallPermissions("accessibility").catch(error => setError(errorMessage(error)))}>Open Accessibility settings</button>}
           <details className="call-advanced">
             <summary>Microphone settings and test mode</summary>
             <fieldset className="segmented" disabled={busy}>

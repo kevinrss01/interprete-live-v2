@@ -1647,6 +1647,36 @@ html.toast-window,
   background: #a3e0b3;
   flex-shrink: 0;
 }
+.translation-pill-dot[data-paused="true"] {
+  background: #92958e;
+}
+
+/* One setup list shared by first launch, Settings and meeting preflight. */
+.mac-setup-page > main { margin-top: 104px; padding-top: 0; align-items: flex-start; }
+.mac-setup button { min-height: 44px; }
+.mac-setup { width: 100%; max-width: 840px; padding-block: 12px; }
+.mac-setup-intro { margin-bottom: 26px; }
+.mac-setup-intro h1 { font-size: clamp(30px, 4vw, 44px); line-height: 1.12; letter-spacing: -0.035em; font-weight: 650; text-wrap: balance; }
+.mac-setup-intro > p { margin-top: 10px; color: var(--ink-2); font-size: 16px; line-height: 1.5; }
+.mac-setup-list { padding: 0; margin: 0; list-style: none; border-top: 1px solid var(--line-2); }
+.mac-setup-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: start; gap: 14px; padding: 18px 0; border-bottom: 1px solid var(--line-2); }
+.mac-setup-mark { display: grid; place-items: center; height: 24px; color: var(--ink); }
+.mac-setup-mark > span { height: 14px; width: 14px; border: 1.5px solid var(--line-2); border-radius: 50%; }
+.mac-setup-description h2 { font-size: 15px; font-weight: 650; line-height: 24px; }
+.mac-setup-description > p { color: var(--ink-2); font-size: 14px; line-height: 1.5; margin-top: 2px; max-width: 52ch; }
+.mac-setup-action { display: flex; align-items: flex-end; flex-direction: column; gap: 8px; }
+.mac-setup-state { font-size: 12px; line-height: 24px; color: var(--ink-3); }
+.mac-setup-help { margin-top: 10px; color: var(--ink-2); font-size: 13px; line-height: 1.5; max-width: 62ch; }
+.mac-setup-help > div { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.mac-setup-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; }
+.mac-setup-footer > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.mac-setup-note { color: var(--ink-3); font-size: 12px; line-height: 1.6; max-width: 80ch; margin-top: 18px; }
+@media (max-width: 640px) {
+  .mac-setup-page > main { margin-top: 88px; }
+  .mac-setup-row { grid-template-columns: 20px minmax(0, 1fr); gap: 8px 12px; }
+  .mac-setup-action { grid-column: 2; align-items: flex-start; flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .mac-setup-footer { align-items: flex-start; flex-direction: column; }
+}
 .translation-pill-languages {
   display: flex;
   align-items: center;

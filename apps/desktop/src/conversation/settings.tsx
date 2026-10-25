@@ -684,6 +684,7 @@ export function SettingsPage({
   onSignOut,
   onCaptionPreview,
   captionError,
+  onMacSetup,
 }: {
   profiles: Record<SpeakerId, Profile>;
   busy: boolean;
@@ -696,6 +697,7 @@ export function SettingsPage({
   onSignOut: () => void;
   onCaptionPreview: (visible: boolean) => void;
   captionError: string | null;
+  onMacSetup: () => void;
 }) {
   const [tab, setTab] = useState<TabId>("general");
   const [account] = useState(loadOnboardingAccount);
@@ -787,7 +789,10 @@ export function SettingsPage({
           </>
         )}
         {tab === "permissions" && (
-          <MicrophoneSettings />
+          <>
+            {desktopAvailable() && <SettingsSection title="Mac setup"><SettingsRow label="Meeting permissions and virtual microphone" hint="Review access, finish installation, or fix a changed permission."><Button variant="outline" disabled={busy} onClick={onMacSetup}>Review Mac setup</Button></SettingsRow></SettingsSection>}
+            <MicrophoneSettings />
+          </>
         )}
         {tab === "captions" && <CaptionSettings onPreview={onCaptionPreview} busy={busy} previewError={captionError} />}
       </div>

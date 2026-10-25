@@ -10,6 +10,28 @@ import {
 
 const device = (deviceId: string, label: string) =>
   ({ deviceId, label, kind: "audioinput" }) as MediaDeviceInfo;
+test("muting clears queued PCM while retaining the route and its system-input lease", async () => {
+  const commands: string[] = [];
+  const packets: number[][] = [];
+  const player = new NativePcmPlayer("Interprete", assert.fail, async <T>(name: string, args: Record<string, unknown>) => {
+    commands.push(name);
+    if (name === "audio_route_push") packets.push([...Buffer.from(String(args.audio), "base64")]);
+    return undefined as T;
+  });
+  await player.unlock(); player.setHoldOpen(true);
+  const stale = player.enqueue(new Uint8Array([1, 2]));
+  player.stop(); await stale;
+  await player.unlock();
+  assert.ok(commands.includes("audio_route_clear"));
+  assert.equal(commands.filter(name => name === "audio_route_open").length, 1);
+  assert.ok(!commands.includes("audio_route_close"));
+  await player.enqueue(new Uint8Array([3, 4]));
+  assert.deepEqual(packets, [[3, 4]]);
+  player.setHoldOpen(false); player.stop();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(commands.at(-1), "audio_route_close");
+  player.dispose();
+});
 test("call mode requires an explicit physical microphone and excludes virtual/default aliases", () => {
   const devices = [
     device("default", "EarPods"),

@@ -12,7 +12,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc,
 };
 use std::time::Duration;
@@ -92,6 +92,21 @@ struct Route {
     resampler: Resampler,
     device_uid: String,
     input_lease: Option<InputLease>,
+    reset: Arc<PlaybackReset>,
+}
+#[derive(Default)]
+struct PlaybackReset {
+    requested: AtomicU64,
+    applied: AtomicU64,
+}
+impl PlaybackReset {
+    fn apply(&self, consumer: &mut impl Consumer<Item = f32>) {
+        let requested = self.requested.load(Ordering::Acquire);
+        if self.applied.load(Ordering::Relaxed) != requested {
+            consumer.clear();
+            self.applied.store(requested, Ordering::Release);
+        }
+    }
 }
 impl Route {
     fn new(id: String, name: &str) -> Result<Self, String> {
@@ -134,6 +149,8 @@ impl Route {
         let rate = config.sample_rate.0;
         let channels = config.channels as usize;
         let (producer, mut consumer) = HeapRb::<f32>::new(rate as usize * 8).split();
+        let reset = Arc::new(PlaybackReset::default());
+        let callback_reset = reset.clone();
         let failed = Arc::new(AtomicBool::new(false));
         let fail = failed.clone();
         let error = move |_| {
@@ -143,6 +160,7 @@ impl Route {
             cpal::SampleFormat::F32 => device.build_output_stream(
                 &config,
                 move |data: &mut [f32], _| {
+                    callback_reset.apply(&mut consumer);
                     for frame in data.chunks_mut(channels) {
                         let sample = consumer.try_pop().unwrap_or(0.0);
                         frame.fill(sample);
@@ -154,6 +172,7 @@ impl Route {
             cpal::SampleFormat::I16 => device.build_output_stream(
                 &config,
                 move |data: &mut [i16], _| {
+                    callback_reset.apply(&mut consumer);
                     for frame in data.chunks_mut(channels) {
                         let sample = consumer.try_pop().unwrap_or(0.0);
                         frame.fill((sample * 32767.0) as i16);
@@ -176,6 +195,7 @@ impl Route {
             resampler: Resampler::default(),
             device_uid,
             input_lease: None,
+            reset,
         })
     }
     fn activate_input(&mut self, path: PathBuf) -> Result<(), String> {
@@ -195,13 +215,26 @@ impl Route {
         }
         Ok(())
     }
+    fn clear(&mut self) -> Result<(), String> {
+        let revision = self.reset.requested.fetch_add(1, Ordering::Release) + 1;
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        // The callback owns the consumer. Wait for its acknowledgement before accepting new PCM,
+        // so an unmute cannot replay speech that was queued before the mute.
+        while self.reset.applied.load(Ordering::Acquire) != revision {
+            if self.failed.load(Ordering::Relaxed) || std::time::Instant::now() > deadline {
+                return Err("The audio output did not clear. Restart the translation.".into());
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        self.resampler = Resampler::default();
+        Ok(())
+    }
     fn push(&mut self, bytes: &[u8]) -> Result<(), String> {
         if self.failed.load(Ordering::Relaxed) {
             return Err(if self.name == SYSTEM_OUTPUT {
                 "The Mac audio output was disconnected. Restart the translation.".into()
             } else {
-                "The virtual output was disconnected. Refresh, then restart the translation."
-                    .into()
+                "The virtual output was disconnected. Refresh, then restart the translation.".into()
             });
         }
         let samples = self.resampler.convert(bytes, self.rate);
@@ -229,6 +262,10 @@ fn close_routes(routes: &mut Vec<Route>, matches: impl Fn(&Route) -> bool) -> Re
     result
 }
 enum Command {
+    Clear {
+        id: String,
+        reply: mpsc::Sender<Result<(), String>>,
+    },
     Configure(PathBuf),
     Activate {
         id: String,
@@ -269,6 +306,14 @@ impl Default for AudioRoute {
             let mut journal: Option<PathBuf> = None;
             for command in receiver {
                 match command {
+                    Command::Clear { id, reply } => {
+                        let result = routes
+                            .iter_mut()
+                            .find(|r| r.id == id)
+                            .ok_or("The audio output is stopped.".into())
+                            .and_then(Route::clear);
+                        let _ = reply.send(result);
+                    }
                     Command::Configure(path) => {
                         if crate::system_microphone::recover(&NativeInput, &path).is_err() {
                             eprintln!(
@@ -344,6 +389,19 @@ impl AudioRoute {
     pub async fn shutdown(&self) -> Result<(), String> {
         request(self.sender.clone(), |reply| Command::Shutdown { reply }).await
     }
+}
+#[tauri::command]
+pub async fn audio_route_clear(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, AudioRoute>,
+    id: String,
+) -> Result<(), String> {
+    authorize(&window)?;
+    request(state.sender.clone(), move |reply| Command::Clear {
+        id,
+        reply,
+    })
+    .await
 }
 #[tauri::command]
 pub async fn audio_route_activate(
@@ -457,6 +515,19 @@ pub async fn audio_route_status(
 mod tests {
     use super::*;
     #[test]
+    fn playback_reset_discards_old_samples_before_acknowledging_resume() {
+        let (mut producer, mut consumer) = HeapRb::<f32>::new(16).split();
+        let reset = PlaybackReset::default();
+        producer.push_slice(&[0.2, 0.3]);
+        reset.requested.store(1, Ordering::Release);
+        reset.apply(&mut consumer);
+        assert_eq!(reset.applied.load(Ordering::Acquire), 1);
+        assert!(consumer.try_pop().is_none());
+        producer.push_slice(&[0.7]);
+        reset.apply(&mut consumer);
+        assert_eq!(consumer.try_pop(), Some(0.7));
+    }
+    #[test]
     fn resampling_is_packet_invariant() {
         let bytes: Vec<u8> = (0..2400_i16).flat_map(i16::to_le_bytes).collect();
         for rate in [24000, 44100, 48000] {
@@ -539,6 +610,10 @@ mod tests {
             .push(&vec![0; 48000])
             .expect("enqueue digital silence");
         std::thread::sleep(Duration::from_millis(350));
+        route
+            .clear()
+            .expect("clear queued silence without closing the route");
+        assert_eq!(route.producer.occupied_len(), 0);
         route.close().expect("close app output");
         drop(stream);
         assert!(

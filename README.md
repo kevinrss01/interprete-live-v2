@@ -6,6 +6,8 @@ Traduction vocale en conversation ou pendant un appel sur Mac.
 
 **Activer la traduction** retrouve vos réglages et peut basculer le micro système automatiquement ; l’arrêt rétablit le micro précédent. Dans l’application d’appel, choisissez **Système / Par défaut** pour suivre ces changements.
 
+Lors de la première configuration sur Mac, **Get your Mac ready** guide les accès au microphone, à l’audio des appels et au bouton mute de Meet, puis l’installation du microphone virtuel. L’installateur officiel BlackHole 2ch est téléchargé, vérifié et ouvert dans l’installateur macOS. Le parcours reprend après un redémarrage et reste accessible depuis **Settings → Permissions → Review Mac setup**. Il peut être reporté pour utiliser la conversation sur place ; chaque direction de traduction d’appel vérifie ses prérequis avant de démarrer.
+
 Le mode conversation permet la traduction vocale pour deux personnes qui parlent à tour de rôle sur **un seul appareil**. App desktop [Tauri 2](https://v2.tauri.app) (React, TypeScript, Vite, Tailwind CSS) et API [Hono](https://hono.dev) hébergée sur un VPS.
 
 ```

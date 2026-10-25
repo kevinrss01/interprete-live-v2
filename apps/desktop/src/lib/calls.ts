@@ -130,6 +130,8 @@ export class NativePcmPlayer {
   private endAt = 0;
   private activity = (_active: boolean) => {};
   private active = false;
+  private holdOpen = false;
+  setHoldOpen(hold: boolean) { this.holdOpen = hold; }
   private setActive(active: boolean) {
     if (this.active === active) return;
     this.active = active;
@@ -153,7 +155,7 @@ export class NativePcmPlayer {
     return Math.max(0, (this.endAt - performance.now()) / 1000);
   }
   async unlock() {
-    if (this.id) return;
+    if (this.id) { await this.tail; return; }
     const generation = ++this.generation;
     const id = crypto.randomUUID();
     this.failure = null;
@@ -171,6 +173,7 @@ export class NativePcmPlayer {
   }
   enqueue(input: Uint8Array): Promise<null> {
     const id = this.id;
+    const generation = this.generation;
     if (this.failure) return Promise.reject(this.failure);
     if (!id)
       return Promise.reject(new Error(`${this.label} is not ready.`));
@@ -190,9 +193,9 @@ export class NativePcmPlayer {
       .then(async () => {
         // Split large provider messages and pause SSE consumption as the actual hardware queue fills.
         for (let at = 0; at < packet.length; at += 24000) {
-          if (this.id !== id || this.failure) return;
+          if (this.id !== id || this.generation !== generation || this.failure) return;
           if (this.pendingSeconds > 5.5) {
-            while (this.id === id) {
+            while (this.id === id && this.generation === generation) {
               const status = await this.call<NativeStatus>(
                 "audio_route_status",
                 { id },
@@ -204,13 +207,13 @@ export class NativePcmPlayer {
               await new Promise((resolve) => setTimeout(resolve, 40));
             }
           }
-          if (this.id !== id) return;
+          if (this.id !== id || this.generation !== generation) return;
           const chunk = packet.subarray(at, at + 24000);
           await this.call("audio_route_push", {
             id,
             audio: bytesToBase64(chunk),
           });
-          if (this.id !== id) return;
+          if (this.id !== id || this.generation !== generation) return;
           this.endAt =
             Math.max(performance.now(), this.endAt) + chunk.length / 48;
           this.setActive(true);
@@ -225,9 +228,10 @@ export class NativePcmPlayer {
         }
       })
       .catch((error: unknown) => {
-        if (this.id !== id) return;
+        if (this.id !== id || this.generation !== generation) return;
         this.failure = new Error(String(error));
         this.failed(this.failure.message);
+        this.holdOpen = false;
         this.stop();
       });
     // The controller awaits delivery, applying backpressure within a long segment as well as between segments.
@@ -263,7 +267,8 @@ export class NativePcmPlayer {
   stop() {
     const generation = ++this.generation;
     const id = this.id;
-    this.id = null;
+    const keepOpen = this.holdOpen && !this.failure;
+    if (!keepOpen) this.id = null;
     this.endAt = 0;
     this.carry = null;
     if (this.timer) clearInterval(this.timer);
@@ -271,16 +276,23 @@ export class NativePcmPlayer {
     this.setActive(false);
     if (id)
       this.tail = this.tail
-        .then(() => this.call("audio_route_close", { id }))
+        .then(() => this.call(keepOpen ? "audio_route_clear" : "audio_route_close", { id }))
         .then(
           () => {},
           (error: unknown) => {
-            if (this.generation === generation && !this.id)
+            if (this.generation === generation) {
+              if (keepOpen) {
+                this.failure = new Error(String(error));
+                this.holdOpen = false;
+                this.stop();
+              }
               this.failed(String(error));
+            }
           },
         );
   }
   dispose() {
+    this.holdOpen = false;
     this.stop();
   }
   async play(_url: string, _signal: AbortSignal): Promise<void> {
@@ -293,6 +305,9 @@ export class CallAudioPlayer {
   private player: AudioPlayer | NativePcmPlayer = new AudioPlayer();
   private listener = (_active: boolean) => {};
   constructor(private failed: (message: string) => void) {}
+  setHoldOpen(hold: boolean) {
+    if (this.player instanceof NativePcmPlayer) this.player.setHoldOpen(hold);
+  }
   configure(output: string | null) {
     this.player.dispose();
     this.player = output

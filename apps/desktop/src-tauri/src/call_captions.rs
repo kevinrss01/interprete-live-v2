@@ -53,6 +53,8 @@ pub struct Update {
     pub target: String,
     pub lines: Vec<Line>,
     #[serde(default)]
+    pub notice: Option<String>,
+    #[serde(default)]
     pub layout: Layout,
 }
 #[derive(Clone, Default, Serialize)]
@@ -99,7 +101,8 @@ impl Snapshot {
                 }
             }
             // The app sends the tail of recent lines; anything larger is a bug, not a caption.
-            if update.lines.len() > 3
+            if update.notice.as_ref().is_some_and(|text| text.len() > 1000)
+                || update.lines.len() > 3
                 || update
                     .lines
                     .iter()
@@ -302,6 +305,7 @@ mod tests {
                 live: true,
             }],
             layout: Layout::default(),
+            notice: None,
         }
     }
     #[test]

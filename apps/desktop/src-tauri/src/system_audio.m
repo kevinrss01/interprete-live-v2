@@ -21,6 +21,9 @@ typedef void (*interprete_tap_samples)(void *context, const float *samples, uint
   UInt32 capacity;
 }
 @property(nonatomic, strong) dispatch_queue_t queue;
+@property(nonatomic, strong) dispatch_source_t refresh;
+@property(nonatomic, strong) CATapDescription *tapDescription;
+@property(nonatomic, strong) NSArray<NSString *> *prefixes;
 @end
 @implementation InterpreteTap
 - (void)dealloc {
@@ -112,6 +115,7 @@ static void deliver(InterpreteTap *tap, const AudioBufferList *input) {
 }
 
 static void destroy(InterpreteTap *tap) API_AVAILABLE(macos(14.2)) {
+  if (tap.refresh) { dispatch_source_cancel(tap.refresh); tap.refresh = nil; }
   if (tap->aggregate != kAudioObjectUnknown && tap->proc) {
     AudioDeviceStop(tap->aggregate, tap->proc);
     AudioDeviceDestroyIOProcID(tap->aggregate, tap->proc);
@@ -127,7 +131,7 @@ static void destroy(InterpreteTap *tap) API_AVAILABLE(macos(14.2)) {
 
 // Returns owned JSON: {"scope":"app"|"system","processes":n} or {"error":"..."}.
 // Without matching processes, every app except Interprète is captured, so translated speech never loops back.
-// With mute, the captured apps stay silent on the speakers while the tap is read; destroying it restores them.
+// Always start audible. The owner may mute the source only while translated audio is playing.
 char *interprete_tap_start(const char *prefixes_json, bool mute, interprete_tap_samples callback, void *context, void **handle) {
   @autoreleasepool {
     *handle = NULL;
@@ -146,19 +150,22 @@ char *interprete_tap_start(const char *prefixes_json, bool mute, interprete_tap_
         UInt32 size = sizeof(own);
         AudioObjectGetPropertyData(kAudioObjectSystemObject, &translate, sizeof(me), &me, &size, &own);
       }
-      CATapDescription *description = processes.count
+      CATapDescription *description = prefixes.count
         ? [[CATapDescription alloc] initMonoMixdownOfProcesses:processes]
         : [[CATapDescription alloc] initMonoGlobalTapButExcludeProcesses:own == kAudioObjectUnknown ? @[] : @[@(own)]];
       description.UUID = [NSUUID UUID];
       description.name = @"Interprète";
       description.privateTap = YES;
-      description.muteBehavior = mute ? CATapMutedWhenTapped : CATapUnmuted;
+      description.muteBehavior = CATapUnmuted;
+      (void)mute; // Kept at the bridge boundary for compatibility; never mute on capture startup.
 
       InterpreteTap *tap = [InterpreteTap new];
       tap->tap = kAudioObjectUnknown;
       tap->aggregate = kAudioObjectUnknown;
       tap->callback = callback;
       tap->context = context;
+      tap.tapDescription = description;
+      tap.prefixes = prefixes;
       OSStatus status = AudioHardwareCreateProcessTap(description, &tap->tap);
       if (status != noErr) return failure(@"Unable to capture the call audio.", status);
 
@@ -205,11 +212,52 @@ char *interprete_tap_start(const char *prefixes_json, bool mute, interprete_tap_
         destroy(tap);
         return failure(@"Unable to start the call capture.", status);
       }
+      // Browser audio helpers can appear/restart after call detection. A fixed process list
+      // would then capture silence forever. Stay scoped to the chosen app, even with no matches.
+      if (prefixes.count) {
+        tap.refresh = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, tap.queue);
+        __weak InterpreteTap *weakTap = tap;
+        dispatch_source_set_timer(tap.refresh, dispatch_time(DISPATCH_TIME_NOW, 500 * NSEC_PER_MSEC), 500 * NSEC_PER_MSEC, 50 * NSEC_PER_MSEC);
+        dispatch_source_set_event_handler(tap.refresh, ^{
+          InterpreteTap *current = weakTap;
+          if (!current) return;
+          AudioObjectID excluded = kAudioObjectUnknown;
+          NSArray *latest = call_processes(current.prefixes, &excluded);
+          @synchronized(current) {
+            if ([latest isEqual:current.tapDescription.processes]) return;
+            NSArray *previous = current.tapDescription.processes;
+            current.tapDescription.processes = latest;
+            CATapDescription *description = current.tapDescription;
+            AudioObjectPropertyAddress property = global_address(kAudioTapPropertyDescription);
+            if (AudioObjectSetPropertyData(current->tap, &property, 0, NULL, sizeof(description), &description) != noErr)
+              current.tapDescription.processes = previous;
+          }
+        });
+        dispatch_resume(tap.refresh);
+      }
       *handle = (__bridge_retained void *)tap;
-      return owned_json(@{@"scope": processes.count ? @"app" : @"system", @"processes": @(processes.count)});
+      return owned_json(@{@"scope": prefixes.count ? @"app" : @"system", @"processes": @(processes.count)});
     }
     return owned_json(@{@"error": @"Capturing call audio requires macOS 14.2 or later."});
   }
+}
+
+// Session ownership is enforced by Rust. This never changes a device or system volume.
+int interprete_tap_mute(void *handle, bool muted) {
+  if (!handle) return kAudioHardwareBadObjectError;
+  if (@available(macOS 14.2, *)) {
+    InterpreteTap *tap = (__bridge InterpreteTap *)handle;
+    @synchronized(tap) {
+      CATapMuteBehavior previous = tap.tapDescription.muteBehavior;
+      tap.tapDescription.muteBehavior = muted ? CATapMutedWhenTapped : CATapUnmuted;
+      CATapDescription *description = tap.tapDescription;
+      AudioObjectPropertyAddress property = global_address(kAudioTapPropertyDescription);
+      OSStatus status = AudioObjectSetPropertyData(tap->tap, &property, 0, NULL, sizeof(description), &description);
+      if (status != noErr) tap.tapDescription.muteBehavior = previous;
+      return status;
+    }
+  }
+  return kAudioHardwareUnsupportedOperationError;
 }
 
 // Stops callbacks synchronously. After this returns, the callback context is never used again.
