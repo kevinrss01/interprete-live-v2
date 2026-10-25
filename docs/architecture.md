@@ -182,7 +182,7 @@ sequenceDiagram
 
 ## Comptes et préférences
 
-Le serveur comprend un socle Hono + oRPC + Zod + Better Auth + Drizzle + PostgreSQL. Les procédures `account.me`, `preferences.get` et `preferences.update` sont montées sous `/rpc/*` et protégées par une session utilisateur. Le frontend audio conserve son client Hono et ses sessions anonymes.
+Le serveur comprend un socle Hono + oRPC + Zod + Better Auth + Drizzle + PostgreSQL. Les procédures `account.me`, `preferences.get` et `preferences.update` sont montées sous `/rpc/*` et protégées par une session utilisateur. `voice.get`, `voice.save` et `voice.remove` rattachent la voix clonée du profil A au compte (table `user_voice` : identifiant ElevenLabs seulement, jamais d’audio). `voice.save` exige une autorisation de voix signée pour la session d’appareil fournie ; `voice.get` renvoie une nouvelle autorisation liée à la session d’appareil courante. Au démarrage et à la connexion, l’app prend la voix du compte, sinon le clone local (enregistré sur le compte), sinon la voix standard. La déconnexion oublie la voix sur l’appareil sans la supprimer. Le frontend audio conserve son client Hono et ses sessions anonymes.
 
 Aucune méthode de connexion n’est encore activée. Le frontend, le stockage des jetons et la reprise des préférences locales restent à intégrer.
 

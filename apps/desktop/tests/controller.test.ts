@@ -141,3 +141,67 @@ test("a silent recording contributes zero seconds toward voice cloning", async (
   const sample = await capture.stop();
   assert.equal(sample?.seconds, 0);
 });
+
+test("a long sample keeps collecting past 30 s without cloning, within the upload cap", async () => {
+  const original = globalThis.fetch;
+  let clones = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith("/api/voice/clone")) clones++;
+    throw new Error("No network in tests");
+  };
+  const controller = new InterpreterController();
+  try {
+    await controller.setConsent("a", true);
+    const chunk = new Blob([new Uint8Array(700_000)]);
+    for (let i = 0; i < 5; i++) await controller.collect("a", chunk, 12, { autoClone: false });
+    assert.equal(clones, 0);
+    // Four chunks fit the 3.2 MB cap; the fifth is dropped.
+    assert.equal(controller.getSnapshot().profiles.a.sampleSeconds, 48);
+  } finally {
+    controller.dispose();
+    globalThis.fetch = original;
+  }
+});
+
+test("the account voice wins, then the local clone is saved, else the standard voice stays", async () => {
+  const original = { fetch: globalThis.fetch, localStorage: globalThis.localStorage, location: globalThis.location };
+  const store = new Map([["interprete-auth-token", "auth"], ["interprete-session", "device"]]);
+  Object.assign(globalThis, {
+    location: { origin: "http://localhost" },
+    localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) },
+  });
+  let account: string | null = "account-grant";
+  const saved: string[] = [];
+  globalThis.fetch = async (input) => {
+    const request = input instanceof Request ? input : new Request(String(input));
+    const body = await request.clone().json().catch(() => ({}));
+    if (request.url.endsWith("/rpc/voice/get"))
+      return Response.json({ json: account ? { voice: account } : null });
+    if (request.url.endsWith("/rpc/voice/save")) {
+      saved.push(body.json.voice);
+      return Response.json({ json: { saved: true } });
+    }
+    throw new Error("Unexpected request " + request.url);
+  };
+  const controller = new InterpreterController();
+  try {
+    controller.setProfile("a", { cloneVoice: "local-grant", voice: "local-grant", cloneStatus: "ready", consent: true });
+    await controller.syncAccountVoice();
+    assert.equal(controller.getSnapshot().profiles.a.cloneVoice, "account-grant");
+    assert.deepEqual(saved, []);
+
+    account = null;
+    controller.setProfile("a", { cloneVoice: "local-grant", voice: "local-grant", cloneStatus: "ready" });
+    await controller.syncAccountVoice();
+    assert.equal(controller.getSnapshot().profiles.a.cloneVoice, "local-grant");
+    assert.deepEqual(saved, ["local-grant"]);
+
+    controller.forgetAccountVoice();
+    await controller.syncAccountVoice();
+    assert.equal(controller.getSnapshot().profiles.a.cloneStatus, "off");
+    assert.equal(controller.getSnapshot().profiles.a.voice, "sarah");
+  } finally {
+    controller.dispose();
+    Object.assign(globalThis, original);
+  }
+});

@@ -9,8 +9,9 @@ export function saveSession(token: unknown) {
   if (typeof token === "string")
     globalThis.localStorage?.setItem(SESSION_KEY, token);
 }
+export const readSession = () => globalThis.localStorage?.getItem(SESSION_KEY) ?? null;
 function authorization(): Record<string, string> {
-  const token = globalThis.localStorage?.getItem(SESSION_KEY);
+  const token = readSession();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 // Shape of errorResponse() on the server; not part of the route types.

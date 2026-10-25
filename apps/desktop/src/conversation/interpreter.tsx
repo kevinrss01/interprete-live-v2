@@ -31,6 +31,7 @@ import { useDiscussion } from "../lib/use-discussion";
 import { Conversation } from "./conversation";
 import { HistoryPage } from "./history";
 import { SettingsPage } from "./settings";
+import { VoicesPage } from "./voices";
 import type { Profile, SpeakerId } from "@interprete/shared/contracts";
 import { Button } from "@interprete/ui/components/button";
 import logo from "@interprete/ui/assets/logo.png";
@@ -196,6 +197,7 @@ export function Interpreter({
   function leave() {
     if (callOverlay?.sessionId) callPanelRef.current?.stop(callOverlay.sessionId);
     controller.cancel();
+    if (readAuthToken()) controller.forgetAccountVoice();
     signOut();
     clearOnboardingAccount();
     onLeave();
@@ -372,9 +374,7 @@ export function Interpreter({
         )}
         {view === "history" && <HistoryPage />}
         {view === "voices" && (
-          <section className="placeholder" aria-label="Voices">
-            <p className="empty-title">Coming soon</p>
-          </section>
+          <VoicesPage controller={controller} profile={state.profiles.a} busy={busy} />
         )}
       </main>
       <div className="dock" hidden={view !== "conversation"}>

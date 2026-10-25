@@ -15,6 +15,13 @@
       "when": 1792864878593,
       "tag": "0001_discussions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792932752026,
+      "tag": "0002_user_voice",
+      "breakpoints": true
     }
   ]
 }

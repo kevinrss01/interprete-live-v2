@@ -26,3 +26,29 @@ export const ONBOARDING_TEXTS: Record<Language, string> = {
 
 export const onboardingDirection = (language: Language) =>
   language === "ar" ? "rtl" : "ltr";
+
+// The longer reading: the same text plus a second paragraph, about a minute aloud.
+// More varied speech gives a closer clone; the server accepts up to ~60 s of clean audio.
+const ONBOARDING_EXTRA: Record<Language, string> = {
+  en: "When I tell a story, my voice rises a little, and sometimes I laugh before the end. On quiet mornings, I like to read the news with a cup of coffee and call a friend. I ask questions, I listen, and I answer with a few simple words. Whether the weather is sunny or grey, I try to keep a warm and natural tone.",
+  fr: "Quand je raconte une histoire, ma voix monte un peu, et parfois je ris avant la fin. Les matins calmes, j’aime lire les nouvelles avec un café, puis appeler un ami. Je pose des questions, j’écoute, et je réponds avec quelques mots simples. Qu’il fasse beau ou gris, j’essaie de garder un ton chaleureux et naturel.",
+  es: "Cuando cuento una historia, mi voz sube un poco y a veces me río antes del final. En las mañanas tranquilas, me gusta leer las noticias con un café y llamar a un amigo. Hago preguntas, escucho y respondo con unas pocas palabras sencillas. Haga sol o esté nublado, intento mantener un tono cálido y natural.",
+  de: "Wenn ich eine Geschichte erzähle, wird meine Stimme etwas höher, und manchmal lache ich vor dem Ende. An ruhigen Morgen lese ich gern die Nachrichten bei einem Kaffee und rufe dann einen Freund an. Ich stelle Fragen, höre zu und antworte mit ein paar einfachen Worten. Ob die Sonne scheint oder der Himmel grau ist, ich versuche, warm und natürlich zu klingen.",
+  it: "Quando racconto una storia, la mia voce sale un po’ e a volte rido prima della fine. Nelle mattine tranquille mi piace leggere le notizie con un caffè e poi chiamare un amico. Faccio domande, ascolto e rispondo con poche parole semplici. Che ci sia il sole o il cielo sia grigio, cerco di mantenere un tono caldo e naturale.",
+  pt: "Quando conto uma história, a minha voz sobe um pouco e às vezes rio antes do fim. Nas manhãs tranquilas, gosto de ler as notícias com um café e depois ligar para um amigo. Faço perguntas, escuto e respondo com algumas palavras simples. Faça sol ou esteja nublado, tento manter um tom caloroso e natural.",
+  nl: "Als ik een verhaal vertel, gaat mijn stem iets omhoog en soms lach ik al voor het einde. Op rustige ochtenden lees ik graag het nieuws bij een kop koffie en bel ik daarna een vriend. Ik stel vragen, ik luister en ik antwoord met een paar eenvoudige woorden. Of het nu zonnig of grijs is, ik probeer een warme en natuurlijke toon te houden.",
+  ja: "物語を話すとき、私の声は少し高くなり、ときどき最後まで話す前に笑ってしまいます。静かな朝には、コーヒーを飲みながらニュースを読み、友だちに電話をするのが好きです。質問をして、話を聞いて、簡単な言葉で答えます。晴れの日でもくもりの日でも、温かく自然な話し方を心がけています。",
+  ko: "이야기를 들려줄 때면 제 목소리가 조금 높아지고, 가끔은 끝나기도 전에 웃음이 나요. 조용한 아침에는 커피를 마시며 뉴스를 읽고 친구에게 전화하는 것을 좋아합니다. 질문을 하고, 귀 기울여 듣고, 몇 마디 간단한 말로 대답합니다. 날씨가 맑든 흐리든, 따뜻하고 자연스러운 말투를 유지하려고 해요.",
+  zh: "讲故事的时候，我的声音会稍微高一点，有时还没讲完就笑了。在安静的早晨，我喜欢一边喝咖啡一边看新闻，然后给朋友打个电话。我会提问，认真倾听，再用几句简单的话回答。不管天气晴朗还是阴沉，我都尽量保持温暖、自然的语气。",
+  ar: "عندما أروي قصة، يرتفع صوتي قليلًا، وأحيانًا أضحك قبل النهاية. في الصباحات الهادئة، أحب قراءة الأخبار مع فنجان قهوة ثم الاتصال بصديق. أطرح الأسئلة، وأستمع، وأجيب ببضع كلمات بسيطة. سواء كان الجو مشمسًا أو غائمًا، أحاول أن أحافظ على نبرة دافئة وطبيعية.",
+  hi: "कहानी सुनाते समय आवाज़ थोड़ी ऊँची हो जाती है, और कभी-कभी अंत से पहले ही हँसी आ जाती है। शांत सुबहों में कॉफ़ी के साथ ख़बरें पढ़ना और फिर किसी दोस्त को फ़ोन करना अच्छा लगता है। सवाल पूछना, ध्यान से सुनना और कुछ आसान शब्दों में जवाब देना। धूप हो या बादल, कोशिश रहती है कि लहजा गर्मजोशी भरा और सहज रहे।",
+  pl: "Kiedy opowiadam historię, mój głos trochę się podnosi, a czasem śmieję się przed końcem. W spokojne poranki lubię czytać wiadomości przy kawie, a potem zadzwonić do przyjaciela. Zadaję pytania, słucham i odpowiadam kilkoma prostymi słowami. Czy świeci słońce, czy jest szaro, staram się mówić ciepło i naturalnie.",
+  ru: "Когда я рассказываю историю, мой голос немного повышается, а иногда я смеюсь ещё до конца. Тихим утром я люблю читать новости за чашкой кофе, а потом звонить другу. Я задаю вопросы, слушаю и отвечаю несколькими простыми словами. Солнечно на улице или пасмурно, я стараюсь говорить тепло и естественно.",
+  sv: "När jag berättar en historia blir min röst lite ljusare, och ibland skrattar jag innan slutet. På lugna morgnar läser jag gärna nyheterna med en kopp kaffe och ringer sedan en vän. Jag ställer frågor, lyssnar och svarar med några enkla ord. Oavsett om det är soligt eller grått försöker jag hålla en varm och naturlig ton.",
+  tr: "Bir hikâye anlatırken sesim biraz yükselir ve bazen sonuna gelmeden gülerim. Sakin sabahlarda kahvemi içerken haberleri okumayı, sonra da bir arkadaşımı aramayı severim. Sorular sorarım, dinlerim ve birkaç basit kelimeyle cevap veririm. Hava güneşli de olsa bulutlu da olsa, sıcak ve doğal bir ton korumaya çalışırım.",
+  uk: "Коли я розповідаю історію, мій голос трохи підвищується, а інколи я сміюся ще до кінця. Тихого ранку я люблю читати новини за чашкою кави, а потім телефонувати другові. Я ставлю запитання, слухаю й відповідаю кількома простими словами. Сонячно надворі чи похмуро, я намагаюся говорити тепло й природно.",
+  vi: "Khi kể một câu chuyện, giọng tôi cao lên một chút, và đôi khi tôi bật cười trước khi kết thúc. Vào những buổi sáng yên tĩnh, tôi thích đọc tin tức bên tách cà phê rồi gọi điện cho một người bạn. Tôi đặt câu hỏi, lắng nghe và trả lời bằng vài từ đơn giản. Dù trời nắng hay âm u, tôi luôn cố giữ giọng nói ấm áp và tự nhiên.",
+};
+
+export const onboardingLongText = (language: Language) =>
+  `${ONBOARDING_TEXTS[language]} ${ONBOARDING_EXTRA[language]}`;

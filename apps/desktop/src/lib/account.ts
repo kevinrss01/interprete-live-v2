@@ -17,7 +17,10 @@ export function signOut() {
 // Typed oRPC client: account.me, preferences.get, preferences.update.
 export const rpc: ApiClient = createORPCClient(
   new RPCLink({
-    url: `${API_URL}/rpc`,
+    // oRPC needs an absolute URL; without VITE_API_URL the API is on the page's origin.
+    url: () => `${API_URL || globalThis.location?.origin}/rpc`,
+    // Resolved per call, so tests can mock fetch after import.
+    fetch: (request, init) => globalThis.fetch(request, init),
     headers: (): Record<string, string> => {
       const token = readAuthToken();
       return token ? { Authorization: `Bearer ${token}` } : {};

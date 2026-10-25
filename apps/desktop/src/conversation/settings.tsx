@@ -133,7 +133,7 @@ function FirstNameField({ initial }: { initial: string }) {
 
 // One settings layout for every tab: an optional title, then a card of rows
 // with the label on the left and the value or control on the right.
-function SettingsSection({ title, children }: { title?: ReactNode; children: ReactNode }) {
+export function SettingsSection({ title, children }: { title?: ReactNode; children: ReactNode }) {
   return (
     <section className="settings-section">
       {title && <h2 className="settings-section-title">{title}</h2>}
@@ -142,7 +142,7 @@ function SettingsSection({ title, children }: { title?: ReactNode; children: Rea
   );
 }
 
-function SettingsRow({
+export function SettingsRow({
   label,
   htmlFor,
   hint,

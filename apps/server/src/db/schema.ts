@@ -90,3 +90,11 @@ export const discussionMessage = pgTable("discussion_message", {
   check("discussion_message_role", sql`${table.role} in ('you', 'them')`),
   check("discussion_message_status", sql`${table.status} in ('draft', 'working', 'done', 'error')`),
 ]);
+
+// The account's cloned voice (speaker A): only the ElevenLabs id, never the recording.
+// The desktop gets a grant bound to its current device session through voice.get.
+export const userVoice = pgTable("user_voice", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  voiceId: text("voice_id").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});

@@ -5,7 +5,8 @@ import {
   makeWav,
   type CaptureOptions,
 } from "./audio";
-import { api, call, saveSession, streamInterpretation } from "./api";
+import { readAuthToken, rpc } from "./account";
+import { api, call, readSession, saveSession, streamInterpretation } from "./api";
 import { savedMicrophone } from "./call-preferences";
 import { ContinuousTranscription, type ConnectionState, type StreamTiming, type Transcript } from "./transcription";
 import type {
@@ -345,6 +346,7 @@ export class InterpreterController {
           }
         } catch {}
         this.update({ services: result.services, ready: true });
+        void this.syncAccountVoice();
       } catch (e) {
         this.update({ error: message(e), ready: false });
         this.initPromise = null;
@@ -855,7 +857,8 @@ export class InterpreterController {
     }
   }
   // Public for onboarding, which records its own sample before cloning.
-  async collect(id: SpeakerId, blob: Blob, seconds: number) {
+  // `autoClone: false` keeps collecting past 30 s; the caller then calls clone().
+  async collect(id: SpeakerId, blob: Blob, seconds: number, { autoClone = true } = {}) {
     const profile = this.state.profiles[id];
     if (
       !profile.consent ||
@@ -865,7 +868,9 @@ export class InterpreterController {
     )
       return;
     const sample = this.samples[id];
-    if (sample.seconds + seconds <= 90 && sample.files.length < 12) {
+    const bytes = sample.files.reduce((n, f) => n + f.size, 0);
+    // Same caps as the clone route: 90 s, 12 files, 3.2 MB.
+    if (sample.seconds + seconds <= 90 && sample.files.length < 12 && bytes + blob.size <= 3_200_000) {
       sample.files.push(blob);
       sample.seconds += seconds;
     }
@@ -874,6 +879,7 @@ export class InterpreterController {
       cloneStatus: profile.cloneStatus === "error" ? "error" : "collecting",
     });
     if (
+      autoClone &&
       profile.cloneStatus !== "error" &&
       (sample.seconds >= 30 || sample.files.length >= 12)
     )
@@ -927,6 +933,7 @@ export class InterpreterController {
           sampleSeconds: Math.round(sample.seconds),
         });
         this.samples[id] = { files: [], seconds: 0 };
+        if (id === "a") void this.saveAccountVoice();
       }
     } catch (e) {
       this.setProfile(id, { cloneStatus: "error", cloneError: message(e) });
@@ -948,6 +955,8 @@ export class InterpreterController {
         p.cloneVoice || (p.cloneStatus === "ready" ? p.voice : undefined);
       if (voice)
         await call(api.api.voice.delete.$post({ json: { speaker: id, voice } }));
+      if (id === "a" && readAuthToken())
+        await rpc.voice.remove().catch((e) => console.warn("Account voice not removed", e));
       this.setProfile(id, {
         cloneVoice: undefined,
         consentId: p.consent ? crypto.randomUUID() : undefined,
@@ -961,6 +970,50 @@ export class InterpreterController {
       });
       this.update({ error: message(e) });
     }
+  }
+  // Speaker A's clone lives on the signed-in account (PostgreSQL). Order: the account's
+  // clone if there is one, else the local clone (then saved on the account), else the
+  // standard voice already in the profile.
+  async syncAccountVoice() {
+    const session = readSession();
+    if (!readAuthToken() || !session || this.cloneJobs.has("a")) return;
+    try {
+      const saved = await rpc.voice.get({ session });
+      if (!saved) return await this.saveAccountVoice();
+      if (this.cloneJobs.has("a")) return;
+      this.setProfile("a", {
+        voice: saved.voice,
+        cloneVoice: saved.voice,
+        voiceLabel: this.state.profiles.a.name,
+        consent: true,
+        consentId: this.state.profiles.a.consentId || crypto.randomUUID(),
+        cloneStatus: "ready",
+        cloneError: undefined,
+      });
+    } catch (e) {
+      console.warn("Account voice not synced", e);
+    }
+  }
+  // Saves a ready local clone on the account (after onboarding or a new recording).
+  async saveAccountVoice() {
+    const session = readSession();
+    const p = this.state.profiles.a;
+    if (!readAuthToken() || !session || p.cloneStatus !== "ready" || !p.cloneVoice) return;
+    await rpc.voice.save({ session, voice: p.cloneVoice }).catch((e) => console.warn("Account voice not saved", e));
+  }
+  // On sign-out the clone stays on the account; this device forgets it.
+  forgetAccountVoice() {
+    this.samples.a = { files: [], seconds: 0 };
+    this.setProfile("a", {
+      voice: initialProfiles.a.voice,
+      voiceLabel: undefined,
+      cloneVoice: undefined,
+      consent: false,
+      consentId: undefined,
+      cloneStatus: "off",
+      cloneError: undefined,
+      sampleSeconds: 0,
+    });
   }
   clearConversation = () => {
     this.cancel();

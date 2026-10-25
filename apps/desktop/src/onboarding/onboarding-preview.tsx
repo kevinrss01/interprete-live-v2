@@ -43,39 +43,12 @@ export function OnboardingPreview({
   const choices = useMemo(() => PREVIEW_LANGUAGES.filter((l) => l !== language).slice(0, 4), [language]);
   const [target, setTarget] = useState(choices[0]);
   const ready = status === "ready" && !!voice;
-  const [url, setUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const { url, failed, retry } = useVoicePreview(ready ? voice : undefined, target);
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [played, setPlayed] = useState(false);
   // True once the first sentence is ready, even if the webview blocks autoplay.
   const [revealed, setRevealed] = useState(false);
-
-  useEffect(() => {
-    if (!ready) return;
-    let objectUrl = "";
-    let live = true;
-    setUrl(null);
-    setFailed(false);
-    (async () => {
-      try {
-        const response = await api.api.voice.preview.$post({ json: { voice, speaker: "a", language: target } });
-        if (!response.ok) throw new Error(`Preview failed (${response.status})`);
-        const blob = await response.blob();
-        if (!live) return;
-        objectUrl = URL.createObjectURL(blob);
-        setUrl(objectUrl);
-      } catch (e) {
-        console.warn("Voice preview unavailable", e);
-        if (live) setFailed(true);
-      }
-    })();
-    return () => {
-      live = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [ready, voice, target, attempt]);
 
   // Plays as soon as it's ready. If the webview blocks it, the button stays there to tap.
   useEffect(() => {
@@ -199,7 +172,7 @@ export function OnboardingPreview({
             waiting && "animate-pulse disabled:opacity-100",
           )}
           onClick={() =>
-            failed ? setAttempt((n) => n + 1) : playing ? audio.current?.pause() : void audio.current?.play()
+            failed ? retry() : playing ? audio.current?.pause() : void audio.current?.play()
           }
           aria-label={failed ? "Try again" : playing ? "Pause" : "Play your voice"}
           disabled={waiting}
@@ -240,6 +213,38 @@ export function OnboardingPreview({
       </div>
     </div>
   );
+}
+
+// Fetches the fixed preview sentence spoken by speaker A's voice (also used by the Voices page).
+export function useVoicePreview(voice: string | undefined, language: Language) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!voice) return;
+    let objectUrl = "";
+    let live = true;
+    setUrl(null);
+    setFailed(false);
+    (async () => {
+      try {
+        const response = await api.api.voice.preview.$post({ json: { voice, speaker: "a", language } });
+        if (!response.ok) throw new Error(`Preview failed (${response.status})`);
+        const blob = await response.blob();
+        if (!live) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      } catch (e) {
+        console.warn("Voice preview unavailable", e);
+        if (live) setFailed(true);
+      }
+    })();
+    return () => {
+      live = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [voice, language, attempt]);
+  return { url, failed, retry: () => setAttempt((n) => n + 1) };
 }
 
 function Message({ title, text, children }: { title: string; text: string; children: ReactNode }) {

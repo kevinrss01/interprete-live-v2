@@ -97,6 +97,8 @@ export function Onboarding({
       .catch((e) => console.warn("Preferences not saved", e));
     saveOnboardingAccount({ ...values, language, complete: true });
     controller.setProfile("a", { name: values.firstName });
+    // The voice was created before the account: attach it now.
+    await controller.syncAccountVoice();
     onDone();
     return null;
   }

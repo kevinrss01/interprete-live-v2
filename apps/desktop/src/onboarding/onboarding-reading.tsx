@@ -12,20 +12,22 @@ const ANCHOR = 0.35;
 // the recorder) has a fixed height, so nothing moves when the recording starts.
 export function OnboardingReading({
   language,
+  text = ONBOARDING_TEXTS[language],
   read,
   live,
   onLanguage,
   children,
 }: {
   language: Language;
+  text?: string;
   read: number;
   live: boolean;
   onLanguage?: (language: Language) => void; // absent once the recording has started
   children: ReactNode;
 }) {
   const segments = useMemo(
-    () => onboardingSegments(ONBOARDING_TEXTS[language], language),
-    [language],
+    () => onboardingSegments(text, language),
+    [text, language],
   );
   const prompter = useRef<HTMLDivElement>(null);
 

@@ -118,6 +118,7 @@ function Login({
       // The two speakers need different languages, as during onboarding.
       const target = savedTarget ?? (current !== language ? current : language === "en" ? "fr" : "en");
       controller.setProfile("b", { language: target });
+      await controller.syncAccountVoice();
       onSignedIn();
     } catch (e) {
       setError(e instanceof Error ? e.message : "You could not be logged in. Try again.");
