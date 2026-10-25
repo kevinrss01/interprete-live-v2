@@ -48,6 +48,7 @@ pub fn run() {
             audio_route::audio_route_status,
             virtual_camera::camera_devices,
             virtual_camera::camera_access,
+            virtual_camera::camera_relay_page,
             virtual_camera::camera_relay_start,
             virtual_camera::camera_relay_caption,
             virtual_camera::camera_relay_stop,
@@ -93,10 +94,12 @@ pub fn run() {
         .on_page_load(|webview, payload| {
             if webview.label() == "main" && payload.event() == tauri::webview::PageLoadEvent::Started {
                 webview.state::<system_audio::SystemAudio>().release_all();
-                // Waits for a camera still opening, so off the main thread.
+                // The new page number applies at once; the release waits for a camera still
+                // opening, so it runs off the main thread.
+                let page = webview.state::<virtual_camera::CameraRelay>().next_page();
                 let app = webview.app_handle().clone();
                 tauri::async_runtime::spawn_blocking(move || {
-                    app.state::<virtual_camera::CameraRelay>().release_all();
+                    app.state::<virtual_camera::CameraRelay>().release_before(page);
                 });
             }
         })

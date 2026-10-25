@@ -90,6 +90,7 @@ function nativeRelay() {
   let opening: Promise<void> | null = null;
   let status: Partial<RelayStatus> = {};
   const call: NativeInvoke = async <T>(name: string, args: Record<string, unknown>) => {
+    if (name === "camera_relay_page") return 7 as T;
     calls.push({ name, args });
     if (name === "camera_relay_start" && opening) await opening;
     if (name === "camera_relay_status")
@@ -124,6 +125,7 @@ test("captions wait for the camera to open, then collapse to the newest text", a
   await settle();
   const start = h.calls.find((entry) => entry.name === "camera_relay_start")!;
   assert.equal(start.args.cameraId, "built-in");
+  assert.equal(start.args.page, 7, "the start carries the page that asked for it");
   const captions = h.calls.filter((entry) => entry.name === "camera_relay_caption");
   assert.deepEqual(captions.map((entry) => entry.args.text), ["Hello everyone"]);
   assert.equal(captions[0].args.sessionId, start.args.sessionId);

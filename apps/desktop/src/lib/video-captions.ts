@@ -233,9 +233,12 @@ export class VideoRelay {
     try {
       await this.queue(async () => {
         if (this.state.sessionId !== sessionId) return;
+        // Ties the start to this page: a start sent just before a reload is then refused.
+        const page = await this.call<number>("camera_relay_page", {});
+        if (this.state.sessionId !== sessionId) return;
         // A native start replaces the previous relay, even when it fails.
         this.owner = null;
-        await this.call("camera_relay_start", { sessionId, cameraId });
+        await this.call("camera_relay_start", { sessionId, cameraId, page });
         this.owner = sessionId;
       });
     } catch (error) {

@@ -133,12 +133,18 @@ mod native {
 pub struct CameraRelay {
     owner: Mutex<Option<String>>,
     lifecycle: Mutex<()>,
-    // Advances when the main page reloads; starts requested by the previous page are dropped.
+    // Advances when a new main page commits; starts requested by an earlier page are refused.
     page: AtomicU64,
+    // The page whose session runs the relay.
+    owner_page: AtomicU64,
 }
 impl CameraRelay {
     fn page(&self) -> u64 {
         self.page.load(Ordering::SeqCst)
+    }
+    // Called on the main thread when a new main page commits, before it can send anything.
+    pub fn next_page(&self) -> u64 {
+        self.page.fetch_add(1, Ordering::SeqCst) + 1
     }
     fn owns(&self, session_id: &str) -> bool {
         self.owner
@@ -154,6 +160,7 @@ impl CameraRelay {
         *self.owner.lock().map_err(|e| e.to_string())? = None;
         native::start(camera_id, true)?;
         *self.owner.lock().map_err(|e| e.to_string())? = Some(session_id);
+        self.owner_page.store(page, Ordering::SeqCst);
         Ok(())
     }
     // The owner stays locked while the caption is handed over, so a start cannot replace the
@@ -182,10 +189,19 @@ impl CameraRelay {
         }
     }
     // A reloaded page lost the session that would stop the camera, and shows no control for it.
-    // A start still opening the camera finishes first, then is stopped here.
-    pub fn release_all(&self) {
-        self.page.fetch_add(1, Ordering::SeqCst);
-        self.shutdown();
+    // A start still opening the camera finishes first, then is stopped here; a relay the new
+    // page already started is kept.
+    pub fn release_before(&self, page: u64) {
+        let Ok(_lifecycle) = self.lifecycle.lock() else {
+            return;
+        };
+        let Ok(mut owner) = self.owner.lock() else {
+            return;
+        };
+        if owner.is_some() && self.owner_page.load(Ordering::SeqCst) < page {
+            native::stop();
+            *owner = None;
+        }
     }
 }
 
@@ -241,19 +257,29 @@ pub async fn camera_access(window: tauri::WebviewWindow) -> Result<bool, String>
         .await
         .map_err(|e| e.to_string())
 }
+// Synchronous on purpose: it runs on the main thread in order with page loads, so the number
+// identifies the page that asks, even if its asynchronous start runs after a reload.
+#[tauri::command]
+pub fn camera_relay_page(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, CameraRelay>,
+) -> Result<u64, String> {
+    authorize(&window)?;
+    Ok(state.page())
+}
 #[tauri::command]
 pub async fn camera_relay_start(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
     session_id: String,
     camera_id: String,
+    page: u64,
 ) -> Result<(), String> {
     authorize(&window)?;
     valid_session(&session_id)?;
     valid_camera(&camera_id)?;
-    use tauri::Manager;
-    let page = app.state::<CameraRelay>().page();
     tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
         app.state::<CameraRelay>()
             .start(session_id, &camera_id, page)
     })
@@ -353,16 +379,20 @@ mod tests {
         assert!(!devices.virtual_camera.name.is_empty());
     }
     #[test]
-    fn a_page_reload_drops_starts_requested_before_it() {
+    fn a_page_reload_refuses_earlier_starts_and_keeps_the_new_page_relay() {
         let relay = CameraRelay::default();
-        let page = relay.page();
-        relay.release_all();
+        let earlier = relay.page();
+        let current = relay.next_page();
         assert!(
             relay
-                .start("previous".into(), SYNTHETIC_CAMERA, page)
+                .start("previous".into(), SYNTHETIC_CAMERA, earlier)
                 .is_err()
         );
         assert!(!relay.owns("previous"));
+        *relay.owner.lock().unwrap() = Some("new".into());
+        relay.owner_page.store(current, Ordering::SeqCst);
+        relay.release_before(current);
+        assert!(relay.owns("new"), "a relay the new page started is kept");
     }
     #[test]
     fn a_replaced_session_cannot_caption_or_stop_the_relay() {
