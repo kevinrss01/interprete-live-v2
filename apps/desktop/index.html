@@ -25,6 +25,19 @@
     <meta name="twitter:description" content="Interprète translates as you speak. Two people, two languages, one shared device—with a voice you choose, or your own with permission." />
     <meta name="twitter:image" content="https://tryinterprete.com/social-preview-v1.jpg" />
     <meta name="twitter:image:alt" content="Interprète: Your voice. In their language. Orange logo with a charcoal and orange headline above warm sunrise clouds." />
+    <script>
+      (function () {
+        var hash = location.hash;
+        if (hash === "#translation-overlay" || hash === "#call-toast" || hash === "#call-captions") return;
+        try {
+          if (localStorage.getItem("interprete-theme") !== "dark") return;
+          document.documentElement.classList.add("dark");
+          document.documentElement.style.colorScheme = "dark";
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", "#141413");
+        } catch (error) {}
+      })();
+    </script>
   </head>
 
   <body>

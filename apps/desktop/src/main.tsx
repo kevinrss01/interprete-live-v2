@@ -1,6 +1,9 @@
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
 import "./globals.css";
+import { applyTheme, loadTheme } from "./lib/theme";
+
+applyTheme(loadTheme());
 import { App } from "./components/app";
 import { CallToast } from "./windows/call-toast";
 import { CallCaptions } from "./windows/call-captions";
