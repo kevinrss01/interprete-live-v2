@@ -134,21 +134,23 @@ Voir [les vérifications effectuées](docs/VALIDATION.md). Les latences de démo
 
 ## Déploiement
 
-### Release macOS manuelle
+### Téléchargement macOS et publication automatique
 
-Le workflow [Release macOS](.github/workflows/release-macos.yml) ne se déclenche que sur demande : aucun commit, push ou tag ne publie de release. Il construit uniquement la version de `main` présente sur GitHub au lancement, sans inclure les modifications locales.
+La [landing](https://tryinterprete.com) propose un téléchargement public du DMG Apple Silicon, sans compte GitHub. Le code source et les releases de référence restent dans le dépôt privé. Le fichier public est hébergé dans le store Vercel Blob `interprete-downloads`, rattaché au projet `interprete-landing`.
 
-Configuration initiale : intégrer le workflow sur `main`, configurer la variable GitHub Actions du dépôt `VITE_API_URL` avec l'URL HTTPS du backend de production (sans identifiants), puis installer GitHub CLI et se connecter avec `gh auth login`. Les clés fournisseurs restent sur le serveur.
+Chaque **push sur `main`** déclenche le workflow [Release macOS](.github/workflows/release-macos.yml). Il vérifie la configuration et les tests, construit le DMG, publie une release GitHub `v<version>-build.<numéro du workflow>.<tentative>`, puis remplace le téléchargement public. Il n'est pas nécessaire d'augmenter la version pour chaque push. Les builds sont sérialisés et les commits devenus obsolètes ne sont pas publiés ; si un build échoue, le fichier public précédent reste disponible. Le cache du fichier est limité à 60 secondes.
 
-Pour chaque release :
+Configuration de publication :
 
-1. Mettre à jour `version` dans `apps/desktop/src-tauri/tauri.conf.json` avec une nouvelle version stable `x.y.z`, puis intégrer les changements à publier sur `main`.
-2. Depuis la racine du dépôt, lancer **`pnpm release`**. La commande déclenche le workflow GitHub puis rend la main ; suivre sa progression dans **Actions → Release macOS**. On peut aussi utiliser **Run workflow**, en choisissant `main`.
-3. GitHub vérifie l'URL, refuse tout tag ou release existant pour cette version, lance les contrôles de `check.yml`, construit le DMG Apple Silicon et publie automatiquement la release avec `Interprete-macOS-arm64.dmg` et les notes générées. Aucun clic de publication supplémentaire n'est requis. Le backend n'est pas déployé par ce workflow.
+- GitHub Actions : variable `VITE_API_URL` avec l'URL HTTPS de l'API de production et secret `DOWNLOAD_PUBLISH_SECRET`.
+- Projet Vercel `interprete-landing` : le même secret serveur `DOWNLOAD_PUBLISH_SECRET`, variable `BLOB_STORE_ID` et authentification OIDC activée. Aucune de ces valeurs ne doit être préfixée par `VITE_`.
+- L'endpoint `POST /api/publish-download` vérifie le secret, puis émet une URL d'envoi valable 10 minutes, limitée au DMG (100 Mio maximum). L'envoi va directement vers Blob, sans faire transiter le fichier par une Function. Les identifiants du store restent sur Vercel.
 
-La release est préparée temporairement en brouillon pendant l'envoi du fichier, puis publiée et définie comme dernière version uniquement après le succès de l'envoi. Si l'envoi ou la publication échoue, le brouillon éventuel reste privé et la dernière version disponible ne change pas. Pour relancer cette même version, supprimer explicitement le brouillon précédent ; si le tag existe, utiliser une nouvelle version.
+`pnpm release` reste disponible pour déclencher manuellement une release stable `v<version>` sur `main`. Augmenter d'abord la version dans `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/Cargo.toml` et l'entrée du paquet dans `Cargo.lock`, puis pousser. Le workflow refuse une version stable déjà publiée. Suivre **Actions → Release macOS** ; aucun clic de publication supplémentaire n'est requis.
 
-Le lien permanent de la landing est `https://github.com/kevinrss01/interprete-live-v2/releases/latest/download/Interprete-macOS-arm64.dmg`. Chaque dernière release doit conserver ce nom de fichier. Les téléchargements publics nécessitent un dépôt public ; les brouillons ne rendent pas ce lien disponible.
+La release est préparée en brouillon pendant l'envoi du fichier, puis publiée et définie comme dernière version. Si la publication publique échoue après la release GitHub, le workflow échoue et le fichier public précédent reste disponible ; relancer le workflow automatique (la tentative reçoit un nouveau tag) ou republier ce DMG avec `scripts/publish-download.mjs`. Le backend n'est pas déployé par ce workflow. Le téléchargement ne met pas automatiquement à jour les applications déjà installées.
+
+Le lien permanent public est `https://h7ddt3inb3wj86c7.public.blob.vercel-storage.com/Interprete-macOS-arm64.dmg?download=1`. La landing et le footer partagent ce lien. Le DMG reste non signé et non notarisé ; macOS peut demander une autorisation d'ouverture dans **System Settings → Privacy & Security**.
 
 En local, `pnpm build:desktop:dmg` reconstruit le DMG avec les icônes et les réglages Tauri existants, sans créer de tag ou de release. Configurer `VITE_API_URL` dans `apps/desktop/.env.local` avant le build ; le terminal indique le chemin du fichier produit. Cible : macOS 14.2 minimum, Apple Silicon. La signature et la notarisation ne sont pas ajoutées par ce workflow.
 

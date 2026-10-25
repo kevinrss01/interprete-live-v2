@@ -125,8 +125,9 @@ Le CTA affiche un panorama alpin généré, en ivoire et orange, avec un premier
 pour le texte. Les deux WebP `download-landscape.webp` (1983 × 793 px natifs) et
 `download-landscape-1280.webp` sont chargés paresseusement avec `srcset`. Le grain existant
 est réutilisé à l'échelle de l'écran. Le bouton « Download for macOS » cible le DMG
-Apple Silicon (`Interprete-macOS-arm64.dmg`) de la dernière release GitHub du dépôt
-`kevinrss01/interprete-live-v2`. C'est l'unique action du CTA ; le contour visible de
+Apple Silicon (`Interprete-macOS-arm64.dmg`) hébergé publiquement sur Vercel Blob
+(store `interprete-downloads`, projet `interprete-landing`), sans authentification GitHub.
+Le prérequis macOS 14.2+ / Apple Silicon apparaît sous le bouton. C'est l'unique action du CTA ; le contour visible de
 la carte et le lien secondaire vers l'application web ont été retirés. Le CTA ne contient
 pas de logo ; l'image et son grain sont inchangés.
 La page reste en `noindex` pour la revue locale.
@@ -261,9 +262,11 @@ flowchart LR
 - **API** : copier le repo et `apps/server/.env.local` sur le VPS, puis `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtient le certificat et relaie le SSE sans buffering (`flush_interval -1`).
 - **Desktop** : `VITE_API_URL` est intégré au moment du build ; le pointer vers le domaine du VPS avant `pnpm build:desktop`. Sur macOS, `Info.plist` déclare l'usage du micro et `Entitlements.plist` l'autorise sous hardened runtime. La signature et la notarisation ne sont pas encore configurées.
 
-### Note pour la page Download (2026-10-24)
+### Distribution macOS (2026-10-25)
 
-- Distribution initiale macOS uniquement, avec téléchargements hébergés sur GitHub Releases et liés depuis la landing. `pnpm release` déclenche manuellement le workflow sur `main` ; après les contrôles et le build, la release est publiée automatiquement et devient la dernière version.
+- Chaque push sur `main` déclenche les contrôles et un build DMG Apple Silicon. Les releases GitHub privées utilisent `v<version>-build.<numéro du workflow>.<tentative>` pour permettre les pushs sans changement manuel de version ; `pnpm release` conserve les tags stables manuels.
+- Après publication de la release, `scripts/publish-download.mjs` valide le DMG et demande une URL d'envoi à `apps/landing/api/publish-download.mjs`. Le secret `DOWNLOAD_PUBLISH_SECRET` est partagé uniquement entre GitHub Actions et le serveur Vercel. L'endpoint utilise OIDC et `BLOB_STORE_ID` pour émettre un PUT signé, limité au nom du DMG, à 100 Mio et à 10 minutes. Le fichier est envoyé directement à Blob pour éviter la limite de taille des Functions.
+- Le nom public reste constant ; le cache est limité à 60 secondes et les builds sont sérialisés. La publication vérifie que le commit correspond encore à `main`, pour empêcher un ancien workflow relancé de remplacer une version récente. Une compilation ou un envoi échoué ne remplace pas le DMG précédent. Le code source reste privé. Cette distribution ne configure pas d'updater dans l'application.
 - Prérequis retenu pour la distribution : **macOS Sonoma 14.2 minimum**, afin d'inclure la détection automatique des appels (`apps/desktop/src-tauri/src/call_probe.m`). Le minimum du bundle est aligné sur 14.2. Ce choix ne constitue pas un test de compatibilité.
 - Le workflow de release prépare un DMG Apple Silicon (ARM64) ; aucun build Intel n'est prévu dans ce workflow. L'extension caméra est encore au stade de plan.
 
