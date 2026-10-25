@@ -1,5 +1,18 @@
 # Vérifications de l’app — 24 octobre 2026
 
+## macOS download signature repair — 25 October 2026
+
+The downloaded DMG passed `hdiutil verify` and matched the private release's
+SHA-256, but its app failed strict signature verification: the executable had only
+a linker signature and the bundle resources were not sealed. The new publication
+check rejects that DMG. A native Apple Silicon release build with explicit ad-hoc
+signing passes the same check, including its bundle identifier and microphone
+entitlement. A repaired local copy opens to onboarding without capture or playback.
+ShellCheck, shell syntax, workspace typecheck, server lint, app/configuration tests,
+and server/desktop/landing builds pass. Ad-hoc signing does not establish Developer
+ID trust or notarization; downloaded copies can still require Open Anyway. Public
+publication is verified separately after merging; these are local results.
+
 ## Verb, compound and agreement trial — 25 October 2026
 
 The next user-authorized trial refines the current Jev instructions to hold ambiguous
