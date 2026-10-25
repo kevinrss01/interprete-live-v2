@@ -1,6 +1,8 @@
 name: Release macOS
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -33,6 +35,8 @@ jobs:
           cache: pnpm
       - name: Validate release configuration
         id: config
+        env:
+          RELEASE_BUILD_ID: ${{ github.event_name == 'push' && format('{0}.{1}', github.run_number, github.run_attempt) || '' }}
         run: node scripts/release-config.mjs --github-output
       - name: Refuse an existing tag or release
         env:
@@ -67,7 +71,20 @@ jobs:
           test "${#files[@]}" -eq 1
           mkdir -p release
           cp "${files[0]}" release/Interprete-macOS-arm64.dmg
+      - name: Skip publication of obsolete builds
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest_sha=$(gh api "repos/$GH_REPO/commits/main" --jq '.sha')
+          if [ "$latest_sha" = "$GITHUB_SHA" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "A newer main commit exists; keeping the current download."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish release
+        if: steps.current.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.config.outputs.tag }}
@@ -76,3 +93,8 @@ jobs:
             --target "$GITHUB_SHA" --title "Interprete $RELEASE_TAG" \
             --draft --generate-notes
           gh release edit "$RELEASE_TAG" --draft=false --latest
+      - name: Update public download
+        if: steps.current.outputs.publish == 'true'
+        env:
+          DOWNLOAD_PUBLISH_SECRET: ${{ secrets.DOWNLOAD_PUBLISH_SECRET }}
+        run: node scripts/publish-download.mjs release/Interprete-macOS-arm64.dmg
