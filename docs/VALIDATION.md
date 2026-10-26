@@ -1,5 +1,13 @@
 # Vérifications de l’app — 24 octobre 2026
 
+## Production API contract recovery — 26 October 2026
+
+- Investigation found that the web app followed Git releases while `interprete-backend` had no Git connection and still served an older manual deployment. The live API returned speech for `speak: false` and returned 404 for account voice/history routes already implemented on `main`.
+- Verified the production Neon tables and ran the existing migration command successfully before release. Connected the backend to the same repository/production branch as the web app. No provider secret, origin allowlist, voice ownership rule or existing account data was replaced.
+- Added a route-level captions-only regression and a validated Git revision in `/api/status`. The explicit `pnpm verify:deployment` live-provider check rejects stale revisions, rejects any captions-only audio, exercises the voice endpoint and ownership rejection, and saves/loads synthetic discussion text using two independent sign-ins. It removes only its own synthetic discussion by default and never captures or plays audio.
+- Before release, the smoke check failed against the old production API with “Captions-only mode returned audio.” It passed against the replacement local API using the hosted production database and the existing authorized local provider credentials: no audio events, `spoken=false`, voice route available, invalid voice grant rejected, and history reloaded through a fresh login. Production-sensitive variables were not exported; the database configuration came from the linked production environment.
+- Passed typecheck (including the smoke script), server lint, 201 tests (15 tooling, 3 landing, 31 server, 152 desktop), standalone and Vercel API bundles, desktop static build, landing static build, and diff whitespace checks. Production verification must be run again against the merged revision; these local results alone do not establish the deployed state. Real microphone, acoustic behavior, native permissions and a real call were not exercised for this backend release.
+
 ## macOS download signature repair — 25 October 2026
 
 The downloaded DMG passed `hdiutil verify` and matched the private release's

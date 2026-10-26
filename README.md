@@ -166,11 +166,22 @@ The DMG background and icon positions are configured in `bundle.macOS.dmg`. To c
 
 - **Landing (Vercel)**: [tryinterprete.com](https://tryinterprete.com) serves `apps/landing` and the social sharing image used by the site and app. See [social sharing metadata](docs/social-preview.md).
 - **Web (Vercel)**: [app.tryinterprete.com](https://app.tryinterprete.com) serves the Vite build of `apps/desktop` (`dist/`). The build variable `VITE_API_URL=https://api.tryinterprete.com` connects the Hono and oRPC clients to the shared backend. `apps/desktop/vercel.json` preserves app routing on reload. The project is connected to GitHub repository `kevinrss01/interprete-live-v2`: pushes to `main` deploy production; other branches create previews. Vercel blocks deployments whose commit author is not a member of the VoiceCheap team. `www` and older web/landing addresses redirect through Vercel Domains settings; the old API address remains available to previously distributed macOS apps.
-- **API (Vercel)**: `interprete-backend` uses `apps/server`, the Frankfurt region, and the Neon database `interprete-postgres`. `pnpm --filter @interprete/server build:vercel` generates `dist/app.mjs`; `apps/server/app.mjs` exposes it to the Hono runtime without starting a standalone server. Provider keys and session secrets remain exclusively in server variables. `BETTER_AUTH_URL` must match the API domain, and `ALLOWED_ORIGINS` must include allowed web domains. Apply migrations through the Neon connection before enabling account flows.
+- **API (Vercel)**: `interprete-backend` uses `apps/server`, the Frankfurt region, and the Neon database `interprete-postgres`. Like the web app, it is connected to the repository with `main` as its production branch; a frontend release must not leave the API on an older manual deployment. `pnpm --filter @interprete/server build:vercel` generates `dist/app.mjs`; `apps/server/app.mjs` exposes it to the Hono runtime without starting a standalone server. Provider keys and session secrets remain exclusively in server variables. `BETTER_AUTH_URL` must match the API domain, and `ALLOWED_ORIGINS` must include allowed web domains. Apply migrations through the Neon connection before releasing code that needs new tables. Migrations are not run automatically by the Vercel build.
 - **API (VPS)**: copy the repository and `apps/server/.env.local` to the server, then run `API_DOMAIN=api.example.com docker compose up -d --build`. Caddy obtains the HTTPS certificate and proxies SSE without buffering. The image includes the ESM bundles `dist/server.mjs`, `dist/db/migrate.mjs`, and SQL migrations. Configure PostgreSQL and follow the [deployment steps](docs/backend.md#déployer) for accounts. Use a single instance: request limits are in memory.
 - **Desktop**: `pnpm build:desktop`. On macOS, `Info.plist` declares microphone use and `Entitlements.plist` authorizes it under the hardened runtime; signing and notarization are configured separately.
 
 Voice conversation works in the browser with microphone permission. Mac call detection, floating windows outside the browser, and the virtual microphone require the Tauri app. Request limits remain in memory per instance; Vercel deployment does not turn them into distributed quotas.
+
+After an API release, verify the actual runtime with a disposable QA account. Store its email and password in a private JSON file outside the repository; do not pass credentials on the command line:
+
+```sh
+pnpm verify:deployment --url https://api.tryinterprete.com \
+  --origin https://app.tryinterprete.com \
+  --account-file /absolute/path/to/private-qa-account.json \
+  --revision "$(git rev-parse origin/main)"
+```
+
+This explicitly invokes live translation with synthetic text and checks that captions-only mode returns no audio. It verifies the account voice route, rejects an invalid voice grant, and saves/loads a synthetic discussion through a fresh login before removing only that discussion. It never opens a microphone or plays audio. `--keep-discussion` retains the synthetic row for browser inspection. `/api/status` reports the deployed Git revision, or `null` outside a Git deployment, so the check can reject a stale runtime.
 
 Cloning a real voice requires that person's consent and a clean sample. The two people always take turns; only synthetic translation overlaps speech. Automatic speaker identification and separation of two simultaneous human voices are not supported.
 
