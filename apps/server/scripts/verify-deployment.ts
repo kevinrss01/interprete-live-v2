@@ -38,7 +38,7 @@ async function main() {
       speaker: "b", voice: "sarah", speak: false, isFinal: true }),
   });
   assert.equal(captions.status, 200, "The captions-only request failed.");
-  assert.match(captions.headers.get("Content-Type") ?? "", /text\/event-stream/);
+  assert.match(captions.headers.get("Content-Type") ?? "", /text\/event-stream/, "The captions response is not an event stream.");
   const events = (await captions.text()).split(/\r?\n\r?\n/).flatMap((block) => {
     const data = block.split(/\r?\n/).find((line) => line.startsWith("data:"));
     return data ? [JSON.parse(data.slice(5)) as { type: string; text?: string; spoken?: boolean }] : [];
@@ -64,9 +64,12 @@ async function main() {
   await first.account.me();
   await first.preferences.get();
   await first.voice.get({ session: device.session });
-  await first.discussions.list();
+  const existing = await first.discussions.list();
+  // A save enforces history retention; use an empty dedicated account so it cannot evict existing rows.
+  assert.equal(existing.length, 0, "Use a dedicated QA account with empty server history.");
   // Reject a voice without an ownership grant; do not create or replace a voice.
-  await assert.rejects(() => first.voice.save({ session: device.session, voice: "invalid-deployment-check-grant" }), { code: "FORBIDDEN" });
+  await assert.rejects(() => first.voice.save({ session: device.session, voice: "invalid-deployment-check-grant" }),
+    { code: "FORBIDDEN" }, "The API accepted an invalid voice grant.");
 
   const at = Date.now();
   const discussion = {
@@ -77,12 +80,13 @@ async function main() {
       status: "done" as const, error: null, demo: true, spokenAt: at, updatedAt: at }],
   };
   try {
-    assert.equal((await first.discussions.save(discussion)).id, discussion.id);
+    assert.equal((await first.discussions.save(discussion)).id, discussion.id, "The synthetic discussion save returned a different identifier.");
     // A fresh login/client has no browser cache and must load the saved database row.
     const second = await login();
     const remote = (await second.discussions.list()).find((item) => item.id === discussion.id);
     assert.ok(remote && remote.messageCount === 1 && remote.startedAt === at, "Saved history was not returned to a fresh login.");
-    assert.deepEqual(await second.discussions.messages({ id: discussion.id }), discussion.messages);
+    assert.deepEqual(await second.discussions.messages({ id: discussion.id }), discussion.messages,
+      "Saved synthetic history did not match after a fresh login.");
     await second.voice.get({ session: device.session });
   } finally {
     // Only remove this run's synthetic row; never touch existing account history.
@@ -96,7 +100,7 @@ async function main() {
 
 void main().catch((error: unknown) => {
   // Do not dump provider responses, account data or bearer tokens into CI logs.
-  console.error(error instanceof assert.AssertionError ? error.message :
+  console.error(error instanceof assert.AssertionError ? error.message.split("\n")[0] :
     `Deployment verification failed (${error && typeof error === "object" && "code" in error ? String(error.code) : "request or configuration error"}).`);
   process.exitCode = 1;
 });

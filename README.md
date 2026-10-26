@@ -172,7 +172,7 @@ The DMG background and icon positions are configured in `bundle.macOS.dmg`. To c
 
 Voice conversation works in the browser with microphone permission. Mac call detection, floating windows outside the browser, and the virtual microphone require the Tauri app. Request limits remain in memory per instance; Vercel deployment does not turn them into distributed quotas.
 
-After an API release, verify the actual runtime with a disposable QA account. Store its email and password in a private JSON file outside the repository; do not pass credentials on the command line:
+After an API release, verify the actual runtime with a dedicated disposable QA account whose server history is empty. Keep that account idle during verification: saving a discussion enforces the app's history retention limit. The checker refuses to write when existing history is present. Store its email and password in a private JSON file outside the repository; do not pass credentials on the command line:
 
 ```sh
 pnpm verify:deployment --url https://api.tryinterprete.com \
